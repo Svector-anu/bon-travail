@@ -6,7 +6,7 @@ export function Footer() {
       <div>
         <Link href="/" className="brand">
           <img src="/mascots/seedling.png" alt="" />
-          <span>Proofwork</span>
+          <span>Preuve</span>
         </Link>
         <p>Autonomous work, real payments. Tasks posted by an agent, answers checked against the chain.</p>
       </div>

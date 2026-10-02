@@ -6,7 +6,7 @@ import { Header } from '@/components/header'
 import { Providers } from '@/components/providers'
 
 export const metadata: Metadata = {
-  title: { default: 'Proofwork', template: '%s | Proofwork' },
+  title: { default: 'Preuve · Proof of work, paid', template: '%s | Preuve' },
   description: 'An autonomous agent pays humans in USDC for machine-verified onchain fact checks.',
   icons: { icon: '/mascots/seedling.png' },
 }

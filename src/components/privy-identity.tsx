@@ -46,7 +46,7 @@ export function PrivyIdentityProvider({ appId, children }: { appId: string; chil
           theme: 'light',
           accentColor: '#d4416a',
           logo: '/mascots/seedling.png',
-          landingHeader: 'Sign in to Proofwork',
+          landingHeader: 'Sign in to Preuve',
           loginMessage: 'Earn USDC for answers the chain can check.',
           walletChainType: 'ethereum-only',
           showWalletLoginFirst: false,

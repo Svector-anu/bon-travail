@@ -24,7 +24,7 @@ export function Header() {
     <header className="topbar">
       <Link href="/" className="brand">
         <img src="/mascots/seedling.png" alt="" />
-        <span>Proofwork</span>
+        <span>Preuve</span>
       </Link>
 
       <nav className="nav" aria-label="Primary">
@@ -53,7 +53,7 @@ export function Header() {
         {menuOpen && signedIn && (
           <div className="menu">
             <p>
-              {identity.embeddedWallet ? 'Your Proofwork wallet' : 'Payout wallet'}
+              {identity.embeddedWallet ? 'Your Preuve wallet' : 'Payout wallet'}
               <span className="mono" style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6, color: 'var(--text)' }}>
                 {identity.address}
                 <CopyButton value={identity.address!} label="Copy address" />
