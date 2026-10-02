@@ -6,6 +6,7 @@ import { ARC_TESTNET_FIXTURES, FixtureChainReader } from '@/server/chain/fixture
 import { ManualClock } from '@/server/clock'
 import { loadConfig } from '@/server/config'
 import { createApp, type App } from '@/server/container'
+import type { IdentityVerifier } from '@/server/identity'
 import { MockPaymentRail } from '@/server/payments/mock-rail'
 import { PaymentRailError, type PaymentRail } from '@/server/payments/payment-provider'
 import { Store } from '@/server/store/store'
@@ -86,13 +87,16 @@ export interface TestApp extends App {
   clock: ManualClock
 }
 
-export function makeApp(options: { env?: Record<string, string>; chain?: ChainReader; rail?: PaymentRail } = {}): TestApp {
+export function makeApp(
+  options: { env?: Record<string, string>; chain?: ChainReader; rail?: PaymentRail; identity?: IdentityVerifier } = {},
+): TestApp {
   const clock = new ManualClock(T0)
   const config = loadConfig({ ...TEST_ENV, ...options.env })
   const app = createApp(config, {
     store: new Store(':memory:'),
     chain: options.chain ?? new FixtureChainReader('https://testnet.arcscan.app'),
     rail: options.rail ?? new MockPaymentRail(),
+    identity: options.identity,
     clock,
   })
   return { ...app, clock }

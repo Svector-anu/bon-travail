@@ -3,9 +3,10 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState, useSyncExternalStore } from 'react'
-import { shortAddress } from '@/domain/address'
 import { THEME_KEY } from '@/lib/theme'
-import { connectInjected, disconnectWallet, hasInjectedWallet, identiconStyle, useWallet } from './wallet'
+import { CopyButton } from './copy-button'
+import { useIdentity } from './identity'
+import { hasInjectedWallet, identiconStyle } from './wallet'
 
 const themeListeners = new Set<() => void>()
 
@@ -39,19 +40,9 @@ const NAV = [
 export function Header() {
   const pathname = usePathname()
   const theme = useSyncExternalStore(subscribeTheme, currentTheme, () => 'light' as const)
-  const wallet = useWallet()
+  const identity = useIdentity()
   const [menuOpen, setMenuOpen] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  async function connect() {
-    setError(null)
-    try {
-      await connectInjected()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not connect')
-      setMenuOpen(true)
-    }
-  }
+  const canSignIn = identity.mode === 'privy' || hasInjectedWallet()
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/' || pathname.startsWith('/task')
@@ -85,36 +76,44 @@ export function Header() {
         </button>
 
         <div className="wallet-wrap">
-          {wallet ? (
+          {identity.signedIn && identity.address ? (
             <button type="button" className="wallet-pill" onClick={() => setMenuOpen((v) => !v)} aria-expanded={menuOpen}>
-              <span className="identicon" style={identiconStyle(wallet.address)} aria-hidden />
-              {shortAddress(wallet.address)}
+              <span className="identicon" style={identiconStyle(identity.address)} aria-hidden />
+              {identity.label}
             </button>
           ) : (
-            <button type="button" className="wallet-pill connect" onClick={hasInjectedWallet() ? connect : () => setMenuOpen((v) => !v)}>
-              Connect
+            <button
+              type="button"
+              className="wallet-pill connect"
+              disabled={!identity.ready}
+              onClick={canSignIn ? identity.signIn : () => setMenuOpen((v) => !v)}
+            >
+              {identity.mode === 'privy' ? 'Sign in' : 'Connect'}
             </button>
           )}
           {menuOpen && (
             <div className="dropdown">
-              {error && <p className="dropdown-note">{error}</p>}
-              {wallet ? (
+              {identity.signedIn && identity.address ? (
                 <>
-                  <p className="dropdown-note">{wallet.via === 'injected' ? 'Browser wallet' : 'Pasted address'}</p>
+                  <p className="dropdown-note">
+                    {identity.embeddedWallet ? 'Your Proofwork wallet' : 'Payout wallet'}
+                    <span className="mono" style={{ display: 'block', marginTop: 4, color: 'var(--text)' }}>
+                      {identity.address}
+                    </span>
+                  </p>
+                  <CopyButton value={identity.address} label="Copy address" />
                   <button
                     type="button"
                     onClick={() => {
-                      disconnectWallet()
+                      identity.signOut()
                       setMenuOpen(false)
                     }}
                   >
-                    Disconnect
+                    {identity.mode === 'privy' ? 'Sign out' : 'Disconnect'}
                   </button>
                 </>
               ) : (
-                <p className="dropdown-note">
-                  No browser wallet found. You can paste a payout address on any task.
-                </p>
+                <p className="dropdown-note">No browser wallet found. You can paste a payout address when you claim a task.</p>
               )}
             </div>
           )}

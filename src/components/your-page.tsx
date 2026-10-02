@@ -4,15 +4,15 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import type { WorkerSummary } from '@/server/queries'
 import { Countdown } from './clock'
-import { connectInjected, disconnectWallet, hasInjectedWallet, useWallet } from './wallet'
+import { useIdentity } from './identity'
 
 const POLL_MS = 5000
 
 /** Turnip "account" recipe, filled from the wallet's real attempts and payouts. */
 export function YourPage() {
-  const wallet = useWallet()
+  const identity = useIdentity()
   const [summary, setSummary] = useState<WorkerSummary | null>(null)
-  const address = wallet?.address ?? null
+  const address = identity.address
 
   useEffect(() => {
     if (!address) return
@@ -84,19 +84,21 @@ export function YourPage() {
           </Link>
         </div>
         {address ? (
-          <button type="button" className="btn ghost" onClick={disconnectWallet}>
-            Disconnect
+          <button type="button" className="btn ghost" onClick={identity.signOut}>
+            {identity.mode === 'privy' ? 'Sign out' : 'Disconnect'}
           </button>
         ) : (
-          <button type="button" className="btn ghost" disabled={!hasInjectedWallet()} onClick={() => void connectInjected()}>
-            Connect wallet
+          <button type="button" className="btn ghost" disabled={!identity.ready} onClick={identity.signIn}>
+            {identity.mode === 'privy' ? 'Sign in' : 'Connect wallet'}
           </button>
         )}
       </div>
 
       {!address && (
         <p className="lede" style={{ marginTop: 28 }}>
-          Connect a wallet, or claim any task with a payout address, and your earnings show up here.
+          {identity.mode === 'privy'
+            ? 'Sign in with email, Google or X and your earnings show up here.'
+            : 'Connect a wallet, or claim any task with a payout address, and your earnings show up here.'}
         </p>
       )}
     </>

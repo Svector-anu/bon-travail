@@ -7,6 +7,7 @@ import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
 import { Footer } from '@/components/footer'
 import { Header } from '@/components/header'
+import { Providers } from '@/components/providers'
 import { Toasts } from '@/components/toasts'
 import { THEME_BOOTSTRAP } from '@/lib/theme'
 
@@ -23,12 +24,14 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP }} />
       </head>
       <body>
-        <div className="shell">
-          <Header />
-          <main className="main">{children}</main>
-          <Footer />
-        </div>
-        <Toasts />
+        <Providers>
+          <div className="shell">
+            <Header />
+            <main className="main">{children}</main>
+            <Footer />
+          </div>
+          <Toasts />
+        </Providers>
       </body>
     </html>
   )

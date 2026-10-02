@@ -18,6 +18,13 @@ export interface TaskSettings {
   deadlineMs: number
   claimTtlMs: number
   chainLabel: string
+  /** When true every claim must come from a verified person who owns the payout wallet. */
+  identityRequired: boolean
+}
+
+export interface ClaimIdentity {
+  userId: string
+  wallets: readonly string[]
 }
 
 export interface ClaimResult {
@@ -147,9 +154,15 @@ export class TaskService {
 
   // ---- worker flow ---------------------------------------------------------
 
-  claimTask(taskId: string, workerInput: string): ClaimResult {
+  claimTask(taskId: string, workerInput: string, identity: ClaimIdentity | null = null): ClaimResult {
     const worker = checkAddress(workerInput)
     if (!worker.ok) throw new DomainError('BAD_REQUEST', `Wallet ${worker.reason}`)
+    if (this.settings.identityRequired) {
+      if (!identity) throw new DomainError('UNAUTHORIZED', 'Sign in to claim a task')
+      if (!identity.wallets.includes(worker.address)) {
+        throw new DomainError('FORBIDDEN', 'You can only claim with a wallet linked to your account')
+      }
+    }
 
     const now = this.clock.now()
     const existing = this.store.requireTask(taskId)
@@ -166,6 +179,9 @@ export class TaskService {
       if (now >= task.deadlineAt) throw new DomainError('GONE', `${taskId} has passed its deadline`)
       if (this.store.workerHasSubmitted(taskId, worker.address)) {
         throw new DomainError('FORBIDDEN', `${shortAddress(worker.address)} already submitted an answer for ${taskId}`)
+      }
+      if (identity && this.store.identityHasSubmitted(taskId, identity.userId)) {
+        throw new DomainError('FORBIDDEN', `You already submitted an answer for ${taskId}`)
       }
 
       const claimId = `clm_${randomBytes(9).toString('hex')}`
@@ -185,6 +201,7 @@ export class TaskService {
           outcome: null,
         },
         hashToken(claimToken),
+        identity?.userId ?? null,
       )
       const updated = this.store.transition({
         taskId,

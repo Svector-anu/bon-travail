@@ -18,6 +18,9 @@ export interface AppConfig {
   targetOpenTasks: number
   agentExpectedIntervalMs: number
   publicBaseUrl: string
+  privyAppId: string | undefined
+  privyAppSecret: string | undefined
+  privyVerificationKey: string | undefined
 }
 
 type Env = Record<string, string | undefined>
@@ -61,6 +64,9 @@ export function loadConfig(env: Env = process.env): AppConfig {
     targetOpenTasks: positiveInt(env, 'TARGET_OPEN_TASKS', 1),
     agentExpectedIntervalMs: positiveInt(env, 'AGENT_EXPECTED_INTERVAL_SECONDS', 300) * 1000,
     publicBaseUrl: (env.PUBLIC_BASE_URL || 'http://localhost:3000').replace(/\/$/, ''),
+    privyAppId: env.NEXT_PUBLIC_PRIVY_APP_ID || undefined,
+    privyAppSecret: env.PRIVY_APP_SECRET || undefined,
+    privyVerificationKey: env.PRIVY_VERIFICATION_KEY || undefined,
   }
 
   if (config.taskRewardMicro > config.maxRewardMicro) {
@@ -68,6 +74,9 @@ export function loadConfig(env: Env = process.env): AppConfig {
   }
   if (config.paymentProvider === 'arc' && !config.arcPayerPrivateKey) {
     throw new PaymentConfigError('PAYMENT_PROVIDER=arc requires ARC_PAYER_PRIVATE_KEY')
+  }
+  if (config.privyAppId && !config.privyAppSecret) {
+    throw new Error('NEXT_PUBLIC_PRIVY_APP_ID is set but PRIVY_APP_SECRET is missing; claims cannot be verified')
   }
   if (config.agentApiToken !== undefined && config.agentApiToken.length < 32) {
     throw new Error('AGENT_API_TOKEN must be at least 32 characters')

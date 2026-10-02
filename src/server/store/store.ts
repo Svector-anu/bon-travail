@@ -20,7 +20,7 @@ import type {
   VerificationResult,
 } from '@/domain/types'
 import { fromJson, num, optNum, optStr, str, toJson } from './codec'
-import { SCHEMA } from './schema'
+import { COLUMN_MIGRATIONS, POST_MIGRATION_SQL, SCHEMA } from './schema'
 
 type Row = Record<string, unknown>
 
@@ -196,6 +196,11 @@ export class Store {
     this.db = new DatabaseSync(path)
     this.db.exec('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;')
     this.db.exec(SCHEMA)
+    for (const migration of COLUMN_MIGRATIONS) {
+      const columns = this.all(`PRAGMA table_info(${migration.table})`).map((row) => str(row, 'name'))
+      if (!columns.includes(migration.column)) this.db.exec(migration.sql)
+    }
+    this.db.exec(POST_MIGRATION_SQL)
   }
 
   close(): void {
@@ -356,15 +361,16 @@ export class Store {
 
   // ---- attempts ------------------------------------------------------------
 
-  insertAttempt(attempt: AttemptRecord, claimTokenHash: string): void {
+  insertAttempt(attempt: AttemptRecord, claimTokenHash: string, identity: string | null): void {
     this.run(
-      `INSERT INTO attempts (id, task_id, claim_id, claim_token_hash, worker, claimed_at, claim_expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO attempts (id, task_id, claim_id, claim_token_hash, worker, identity, claimed_at, claim_expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       attempt.id,
       attempt.taskId,
       attempt.claimId,
       claimTokenHash,
       attempt.worker,
+      identity,
       attempt.claimedAt,
       attempt.claimExpiresAt,
     )
@@ -388,6 +394,13 @@ export class Store {
 
   listAttemptsByWorker(worker: Address, limit = 50): AttemptRecord[] {
     return this.all('SELECT * FROM attempts WHERE worker = ? ORDER BY claimed_at DESC LIMIT ?', worker, limit).map(rowToAttempt)
+  }
+
+  identityHasSubmitted(taskId: string, identity: string): boolean {
+    return (
+      this.get('SELECT 1 FROM attempts WHERE task_id = ? AND identity = ? AND submitted_at IS NOT NULL', taskId, identity) !==
+      undefined
+    )
   }
 
   recordSubmission(claimId: string, submission: Submission, at: number): void {

@@ -9,10 +9,15 @@ import { saveClaim, useStoredClaim, type StoredClaim } from './claim-store'
 import { Countdown } from './clock'
 import { Sheet } from './sheet'
 import { pushToast } from './toasts'
-import { connectInjected, hasInjectedWallet, setManualAddress, useWallet } from './wallet'
+import { useIdentity, type Identity } from './identity'
+import { connectInjected, hasInjectedWallet } from './wallet'
 
-async function post<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+async function post<T>(url: string, body: unknown, headers: Record<string, string> = {}): Promise<T> {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...headers },
+    body: JSON.stringify(body),
+  })
   const data = (await res.json()) as T & { message?: string }
   if (!res.ok) throw new Error(data.message ?? `Request failed (${res.status})`)
   return data
@@ -31,7 +36,7 @@ const errorText = (e: unknown, fallback: string) => (e instanceof Error ? e.mess
 /** Turnip "work" recipe for one task: notice, hero metric, stat pair, sheets. */
 export function TaskWork({ task, attempts }: { task: TaskView; attempts: AttemptView[] }) {
   const router = useRouter()
-  const wallet = useWallet()
+  const identity = useIdentity()
   const claim = useStoredClaim(task.id)
   const [, startRefresh] = useTransition()
   const [sheet, setSheet] = useState<'claim' | 'submit' | null>(null)
@@ -39,7 +44,7 @@ export function TaskWork({ task, attempts }: { task: TaskView; attempts: Attempt
 
   const myAttempt = claim ? attempts.find((a) => a.claimId === claim.claimId) : undefined
   const holdsClaim = task.state === 'CLAIMED' && claim !== null && sameAddress(task.claimant, claim.wallet) && !myAttempt
-  const answeredBefore = wallet ? attempts.some((a) => sameAddress(a.worker, wallet.address)) : false
+  const answeredBefore = identity.address ? attempts.some((a) => sameAddress(a.worker, identity.address)) : false
   const settled = task.state === 'PAID' || task.state === 'REFUNDED'
   const iWasPaid = task.state === 'PAID' && myAttempt?.outcome === 'PASS'
 
@@ -118,7 +123,7 @@ export function TaskWork({ task, attempts }: { task: TaskView; attempts: Attempt
       {sheet === 'claim' && (
         <ClaimSheet
           task={task}
-          walletAddress={wallet?.address ?? null}
+          identity={identity}
           onClose={() => setSheet(null)}
           onClaimed={() => {
             pushToast(`Claimed ${task.displayId}. Lock started.`)
@@ -183,23 +188,25 @@ function rewardCaption(task: TaskView, mine: AttemptView | undefined): string {
 
 function ClaimSheet({
   task,
-  walletAddress,
+  identity,
   onClose,
   onClaimed,
 }: {
   task: TaskView
-  walletAddress: string | null
+  identity: Identity
   onClose: () => void
   onClaimed: () => void
 }) {
-  const [address, setAddress] = useState(walletAddress ?? '')
+  const [pasted, setPasted] = useState(identity.address ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const privy = identity.mode === 'privy'
+  const payout = privy ? identity.address : pasted.trim() || null
 
-  async function useWalletAddress() {
+  async function fillFromBrowserWallet() {
     setError(null)
     try {
-      setAddress((await connectInjected()).address)
+      setPasted((await connectInjected()).address)
     } catch (e) {
       setError(errorText(e, 'Could not connect'))
     }
@@ -207,16 +214,18 @@ function ClaimSheet({
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
-    const wallet = address.trim()
-    if (!wallet) return setError('Enter the address that should receive the reward.')
+    if (privy && !identity.signedIn) return identity.signIn()
+    if (!payout) return setError(privy ? 'Your wallet is still being created. Try again in a moment.' : 'Enter the address that should receive the reward.')
     setBusy(true)
     setError(null)
     try {
-      const res = await post<{ claimId: string; claimToken: string; claimExpiresAt: number }>(`/api/tasks/${task.id}/claim`, {
-        wallet,
-      })
-      if (!walletAddress) setManualAddress(wallet)
-      saveClaim(task.id, { claimId: res.claimId, claimToken: res.claimToken, wallet, expiresAt: res.claimExpiresAt })
+      const res = await post<{ claimId: string; claimToken: string; claimExpiresAt: number }>(
+        `/api/tasks/${task.id}/claim`,
+        { wallet: payout },
+        await identity.authHeaders(),
+      )
+      if (!privy) identity.rememberPayoutAddress?.(payout)
+      saveClaim(task.id, { claimId: res.claimId, claimToken: res.claimToken, wallet: payout, expiresAt: res.claimExpiresAt })
       onClaimed()
     } catch (e) {
       setError(errorText(e, 'Claim failed'))
@@ -224,39 +233,65 @@ function ClaimSheet({
     }
   }
 
+  const primaryLabel = busy
+    ? 'Claiming...'
+    : privy && !identity.signedIn
+      ? 'Sign in to claim'
+      : privy && !identity.address
+        ? 'Creating wallet...'
+        : 'Claim task'
+
   return (
     <Sheet title={`Claim ${task.displayId}`} onClose={onClose}>
       <p className="modal-copy">
-        You get a <strong>10 minute lock</strong> to answer. The reward goes to this address if your answer matches the chain.
+        You get a <strong>10 minute lock</strong> to answer. The reward goes to your wallet the moment your answer matches the
+        chain.
       </p>
       <form className="work" onSubmit={onSubmit}>
-        <div className="field">
-          <label htmlFor="payout">Payout address</label>
-          <div className="amount-box">
-            <input
-              id="payout"
-              className="mono"
-              placeholder="0x..."
-              autoComplete="off"
-              spellCheck={false}
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              style={{ fontSize: 14, fontWeight: 600 }}
-            />
-            {hasInjectedWallet() && (
-              <button type="button" className="max-btn" onClick={useWalletAddress}>
-                Wallet
-              </button>
-            )}
+        {privy ? (
+          identity.signedIn ? (
+            <div className="field">
+              <label>Paying to {identity.embeddedWallet ? 'your Proofwork wallet' : 'your wallet'}</label>
+              <div className="amount-box">
+                <span className="mono" style={{ fontSize: 13, fontWeight: 600 }}>
+                  {identity.address ?? 'Creating your wallet...'}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <p className="modal-copy">
+              Sign in with <strong>email, Google or X</strong>. We create a wallet for you, so there is nothing to install.
+            </p>
+          )
+        ) : (
+          <div className="field">
+            <label htmlFor="payout">Payout address</label>
+            <div className="amount-box">
+              <input
+                id="payout"
+                className="mono"
+                placeholder="0x..."
+                autoComplete="off"
+                spellCheck={false}
+                value={pasted}
+                onChange={(e) => setPasted(e.target.value)}
+                style={{ fontSize: 14, fontWeight: 600 }}
+              />
+              {hasInjectedWallet() && (
+                <button type="button" className="max-btn" onClick={fillFromBrowserWallet}>
+                  Wallet
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
         {error && <p className="form-error">{error}</p>}
         <div className="modal-actions">
           <button className="btn ghost" type="button" onClick={onClose}>
             Cancel
           </button>
-          <button className="btn primary" type="submit" disabled={busy}>
-            {busy ? 'Claiming...' : 'Claim task'}
+          <button className="btn primary" type="submit" disabled={busy || (privy && identity.signedIn && !identity.address)}>
+            {primaryLabel}
           </button>
         </div>
       </form>

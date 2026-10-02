@@ -3,6 +3,7 @@ import type { ChainReader } from './chain/chain-reader'
 import { FixtureChainReader } from './chain/fixture-reader'
 import { systemClock, type Clock } from './clock'
 import { loadConfig, type AppConfig } from './config'
+import { OpenIdentityVerifier, PrivyIdentityVerifier, type IdentityVerifier } from './identity'
 import { ArcPaymentRail } from './payments/arc-rail'
 import { LedgerPaymentProvider } from './payments/ledger-provider'
 import { MockPaymentRail } from './payments/mock-rail'
@@ -21,6 +22,7 @@ export interface App {
   tasks: TaskService
   agent: Agent
   clock: Clock
+  identity: IdentityVerifier
 }
 
 export interface AppOverrides {
@@ -28,6 +30,7 @@ export interface AppOverrides {
   chain?: ChainReader
   rail?: PaymentRail
   clock?: Clock
+  identity?: IdentityVerifier
 }
 
 function defaultChain(config: AppConfig): ChainReader {
@@ -42,8 +45,19 @@ function defaultRail(config: AppConfig): PaymentRail {
     : new MockPaymentRail()
 }
 
+function defaultIdentity(config: AppConfig): IdentityVerifier {
+  return config.privyAppId && config.privyAppSecret
+    ? new PrivyIdentityVerifier({
+        appId: config.privyAppId,
+        appSecret: config.privyAppSecret,
+        verificationKey: config.privyVerificationKey,
+      })
+    : new OpenIdentityVerifier()
+}
+
 export function createApp(config: AppConfig, overrides: AppOverrides = {}): App {
   const clock = overrides.clock ?? systemClock
+  const identity = overrides.identity ?? defaultIdentity(config)
   const store = overrides.store ?? new Store(config.databasePath)
   const chain = overrides.chain ?? defaultChain(config)
   const payments = new LedgerPaymentProvider(store, overrides.rail ?? defaultRail(config), {
@@ -63,6 +77,7 @@ export function createApp(config: AppConfig, overrides: AppOverrides = {}): App 
       deadlineMs: config.taskDeadlineMs,
       claimTtlMs: config.claimTtlMs,
       chainLabel: chain.chainLabel,
+      identityRequired: identity.required,
     },
     { explorerUrl: chain.explorerUrl },
   )
@@ -72,7 +87,7 @@ export function createApp(config: AppConfig, overrides: AppOverrides = {}): App 
     chainReaderLabel: config.chainReader === 'fixture' ? 'Arc Testnet (recorded fixtures)' : 'Arc Testnet RPC',
     publicBaseUrl: config.publicBaseUrl,
   })
-  return { config, store, chain, payments, tasks, agent, clock }
+  return { config, store, chain, payments, tasks, agent, clock, identity }
 }
 
 const globalForStore = globalThis as typeof globalThis & { proofworkStore?: Store }

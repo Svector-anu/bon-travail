@@ -6,7 +6,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   return handle(async () => {
     const { id } = await params
     const wallet = field(await readBody(request), 'wallet', 42)
-    const claim = getApp().tasks.claimTask(id, wallet)
+    const app = getApp()
+    const identity = await app.identity.verify(request)
+    const claim = app.tasks.claimTask(id, wallet, identity)
     return json({
       claimId: claim.claimId,
       claimToken: claim.claimToken,

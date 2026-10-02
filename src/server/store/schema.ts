@@ -1,3 +1,13 @@
+/** Applied after SCHEMA; each statement runs only if its column is missing. */
+export const COLUMN_MIGRATIONS: readonly { table: string; column: string; sql: string }[] = [
+  { table: 'attempts', column: 'identity', sql: 'ALTER TABLE attempts ADD COLUMN identity TEXT' },
+]
+
+export const POST_MIGRATION_SQL = `
+CREATE UNIQUE INDEX IF NOT EXISTS attempts_one_submission_per_identity
+  ON attempts(task_id, identity) WHERE submitted_at IS NOT NULL AND identity IS NOT NULL;
+`
+
 /**
  * Integrity lives in the schema, not only in application code:
  * - one payment row per (task, kind), so a payout can never be issued twice
@@ -38,6 +48,7 @@ CREATE TABLE IF NOT EXISTS attempts (
   claim_id TEXT NOT NULL UNIQUE,
   claim_token_hash TEXT NOT NULL,
   worker TEXT NOT NULL,
+  identity TEXT,
   claimed_at INTEGER NOT NULL,
   claim_expires_at INTEGER NOT NULL,
   submitted_at INTEGER,
