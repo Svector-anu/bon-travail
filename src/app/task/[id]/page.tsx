@@ -27,59 +27,72 @@ export default async function TaskPage({ params }: Props) {
   const settled = task.state === 'PAID' || task.state === 'REFUNDED'
 
   return (
-    <Reveal className="detail">
+    <Reveal>
       {!settled && <AutoRefresh />}
-      <div className="detail-top">
-        <Link className="text-link" href="/tasks">
-          <ArrowLeft size={14} /> Back to tasks
-        </Link>
-        <div>
-          <span className="label">{task.displayId}</span>
-          <span className={`chip ${status.tone}`}>{status.label}</span>
+      <section className="bleed stage">
+        <div className="stage-media" aria-hidden>
+          <img src="/scenes/task-stage.jpg" alt="" />
         </div>
-      </div>
-
-      <h1>Read this Arc transaction</h1>
-      <p>Reply with the recipient address and the USDC amount.</p>
-
-      <div className="hash-field">
-        <a className="mono" href={task.explorerTxUrl} target="_blank" rel="noreferrer" title="Open in Arcscan">
-          {task.txHash}
-        </a>
-        <CopyButton value={task.txHash} label="Copy transaction hash" />
-      </div>
-
-      <div className="facts">
-        <div className="fact">
-          <CircleDollarSign size={20} />
-          <div>
-            <span>Reward</span>
-            <strong>{task.reward} USDC</strong>
+        <div className="detail stage-body">
+          <div className="detail-top">
+            <Link className="text-link" href="/tasks">
+              <ArrowLeft size={14} /> Back to tasks
+            </Link>
+            <div>
+              <span className="label">{task.displayId}</span>
+              <span className={`chip ${status.tone}`}>{status.label}</span>
+            </div>
           </div>
-        </div>
-        <div className="fact">
-          <Timer size={20} />
-          <div>
-            <span>{settled ? 'Settled' : 'Time left'}</span>
-            <strong className="tnum">
-              {settled && task.settledAt ? <LocalTime ts={task.settledAt} /> : <Countdown to={task.deadlineAt} done="closing" />}
-            </strong>
-          </div>
-        </div>
-        <div className="fact">
-          <Link2 size={20} />
-          <div>
-            <span>Chain</span>
-            <strong>{task.chain}</strong>
-          </div>
-        </div>
-      </div>
 
-      <ClaimCta task={task} attempts={attempts} />
+          <h1>Read this Arc transaction</h1>
+          <p>Reply with the recipient address and the USDC amount.</p>
 
-      <div className="scene" aria-hidden>
-        <img src="/scenes/monolith.jpg" alt="" />
-      </div>
+          <div className="hash-field">
+            <a className="mono" href={task.explorerTxUrl} target="_blank" rel="noreferrer" title="Open in Arcscan">
+              {task.txHash}
+            </a>
+            <CopyButton value={task.txHash} label="Copy transaction hash" />
+          </div>
+
+          <div className="facts">
+            <div className="fact">
+              <span className="well">
+                <CircleDollarSign size={20} />
+              </span>
+              <div>
+                <span>Reward</span>
+                <strong>{task.reward} USDC</strong>
+              </div>
+            </div>
+            <div className="fact">
+              <span className="well">
+                <Timer size={20} />
+              </span>
+              <div>
+                <span>{settled ? 'Settled' : 'Time left'}</span>
+                <strong className="tnum">
+                  {settled && task.settledAt ? (
+                    <LocalTime ts={task.settledAt} />
+                  ) : (
+                    <Countdown to={task.deadlineAt} done="closing" />
+                  )}
+                </strong>
+              </div>
+            </div>
+            <div className="fact">
+              <span className="well">
+                <Link2 size={20} />
+              </span>
+              <div>
+                <span>Chain</span>
+                <strong>{task.chain}</strong>
+              </div>
+            </div>
+          </div>
+
+          <ClaimCta task={task} attempts={attempts} />
+        </div>
+      </section>
     </Reveal>
   )
 }

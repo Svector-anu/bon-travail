@@ -3,9 +3,8 @@ import Link from 'next/link'
 import { shortAddress } from '@/domain/address'
 import { AutoRefresh } from '@/components/auto-refresh'
 import { Ago, Countdown } from '@/components/clock'
-import { HeroLiveCard } from '@/components/hero-live-card'
 import { Reveal } from '@/components/reveal'
-import { agentActivity, homeSnapshot, recentReceipts } from '@/server/queries'
+import { homeSnapshot, recentReceipts } from '@/server/queries'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,20 +19,24 @@ export default function HomePage() {
   const home = homeSnapshot()
   const receipts = recentReceipts(4)
   const current = home.live.find((t) => t.state === 'OPEN') ?? home.live[0] ?? null
-  const { status } = agentActivity(1)
-  const latestPaid = receipts.find((r) => r.outcome === 'PAID') ?? null
 
   return (
     <Reveal>
       <AutoRefresh everyMs={8000} />
 
-      <section className="hero">
+      <section className="bleed hero">
         <div className="hero-media" aria-hidden>
-          <img src="/scenes/hero-computer.jpg" alt="" />
+          <img src="/scenes/hero-field.jpg" alt="" />
         </div>
         <div className="hero-copy">
           <span className="label">Autonomous work · Real payments</span>
-          <h1>Real work for autonomous agents.</h1>
+          <h1>
+            Real work
+            <br />
+            for autonomous
+            <br />
+            agents.
+          </h1>
           <p>Complete machine-checkable tasks. Get paid in USDC.</p>
           <div className="hero-ctas">
             <Link className="btn btn-primary" href={current ? `/task/${current.id}` : '/tasks'}>
@@ -44,37 +47,19 @@ export default function HomePage() {
             </Link>
           </div>
         </div>
-        <div className="hero-foot">
-          <div className="hero-stats">
-            <div>
-              <strong className="tnum">{home.paidCount + home.refundedCount}</strong>
-              <span>Tasks settled</span>
-            </div>
-            <div>
-              <strong className="tnum">{home.paidCount}</strong>
-              <span>Payments made</span>
-            </div>
-            <div>
-              <strong className="tnum">{home.refundedCount}</strong>
-              <span>Refunded</span>
-            </div>
+        <div className="hero-stats">
+          <div>
+            <strong className="tnum">{home.paidCount + home.refundedCount}</strong>
+            <span>Tasks completed</span>
           </div>
-          <HeroLiveCard
-            health={status.health}
-            lastRunAt={status.lastTickAt}
-            latest={
-              latestPaid
-                ? {
-                    taskId: latestPaid.taskId,
-                    displayId: latestPaid.displayId,
-                    reward: latestPaid.reward,
-                    to: latestPaid.worker ? shortAddress(latestPaid.worker) : null,
-                    at: latestPaid.settledAt,
-                    simulated: latestPaid.simulated,
-                  }
-                : null
-            }
-          />
+          <div>
+            <strong className="tnum">{home.paidCount}</strong>
+            <span>Successful payments</span>
+          </div>
+          <div>
+            <strong className="tnum">{home.refundedCount}</strong>
+            <span>Refunded / expired</span>
+          </div>
         </div>
       </section>
 
@@ -90,14 +75,14 @@ export default function HomePage() {
               <p>Reply with the recipient address and the USDC amount.</p>
               <div className="facts">
                 <div className="fact">
-                  <CircleDollarSign size={20} />
+                  <span className="well"><CircleDollarSign size={20} /></span>
                   <div>
                     <span>Reward</span>
                     <strong>{current.reward} USDC</strong>
                   </div>
                 </div>
                 <div className="fact">
-                  <Timer size={20} />
+                  <span className="well"><Timer size={20} /></span>
                   <div>
                     <span>Time left</span>
                     <strong className="tnum">
@@ -106,7 +91,7 @@ export default function HomePage() {
                   </div>
                 </div>
                 <div className="fact">
-                  <Link2 size={20} />
+                  <span className="well"><Link2 size={20} /></span>
                   <div>
                     <span>Chain</span>
                     <strong>{current.chain}</strong>

@@ -1,4 +1,4 @@
-import { ArrowRight, CircleDollarSign, Link2, Timer } from 'lucide-react'
+import { ArrowRight, ChevronRight, CircleDollarSign, Link2, Timer } from 'lucide-react'
 import Link from 'next/link'
 import type { TaskView } from '@/domain/views'
 import { TASK_STATUS } from '@/lib/format'
@@ -48,9 +48,13 @@ export function TaskRow({ task, featured = false }: { task: TaskView; featured?:
           <Link2 size={15} /> {task.chain}
         </span>
       </div>
-      {task.state === 'OPEN' && (
+      {featured ? (
         <span className="go" aria-hidden>
           <ArrowRight size={16} />
+        </span>
+      ) : (
+        <span className="go quiet" aria-hidden>
+          <ChevronRight size={18} />
         </span>
       )}
     </Link>

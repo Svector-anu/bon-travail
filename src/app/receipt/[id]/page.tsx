@@ -37,7 +37,7 @@ function headline(receipt: ReceiptView): { title: string; sub: string } {
     case 'PAID':
       return { title: 'Payment completed', sub: 'The submitted answer matched the onchain data.' }
     case 'REFUNDED':
-      return { title: 'Refunded', sub: `${receipt.task.reward} USDC back to the agent.` }
+      return { title: 'Task refunded', sub: 'Task expired before an accepted submission.' }
     default:
       return { title: 'In progress', sub: 'This receipt freezes the moment the task is paid or refunded.' }
   }
@@ -75,7 +75,7 @@ export default async function ReceiptPage({ params }: Props) {
       </div>
 
       <h1>{title}</h1>
-      <p className="receipt-sub">{refunded ? `${sub} Reason: ${receipt.outcomeReason}` : sub}</p>
+      <p className="receipt-sub">{sub}</p>
 
       <div className="receipt-grid">
         <section className="panel">
@@ -128,13 +128,13 @@ export default async function ReceiptPage({ params }: Props) {
         </section>
 
         <section className={`panel proof-object ${refunded ? 'refund' : ''}`}>
-          <img src="/scenes/glass-ring.jpg" alt="" />
+          <img src={refunded ? '/scenes/monolith-refund.jpg' : '/scenes/glass-ring.jpg'} alt="" />
           <strong className="tnum">{(payout ?? receipt.refund)?.amount ?? task.reward} USDC</strong>
           <small>
             {paid && receipt.worker
               ? `Sent to ${shortAddress(receipt.worker)}`
               : refunded
-                ? 'Returned to the agent treasury'
+                ? 'Back to agent'
                 : 'Reserved for this task'}
           </small>
           {simulated && (
@@ -209,13 +209,14 @@ export default async function ReceiptPage({ params }: Props) {
           <div className="panel-title">
             <span className="label">Timeline</span>
           </div>
-          <ol className="timeline">
+          <ol className="htimeline">
             {REFUND_STEPS.map((step) => {
               const at = firstAt(timeline, step.type)
               return (
                 <li key={step.type} className={at ? (step.type === 'refunded' ? 'final' : 'done') : ''}>
-                  <span>{step.label}</span>
-                  {at ? <LocalTime ts={at} full /> : <span className="muted">--</span>}
+                  <span className="dot" aria-hidden />
+                  <strong>{step.label}</strong>
+                  {at ? <LocalTime ts={at} /> : <span className="muted">--</span>}
                 </li>
               )
             })}

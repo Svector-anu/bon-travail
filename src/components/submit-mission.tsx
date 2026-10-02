@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowLeft, ArrowRight, Check, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, Clock, Lock, X } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -70,24 +70,25 @@ export function SubmitMission({ task, attempts }: { task: TaskView; attempts: At
 
   return (
     <div className="mission-body">
-      <Link className="text-link label" href={`/task/${task.id}`}>
-        <ArrowLeft size={13} /> {task.displayId}
-      </Link>
+      <div className="detail-top" style={{ margin: 0 }}>
+        <Link className="text-link" href={`/task/${task.id}`}>
+          <ArrowLeft size={14} /> Back to task
+        </Link>
+        <div>
+          <span className="label">{task.displayId}</span>
+          {holdsClaim && <span className="chip claimed">Claimed</span>}
+        </div>
+      </div>
       <AnimatePresence mode="wait">
         {view === 'form' && claim && (
           <motion.div key="form" {...stateMotion}>
-            <h1>Submit your answer</h1>
+            <h1 style={{ marginTop: 22 }}>Submit your answer</h1>
             <p className="muted" style={{ marginTop: 10 }}>
               Enter the recipient address and USDC amount from the transaction.
             </p>
             <form onSubmit={onSubmit}>
               <div className="field">
-                <div className="field-row">
-                  <label htmlFor="recipient">Recipient address</label>
-                  <span className="tnum">
-                    Lock ends in <Countdown to={claim.expiresAt} done="now" />
-                  </span>
-                </div>
+                <label htmlFor="recipient">Recipient address</label>
                 <input
                   id="recipient"
                   className="input mono"
@@ -112,9 +113,16 @@ export function SubmitMission({ task, attempts }: { task: TaskView; attempts: At
                   onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
                 />
               </div>
+              <div className="lock-row">
+                <Lock size={14} />
+                <span>Your claim is locked for you</span>
+                <span className="tnum">
+                  <Clock size={13} /> <Countdown to={claim.expiresAt} done="0s" />
+                </span>
+              </div>
               {error && <p className="form-error">{error}</p>}
               <button type="submit" className="btn btn-primary btn-wide">
-                Submit answer
+                Submit answer <ArrowRight size={16} />
               </button>
               <a className="text-link" href={task.explorerTxUrl} target="_blank" rel="noreferrer" style={{ justifySelf: 'center' }}>
                 Open the transaction on Arcscan <ArrowRight size={13} />

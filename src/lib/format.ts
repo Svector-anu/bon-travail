@@ -19,13 +19,13 @@ export function formatAgo(ts: number, now: number): string {
   return `${Math.floor(s / 86_400)}d ago`
 }
 
-export type StatusTone = 'live' | 'busy' | 'paid' | 'refund' | ''
+export type StatusTone = 'live' | 'busy' | 'claimed' | 'paid' | 'refund' | ''
 
 export const TASK_STATUS: Record<TaskState, { label: string; tone: StatusTone }> = {
   DRAFT: { label: 'Draft', tone: '' },
   FUNDED: { label: 'Funded', tone: '' },
   OPEN: { label: 'Live', tone: 'live' },
-  CLAIMED: { label: 'Claimed', tone: 'busy' },
+  CLAIMED: { label: 'Claimed', tone: 'claimed' },
   SUBMITTED: { label: 'Verifying', tone: 'busy' },
   VERIFYING: { label: 'Verifying', tone: 'busy' },
   ACCEPTED: { label: 'Paying', tone: 'busy' },
