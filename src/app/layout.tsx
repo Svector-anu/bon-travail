@@ -1,15 +1,9 @@
-import '@fontsource/nunito/600.css'
-import '@fontsource/nunito/700.css'
-import '@fontsource/nunito/800.css'
-import '@fontsource/pacifico/400.css'
 import './globals.css'
 import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
 import { Footer } from '@/components/footer'
 import { Header } from '@/components/header'
 import { Providers } from '@/components/providers'
-import { Toasts } from '@/components/toasts'
-import { THEME_BOOTSTRAP } from '@/lib/theme'
 
 export const metadata: Metadata = {
   title: { default: 'Proofwork', template: '%s | Proofwork' },
@@ -19,10 +13,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP }} />
-      </head>
+    <html lang="en">
       <body>
         <Providers>
           <div className="shell">
@@ -30,7 +21,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <main className="main">{children}</main>
             <Footer />
           </div>
-          <Toasts />
         </Providers>
       </body>
     </html>

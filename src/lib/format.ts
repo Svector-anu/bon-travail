@@ -12,51 +12,59 @@ export function formatDuration(ms: number): string {
 }
 
 export function formatAgo(ts: number, now: number): string {
-  const diff = now - ts
-  if (diff < 45_000) return 'just now'
-  if (diff < 3_600_000) return `${Math.round(diff / 60_000)} min ago`
-  if (diff < 86_400_000) return `${Math.round(diff / 3_600_000)} h ago`
-  return `${Math.round(diff / 86_400_000)} d ago`
+  const s = Math.max(0, Math.round((now - ts) / 1000))
+  if (s < 60) return `${s}s ago`
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`
+  if (s < 86_400) return `${Math.floor(s / 3600)}h ago`
+  return `${Math.floor(s / 86_400)}d ago`
 }
 
-interface StateStyle {
-  label: string
-  tone: 'live' | 'paid' | 'fail' | 'muted'
-}
+export type StatusTone = 'live' | 'busy' | 'paid' | 'refund' | ''
 
-export const STATE_STYLE: Record<TaskState, StateStyle> = {
-  DRAFT: { label: 'Draft', tone: 'muted' },
-  FUNDED: { label: 'Funded', tone: 'muted' },
-  OPEN: { label: 'Open', tone: 'live' },
-  CLAIMED: { label: 'Claimed', tone: 'live' },
-  SUBMITTED: { label: 'Submitted', tone: 'live' },
-  VERIFYING: { label: 'Verifying', tone: 'live' },
-  ACCEPTED: { label: 'Paying', tone: 'live' },
+export const TASK_STATUS: Record<TaskState, { label: string; tone: StatusTone }> = {
+  DRAFT: { label: 'Draft', tone: '' },
+  FUNDED: { label: 'Funded', tone: '' },
+  OPEN: { label: 'Live', tone: 'live' },
+  CLAIMED: { label: 'Claimed', tone: 'busy' },
+  SUBMITTED: { label: 'Verifying', tone: 'busy' },
+  VERIFYING: { label: 'Verifying', tone: 'busy' },
+  ACCEPTED: { label: 'Paying', tone: 'busy' },
   PAID: { label: 'Paid', tone: 'paid' },
-  REJECTED: { label: 'Rejected', tone: 'fail' },
-  EXPIRED: { label: 'Expired', tone: 'muted' },
-  REFUNDED: { label: 'Refunded', tone: 'muted' },
-}
-
-const ACTION_LINES: Record<string, string> = {
-  create_task: 'Agent created',
-  fund: 'Reward reserved for',
-  publish: 'Published',
-  release_lapsed_claim: 'Claim lapsed on',
-  verify: 'Verified',
-  pay: 'Paid out',
-  reopen: 'Reopened',
-  expire: 'Expired',
-  refund: 'Refunded',
-  source_task: 'Looked for a new transaction',
-  sweep: 'Sweep',
-  tick: 'Tick',
-}
-
-export function actionLabel(action: string): string {
-  return ACTION_LINES[action] ?? action
+  REJECTED: { label: 'Reopening', tone: 'busy' },
+  EXPIRED: { label: 'Expired', tone: 'refund' },
+  REFUNDED: { label: 'Refunded', tone: 'refund' },
 }
 
 export function displayIdFromTaskId(taskId: string): string {
   return taskId.replace(/^task_/, 'TASK-')
+}
+
+/** One plain-language line per agent action, in the agent's voice. */
+export function activityHeadline(action: string, taskId: string | null, detail: string, result: string): string {
+  const id = taskId ? displayIdFromTaskId(taskId) : ''
+  if (result === 'error') return `${action.replace(/_/g, ' ')} failed${id ? ` on ${id}` : ''}`
+  switch (action) {
+    case 'create_task':
+      return `Created ${id}`
+    case 'fund':
+      return `Reserved reward for ${id}`
+    case 'publish':
+      return `Published ${id}`
+    case 'verify':
+      return detail.startsWith('RPC verification passed') ? `Verification passed on ${id}` : `Answer rejected on ${id}`
+    case 'pay':
+      return result === 'ok' ? detail.replace(/ to 0x\S+/, '') + ` on ${id}` : `Payout pending on ${id}`
+    case 'reopen':
+      return `Reopened ${id}`
+    case 'expire':
+      return `${id} expired`
+    case 'refund':
+      return `Refunded ${id}`
+    case 'release_lapsed_claim':
+      return `Claim lapsed on ${id}`
+    case 'source_task':
+      return 'Looked for a new transaction'
+    default:
+      return detail
+  }
 }

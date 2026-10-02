@@ -1,90 +1,66 @@
 import type { Metadata } from 'next'
-import { ActivityFeed } from '@/components/activity-feed'
-import { healthCopy, sourceLabel } from '@/components/agent-strip'
+import { ActivityTimeline } from '@/components/activity-timeline'
 import { AutoRefresh } from '@/components/auto-refresh'
-import { Ago, LocalTime } from '@/components/clock'
-import { formatDuration } from '@/lib/format'
+import { Ago } from '@/components/clock'
+import { Reveal } from '@/components/reveal'
 import { agentActivity } from '@/server/queries'
 
 export const dynamic = 'force-dynamic'
 export const metadata: Metadata = { title: 'Agent' }
 
-const HEADLINE = {
+const PRESENCE = {
   running: 'Running',
-  alive: 'Alive',
-  error: 'Error',
-  stale: 'Stale',
-  never: 'Never run',
+  alive: 'Online',
+  error: 'Needs attention',
+  stale: 'Offline',
+  never: 'Not started',
 } as const
 
+const SOURCE = { aeon: 'Aeon', 'local-loop': 'local loop', manual: 'manual run' } as Record<string, string>
+
 export default function AgentPage() {
-  const { status, runs } = agentActivity(80)
-  const healthy = status.health === 'alive' || status.health === 'running'
+  const { status, runs } = agentActivity(24)
+  const visible = runs.filter((r) => r.action !== 'source_task' || r.result !== 'skipped')
 
   return (
-    <div className="page">
+    <Reveal>
       <AutoRefresh everyMs={4000} />
-      <img className="hero-mark" src="/mascots/farmer.png" alt="" />
-      <h1>Agent</h1>
-      <p className="lede">
-        It posts tasks, verifies answers against Arc, pays, reopens and refunds on its own. Every action below is a real
-        record.
-      </p>
-
-      <section className="tvl-card">
-        <h2 className={healthy ? '' : 'ink'}>{HEADLINE[status.health]}</h2>
-        <p>
-          {healthCopy(status.health)}.{' '}
-          {status.lastTickAt !== null ? (
-            <>
-              Last sweep <Ago ts={status.lastTickAt} /> via {sourceLabel(status.lastTickSource)}
-              {status.lastTickSummary ? `, ${status.lastTickSummary}` : ''}.
-            </>
-          ) : (
-            'No sweep recorded yet.'
-          )}
-        </p>
-      </section>
-
-      <div className="pair">
-        <div className="card stat-card">
-          <img src="/mascots/sun.png" alt="" />
-          <div className="stat-val tnum">{status.ticksLast24h > 0 ? status.ticksLast24h : '--'}</div>
-          <p>Sweeps in the last 24 hours, expected every {formatDuration(status.expectedIntervalMs)}</p>
+      <div className="agent-head">
+        <div>
+          <h1>Agent</h1>
+          <p>Autonomous execution. Transparent activity.</p>
         </div>
-        <div className="card stat-card">
-          <img src="/mascots/gift.png" alt="" />
-          <div className="stat-val">{status.simulatedPayments ? 'Mock' : 'Arc'}</div>
-          <p>
-            {status.simulatedPayments
-              ? 'Payouts are simulated on a local ledger'
-              : 'Payouts are real USDC transfers on Arc Testnet'}
-            . Reads from {status.chainReader}.
-          </p>
+        <div className="presence">
+          <span className={`presence-dot ${status.health}`} aria-hidden />
+          <div>
+            <strong>{PRESENCE[status.health]}</strong>
+            <small>
+              {status.lastTickAt !== null ? (
+                <>
+                  Last run <Ago ts={status.lastTickAt} />
+                  {status.lastTickSource ? ` via ${SOURCE[status.lastTickSource] ?? status.lastTickSource}` : ''}
+                </>
+              ) : (
+                'Waiting for its first run'
+              )}
+            </small>
+          </div>
         </div>
       </div>
 
-      <section className="card howto">
-        <h2>How it runs without anyone at the keyboard</h2>
-        <p>
-          An Aeon skill (<code>aeon/skills/proofwork-loop</code>) fires on a cron schedule and calls{' '}
-          <code>POST /api/agent/tick</code>. Each sweep expires and refunds overdue tasks, retries stuck verifications and
-          payouts, reopens rejected tasks and posts the next one. Worker submissions are verified the moment they arrive; the
-          sweep is the safety net.
-        </p>
-        <p>
-          The model never decides who gets paid. Verification is an exact comparison against the chain, and every payout is
-          capped per task, per day and by total escrow.
-        </p>
-        {status.lastSuccessAt !== null && (
-          <p>
-            Last clean sweep finished at <LocalTime ts={status.lastSuccessAt} full />.
-          </p>
-        )}
-      </section>
+      <div className="agent-body">
+        <section className="panel" style={{ padding: '6px 0' }}>
+          <ActivityTimeline runs={visible} />
+        </section>
+        <div className="agent-scene" aria-hidden>
+          <img src="/scenes/monolith-tall.jpg" alt="" />
+        </div>
+      </div>
 
-      <h2 className="section-title">Activity</h2>
-      <ActivityFeed runs={runs} empty="Nothing yet. Run npm run agent:tick, start npm run agent:loop, or schedule the Aeon skill." />
-    </div>
+      <p className="label" style={{ marginTop: 22 }}>
+        {status.simulatedPayments ? 'Simulated payouts' : 'Arc Testnet payouts'} · reads {status.chainReader} · expected every{' '}
+        {Math.round(status.expectedIntervalMs / 60000)} min
+      </p>
+    </Reveal>
   )
 }

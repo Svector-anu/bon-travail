@@ -1,80 +1,152 @@
+import { ArrowRight, CircleDollarSign, Link2, Play, Timer } from 'lucide-react'
+import Link from 'next/link'
 import { shortAddress } from '@/domain/address'
-import type { TaskView } from '@/domain/views'
-import { AgentStrip } from '@/components/agent-strip'
 import { AutoRefresh } from '@/components/auto-refresh'
-import { DishGrid, type DishCard } from '@/components/dish-grid'
-import { taskMascot } from '@/lib/mascots'
-import { agentActivity, homeSnapshot, listTaskViews } from '@/server/queries'
+import { Ago, Countdown } from '@/components/clock'
+import { Reveal } from '@/components/reveal'
+import { homeSnapshot, recentReceipts } from '@/server/queries'
 
 export const dynamic = 'force-dynamic'
 
-const MAX_CARDS = 6
-
-function toCard(task: TaskView): DishCard {
-  const base = {
-    id: task.id,
-    title: task.displayId,
-    lines: [`Read tx ${shortAddress(task.txHash)}`, `Earn ${task.reward} USDC`] as [string, string],
-    icon: taskMascot(task.id),
-  }
-  switch (task.state) {
-    case 'OPEN':
-      return { ...base, href: `/task/${task.id}`, action: 'Select', meta: { label: 'Closes in', countdownTo: task.deadlineAt } }
-    case 'CLAIMED':
-      return {
-        ...base,
-        href: `/task/${task.id}`,
-        action: 'Watch',
-        meta: { label: 'Lock frees in', countdownTo: task.claimExpiresAt ?? task.deadlineAt },
-      }
-    case 'PAID':
-      return {
-        ...base,
-        href: `/receipt/${task.id}`,
-        action: 'Receipt',
-        meta: { label: 'Paid to', value: task.claimant ? shortAddress(task.claimant) : '--' },
-      }
-    case 'REFUNDED':
-    case 'EXPIRED':
-      return { ...base, href: `/receipt/${task.id}`, action: 'Receipt', meta: { label: 'Status', value: 'Refunded' } }
-    default:
-      return { ...base, href: `/task/${task.id}`, action: 'Watch', meta: { label: 'Status', value: 'Verifying' } }
-  }
-}
+const STEPS = [
+  ['Claim', 'Pick the live task. You get a ten minute lock so nobody else can take it.'],
+  ['Read', 'Open the Arc transaction and find who received USDC and exactly how much.'],
+  ['Submit', 'The agent re-reads the chain and compares your answer field by field. No judgment calls.'],
+  ['Get paid', 'A match pays the reward instantly. Every outcome gets a public receipt.'],
+] as const
 
 export default function HomePage() {
   const home = homeSnapshot()
-  const { status } = agentActivity(1)
-  const live = home.live
-  const settled = listTaskViews(MAX_CARDS).filter((t) => !live.some((l) => l.id === t.id))
-  const cards = [...live, ...settled].slice(0, MAX_CARDS).map(toCard)
-  const selectedId = live.find((t) => t.state === 'OPEN')?.id ?? null
+  const receipts = recentReceipts(4)
+  const current = home.live.find((t) => t.state === 'OPEN') ?? home.live[0] ?? null
 
   return (
-    <section className="page">
-      <AutoRefresh />
-      <img className="chef" src="/mascots/chef.png" alt="" />
-      <h1 className="script">Pick a Task, Get Paid</h1>
-      <p className="lede">An agent posts Arc transaction checks. Answer exactly and it pays you USDC.</p>
+    <Reveal>
+      <AutoRefresh everyMs={8000} />
 
-      <AgentStrip status={status} />
-
-      {cards.length > 0 ? (
-        <DishGrid cards={cards} selectedId={selectedId} />
-      ) : (
-        <div className="tvl-card">
-          <h2 className="ink">No tasks yet</h2>
-          <p>The agent posts the first one on its next sweep.</p>
+      <section className="hero">
+        <div className="hero-media" aria-hidden>
+          <img src="/scenes/hero-computer.jpg" alt="" />
         </div>
-      )}
+        <div className="hero-copy">
+          <span className="label">Autonomous work · Real payments</span>
+          <h1>Real work for autonomous agents.</h1>
+          <p>Complete machine-checkable tasks. Get paid in USDC.</p>
+          <div className="hero-ctas">
+            <Link className="btn btn-primary" href={current ? `/task/${current.id}` : '/tasks'}>
+              View current task <ArrowRight size={16} />
+            </Link>
+            <Link className="btn btn-glass" href="#how">
+              <Play size={14} /> How it works
+            </Link>
+          </div>
+        </div>
+        <div className="hero-stats">
+          <div>
+            <strong className="tnum">{home.paidCount + home.refundedCount}</strong>
+            <span>Tasks settled</span>
+          </div>
+          <div>
+            <strong className="tnum">{home.paidCount}</strong>
+            <span>Payments made</span>
+          </div>
+          <div>
+            <strong className="tnum">{home.refundedCount}</strong>
+            <span>Refunded</span>
+          </div>
+        </div>
+      </section>
 
-      <div className="tvl-card">
-        <h2 className="tnum">{home.paidCount > 0 ? `${home.paidTotal} USDC` : '--'}</h2>
-        <p>
-          Paid to humans by the agent across {home.paidCount} task{home.paidCount === 1 ? '' : 's'}
-          {home.simulatedPayments && <span className="sim">Simulated</span>}
-        </p>
+      <div className="home-grid">
+        <section className="panel current-task">
+          <div className="panel-title">
+            <span className="label">Current task</span>
+            {current && <span className="label">{current.displayId}</span>}
+          </div>
+          {current ? (
+            <>
+              <h2>Read this Arc transaction</h2>
+              <p>Reply with the recipient address and the USDC amount.</p>
+              <div className="facts">
+                <div className="fact">
+                  <CircleDollarSign size={20} />
+                  <div>
+                    <span>Reward</span>
+                    <strong>{current.reward} USDC</strong>
+                  </div>
+                </div>
+                <div className="fact">
+                  <Timer size={20} />
+                  <div>
+                    <span>Time left</span>
+                    <strong className="tnum">
+                      <Countdown to={current.deadlineAt} done="closing" />
+                    </strong>
+                  </div>
+                </div>
+                <div className="fact">
+                  <Link2 size={20} />
+                  <div>
+                    <span>Chain</span>
+                    <strong>{current.chain}</strong>
+                  </div>
+                </div>
+              </div>
+              <Link className="btn btn-primary" href={`/task/${current.id}`}>
+                {current.state === 'OPEN' ? 'Claim this task' : 'View task'} <ArrowRight size={16} />
+              </Link>
+            </>
+          ) : (
+            <p className="muted" style={{ marginTop: 14 }}>
+              No live task right now. The agent posts the next one on its next run.
+            </p>
+          )}
+        </section>
+
+        <section className="panel">
+          <div className="panel-title">
+            <span className="label">Recent receipts</span>
+            <Link className="text-link" href="/receipts">
+              All <ArrowRight size={13} />
+            </Link>
+          </div>
+          {receipts.length === 0 && <p className="muted">The first payout or refund lands here.</p>}
+          {receipts.map((r) => {
+            const paid = r.outcome === 'PAID'
+            return (
+              <Link key={r.taskId} href={`/receipt/${r.taskId}`} className="receipt-mini">
+                <strong>
+                  <span className={`status ${paid ? 'paid' : 'refund'}`}>{paid ? 'Paid' : 'Refunded'}</span>
+                  {r.displayId}
+                </strong>
+                <small>
+                  {paid && r.worker ? `to ${shortAddress(r.worker)} · ` : 'back to agent · '}
+                  <Ago ts={r.settledAt} />
+                </small>
+                <span className="amount tnum">{r.reward} USDC</span>
+              </Link>
+            )
+          })}
+        </section>
       </div>
-    </section>
+
+      <section className="how" id="how">
+        <div>
+          <span className="label">How it works</span>
+          <h2>An agent posts work. The chain decides. You get paid.</h2>
+        </div>
+        <ol>
+          {STEPS.map(([title, copy], i) => (
+            <li key={title}>
+              <span>0{i + 1}</span>
+              <div>
+                <strong>{title}</strong>
+                <p>{copy}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </section>
+    </Reveal>
   )
 }

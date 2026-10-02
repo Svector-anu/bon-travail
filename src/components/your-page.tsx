@@ -1,14 +1,14 @@
 'use client'
 
+import { ArrowRight } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import type { WorkerSummary } from '@/server/queries'
-import { Countdown } from './clock'
+import { Ago, Countdown } from './clock'
 import { useIdentity } from './identity'
 
 const POLL_MS = 5000
 
-/** Turnip "account" recipe, filled from the wallet's real attempts and payouts. */
 export function YourPage() {
   const identity = useIdentity()
   const [summary, setSummary] = useState<WorkerSummary | null>(null)
@@ -34,73 +34,78 @@ export function YourPage() {
 
   const data = address && summary?.address.toLowerCase() === address.toLowerCase() ? summary : null
 
+  if (!address) {
+    return (
+      <div className="empty">
+        <p style={{ marginBottom: 18 }}>
+          {identity.mode === 'privy'
+            ? 'Sign in with email, Google or X. A wallet is created for you and your earnings show up here.'
+            : 'Connect a wallet, or claim a task with a payout address, and your earnings show up here.'}
+        </p>
+        <button type="button" className="btn btn-primary" onClick={identity.signIn} disabled={!identity.ready}>
+          {identity.mode === 'privy' ? 'Sign in' : 'Connect wallet'}
+        </button>
+      </div>
+    )
+  }
+
   return (
     <>
-      <div className="balances">
-        <div className="bal">
-          <img src="/mascots/gift.png" alt="" />
-          <div>
-            <div className="stat-val tnum">{data?.earned ?? '--'}</div>
-            <p>USDC earned</p>
-          </div>
+      <div className="stats-line">
+        <div>
+          <strong className="tnum">{data?.earned ?? '--'}</strong>
+          <span>USDC earned</span>
         </div>
-        <div className="bal">
-          <img src="/mascots/duck.png" alt="" />
-          <div>
-            <div className="stat-val tnum">{data && data.paidCount > 0 ? data.paidCount : '--'}</div>
-            <p>Tasks paid</p>
-          </div>
+        <div>
+          <strong className="tnum">{data && data.paidCount > 0 ? data.paidCount : '--'}</strong>
+          <span>Tasks paid</span>
+        </div>
+        <div>
+          <strong className="tnum">{data && data.answered > 0 ? `${data.answered - data.rejected}/${data.answered}` : '--'}</strong>
+          <span>Answers matched</span>
         </div>
       </div>
 
-      <hr className="hairline" />
-
-      <div className="balances">
-        <div className="bal">
-          <img src="/mascots/snail.png" alt="" />
-          <div>
-            <div className="stat-val tnum">{data && data.answered > 0 ? `${data.answered - data.rejected} / ${data.answered}` : '--'}</div>
-            <p>Answers matched</p>
-          </div>
-        </div>
-        <div className="bal">
-          <img src="/mascots/seedling.png" alt="" />
-          <div>
-            <div className="stat-val tnum">
-              {data?.activeClaim ? <Countdown to={data.activeClaim.expiresAt} done="--" /> : '--'}
-            </div>
-            <p>{data?.activeClaim ? `Lock on ${data.activeClaim.displayId}` : 'Active claim lock'}</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="user-actions">
-        <div className="user-actions-left">
-          <Link className="btn ghost" href={data?.activeClaim ? `/task/${data.activeClaim.taskId}` : '/'}>
-            {data?.activeClaim ? 'Finish task' : 'Find a task'}
-          </Link>
-          <Link className="btn ghost" href="/receipts">
-            Receipts
-          </Link>
-        </div>
-        {address ? (
-          <button type="button" className="btn ghost" onClick={identity.signOut}>
-            {identity.mode === 'privy' ? 'Sign out' : 'Disconnect'}
-          </button>
-        ) : (
-          <button type="button" className="btn ghost" disabled={!identity.ready} onClick={identity.signIn}>
-            {identity.mode === 'privy' ? 'Sign in' : 'Connect wallet'}
-          </button>
-        )}
-      </div>
-
-      {!address && (
-        <p className="lede" style={{ marginTop: 28 }}>
-          {identity.mode === 'privy'
-            ? 'Sign in with email, Google or X and your earnings show up here.'
-            : 'Connect a wallet, or claim any task with a payout address, and your earnings show up here.'}
-        </p>
+      {data?.activeClaim && (
+        <Link className="task-row featured" href={`/task/${data.activeClaim.taskId}/submit`} style={{ marginBottom: 12 }}>
+          <span className="status busy">Claimed</span>
+          <span className="id">{data.activeClaim.displayId}</span>
+          <h3>Finish your answer</h3>
+          <p className="desc">
+            Lock ends in <Countdown to={data.activeClaim.expiresAt} done="now" />
+          </p>
+          <span className="go" aria-hidden>
+            <ArrowRight size={16} />
+          </span>
+        </Link>
       )}
+
+      <section className="panel">
+        <div className="panel-title">
+          <span className="label">History</span>
+          <span className="mono" style={{ fontSize: 12, color: 'var(--dim)' }}>{address}</span>
+        </div>
+        {!data || data.history.length === 0 ? (
+          <p className="muted">No answers yet.</p>
+        ) : (
+          data.history.map((h) => (
+            <Link key={`${h.taskId}-${h.at}`} href={`/receipt/${h.taskId}`} className="receipt-mini">
+              <strong>
+                <span className={`status ${h.outcome === 'PASS' ? 'paid' : 'refund'}`}>
+                  {h.outcome === 'PASS' ? 'Matched' : h.outcome === 'FAIL' ? 'No match' : 'Lapsed'}
+                </span>
+                {h.displayId}
+              </strong>
+              <small>
+                <Ago ts={h.at} />
+              </small>
+              <span className="amount">
+                <ArrowRight size={14} />
+              </span>
+            </Link>
+          ))
+        )}
+      </section>
     </>
   )
 }

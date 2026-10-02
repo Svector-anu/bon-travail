@@ -1,15 +1,19 @@
 import type { Metadata } from 'next'
+import { Reveal } from '@/components/reveal'
 import { YourPage } from '@/components/your-page'
 
-export const metadata: Metadata = { title: 'Your page' }
+export const metadata: Metadata = { title: 'You' }
 
 export default function YouPage() {
   return (
-    <section className="page">
-      <img className="hero-mark" src="/mascots/turnip.png" alt="" />
-      <h1>Your Page</h1>
-      <p className="lede">Everything your wallet earned on Proofwork.</p>
+    <Reveal>
+      <div className="page-head">
+        <div>
+          <h1>You</h1>
+          <p>What your wallet has earned on Proofwork.</p>
+        </div>
+      </div>
       <YourPage />
-    </section>
+    </Reveal>
   )
 }

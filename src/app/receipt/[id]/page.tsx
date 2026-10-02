@@ -1,11 +1,14 @@
+import { ArrowLeft, ArrowUpRight, Check, X } from 'lucide-react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import type { AttemptView, PaymentView, ReceiptView } from '@/domain/views'
+import { shortAddress } from '@/domain/address'
+import type { ReceiptView, TimelineEntry } from '@/domain/views'
 import { AutoRefresh } from '@/components/auto-refresh'
 import { LocalTime } from '@/components/clock'
 import { CopyButton } from '@/components/copy-button'
-import { StatusPill } from '@/components/status-pill'
+import { Reveal } from '@/components/reveal'
+import { TASK_STATUS } from '@/lib/format'
 import { getApp } from '@/server/container'
 import { getReceiptView } from '@/server/queries'
 
@@ -13,277 +16,228 @@ export const dynamic = 'force-dynamic'
 
 type Props = { params: Promise<{ id: string }> }
 
-const OUTCOME_WORD: Partial<Record<ReceiptView['outcome'], string>> = {
-  PAID: 'PAID',
-  REFUNDED: 'REFUNDED',
-  REJECTED: 'REJECTED',
-  EXPIRED: 'EXPIRED',
-}
-
-const MASCOT: Partial<Record<ReceiptView['outcome'], string>> = {
-  PAID: '/mascots/gift.png',
-  REFUNDED: '/mascots/snail.png',
-  EXPIRED: '/mascots/snail.png',
-}
-
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const receipt = getReceiptView((await params).id)
   if (!receipt) return { title: 'Receipt not found' }
-  return {
-    title: `${receipt.task.displayId} ${receipt.outcome.toLowerCase()}`,
-    description: `${receipt.task.title}. ${receipt.outcomeReason}`,
+  return { title: `${receipt.task.displayId} ${receipt.outcome.toLowerCase()}`, description: receipt.outcomeReason }
+}
+
+const firstAt = (timeline: TimelineEntry[], type: TimelineEntry['type']) => timeline.find((t) => t.type === type)?.at ?? null
+
+const REFUND_STEPS: { type: TimelineEntry['type']; label: string }[] = [
+  { type: 'created', label: 'Created' },
+  { type: 'funded', label: 'Funded' },
+  { type: 'published', label: 'Opened' },
+  { type: 'expired', label: 'Expired' },
+  { type: 'refunded', label: 'Refunded' },
+]
+
+function headline(receipt: ReceiptView): { title: string; sub: string } {
+  switch (receipt.outcome) {
+    case 'PAID':
+      return { title: 'Payment completed', sub: 'The submitted answer matched the onchain data.' }
+    case 'REFUNDED':
+      return { title: 'Refunded', sub: `${receipt.task.reward} USDC back to the agent.` }
+    default:
+      return { title: 'In progress', sub: 'This receipt freezes the moment the task is paid or refunded.' }
   }
-}
-
-function PaymentLine({ payment, label }: { payment: PaymentView; label: string }) {
-  return (
-    <div className="slip-line">
-      <span>{label}</span>
-      <span>
-        {payment.amount} USDC
-        {payment.simulated && <span className="sim">Simulated</span>}
-      </span>
-    </div>
-  )
-}
-
-function AttemptBlock({ attempt }: { attempt: AttemptView }) {
-  const v = attempt.verification
-  return (
-    <div className="attempt">
-      <div className="attempt-top">
-        <span className="mono">{attempt.worker}</span>
-        <span className={`pill ${attempt.outcome === 'PASS' ? 'live' : attempt.outcome === 'FAIL' ? 'fail' : ''}`}>
-          {attempt.outcome === 'PASS' ? 'Match' : attempt.outcome === 'FAIL' ? 'Mismatch' : 'Pending'}
-        </span>
-      </div>
-      {attempt.submitted && (
-        <p>
-          Sent <span className="mono">{attempt.submitted.recipient}</span> and {attempt.submitted.amount} USDC
-          {attempt.submittedAt !== null && (
-            <>
-              {' '}
-              at <LocalTime ts={attempt.submittedAt} full />
-            </>
-          )}
-        </p>
-      )}
-      {v && <p>{v.reason}</p>}
-    </div>
-  )
 }
 
 export default async function ReceiptPage({ params }: Props) {
   const receipt = getReceiptView((await params).id)
   if (!receipt) notFound()
 
-  const { task } = receipt
-  const winner = receipt.attempts.find((a) => a.outcome === 'PASS')
-  const shown = winner ?? receipt.attempts.at(-1)
-  const others = receipt.attempts.filter((a) => a !== shown)
-  const expected = task.expected
-  const fields = shown?.verification?.fields ?? []
-  const fieldMatch = (name: string) => fields.find((f) => f.field === name)?.match
+  const { task, timeline } = receipt
+  const paid = receipt.outcome === 'PAID'
+  const refunded = receipt.outcome === 'REFUNDED'
+  const status = TASK_STATUS[receipt.outcome]
+  const { title, sub } = headline(receipt)
+  const shown = receipt.attempts.find((a) => a.outcome === 'PASS') ?? receipt.attempts.at(-1) ?? null
+  const v = shown?.verification ?? null
+  const field = (name: string) => v?.fields.find((f) => f.field === name)
+  const payout = receipt.payout
+  const simulated = Boolean(payout?.simulated ?? receipt.funding?.simulated)
   const receiptUrl = `${getApp().config.publicBaseUrl}/receipt/${task.id}`
-  const settledAmount = receipt.payout ?? receipt.refund
+  const settledAt = firstAt(timeline, paid ? 'paid' : 'refunded')
+  const verifiedAt = firstAt(timeline, 'accepted')
 
   return (
-    <div className="page">
+    <Reveal className="receipt">
       {!receipt.final && <AutoRefresh />}
+      <div className="receipt-head">
+        <Link className="text-link" href="/receipts">
+          <ArrowLeft size={14} /> Back to receipts
+        </Link>
+        <div>
+          <span className="label">{task.displayId}</span>
+          <span className={`chip ${status.tone}`}>{status.label}</span>
+        </div>
+      </div>
 
-      <article className="slip" aria-label={`Receipt for ${task.displayId}`}>
-        <header className="slip-head">
-          <img src={MASCOT[receipt.outcome] ?? '/mascots/turtle.png'} alt="" />
-          <span className="pill">Receipt {task.displayId}</span>
-          <div className={`slip-outcome ${receipt.outcome === 'PAID' ? 'paid' : ''}`}>
-            {OUTCOME_WORD[receipt.outcome] ?? <StatusPill state={receipt.outcome} />}
-          </div>
-          <div className="slip-amount tnum">
-            {settledAmount?.amount ?? task.reward} USDC
-            {settledAmount?.simulated && <span className="sim">Simulated</span>}
-          </div>
-          <p className="slip-reason">{receipt.outcomeReason}</p>
-        </header>
+      <h1>{title}</h1>
+      <p className="receipt-sub">{refunded ? `${sub} Reason: ${receipt.outcomeReason}` : sub}</p>
 
-        <section className="slip-section">
-          <h2>Task</h2>
-          <div className="slip-line">
-            <span>Asked</span>
-            <span>Read Arc transaction, reply with recipient and USDC amount</span>
-          </div>
-          <div className="slip-line">
-            <span>Transaction</span>
-            <a className="mono" href={task.explorerTxUrl} target="_blank" rel="noreferrer">
-              {task.txHash}
-            </a>
-          </div>
-          <div className="slip-line">
-            <span>Reward</span>
-            <span className="tnum">{task.reward} USDC on {task.chain}</span>
-          </div>
-          <div className="slip-line">
-            <span>Posted</span>
-            <span>
-              <LocalTime ts={task.createdAt} full /> by the agent
-            </span>
-          </div>
+      <div className="receipt-grid">
+        <section className="panel">
+          <dl className="ledger">
+            <dt>Task</dt>
+            <dd>Read this Arc transaction</dd>
+            <dt>Reward</dt>
+            <dd className="tnum">{task.reward} USDC</dd>
+            {receipt.worker && (
+              <>
+                <dt>Worker</dt>
+                <dd className="mono">{shortAddress(receipt.worker)}</dd>
+              </>
+            )}
+            <dt>Posted</dt>
+            <dd>
+              <LocalTime ts={task.createdAt} full />
+            </dd>
+            {task.submittedAt && (
+              <>
+                <dt>Submitted</dt>
+                <dd>
+                  <LocalTime ts={task.submittedAt} full />
+                </dd>
+              </>
+            )}
+            {verifiedAt && (
+              <>
+                <dt>Verified</dt>
+                <dd>
+                  <LocalTime ts={verifiedAt} full />
+                </dd>
+              </>
+            )}
+            {settledAt && (
+              <>
+                <dt>{paid ? 'Paid' : 'Refunded'}</dt>
+                <dd>
+                  <LocalTime ts={settledAt} full />
+                </dd>
+              </>
+            )}
+            <dt>Transaction</dt>
+            <dd>
+              <a className="mono" href={task.explorerTxUrl} target="_blank" rel="noreferrer">
+                {shortAddress(task.txHash)} <ArrowUpRight size={13} />
+              </a>
+            </dd>
+          </dl>
         </section>
 
-        <section className="slip-section">
-          <h2>Verification</h2>
-          <div className="slip-line">
-            <span>Result</span>
-            <span>
-              {shown?.verification ? (shown.verification.valid ? 'Match' : 'Mismatch') : 'No accepted submission'}
-              {shown?.verification && (
-                <span className="mono" style={{ color: 'var(--muted)', fontSize: 12, marginLeft: 8 }}>
-                  {receipt.verifier}, block {shown.verification.chainBlock}
-                </span>
-              )}
+        <section className={`panel proof-object ${refunded ? 'refund' : ''}`}>
+          <img src="/scenes/glass-ring.jpg" alt="" />
+          <strong className="tnum">{(payout ?? receipt.refund)?.amount ?? task.reward} USDC</strong>
+          <small>
+            {paid && receipt.worker
+              ? `Sent to ${shortAddress(receipt.worker)}`
+              : refunded
+                ? 'Returned to the agent treasury'
+                : 'Reserved for this task'}
+          </small>
+          {simulated && (
+            <span className="chip sim" style={{ marginTop: 10 }}>
+              Simulated payout
             </span>
+          )}
+          <a
+            className="btn btn-glass"
+            href={payout?.explorerTxUrl ?? task.explorerTxUrl}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {payout?.explorerTxUrl ? 'View on block explorer' : 'View task transaction'} <ArrowUpRight size={15} />
+          </a>
+        </section>
+      </div>
+
+      {v && (
+        <section className="panel verification">
+          <div className="panel-title">
+            <span className="label">Verification</span>
+            {v.valid ? <Check size={18} className="ok-mark" /> : <X size={18} className="no-mark" />}
           </div>
           <div className="compare">
             <div className="compare-col">
-              <h3>Expected, from chain</h3>
-              {expected ? (
+              <h3>Expected (onchain)</h3>
+              {task.expected ? (
                 <>
-                  <div className="compare-field">
+                  <div className="compare-row">
                     <span>Recipient</span>
-                    <strong className="mono">{expected.recipient}</strong>
+                    <span className="mono" style={{ color: 'var(--text)' }}>
+                      {task.expected.recipient}
+                    </span>
                   </div>
-                  <div className="compare-field">
+                  <div className="compare-row">
                     <span>Amount</span>
-                    <strong className="tnum">{expected.amount} USDC</strong>
+                    <span className="tnum" style={{ color: 'var(--text)' }}>
+                      {task.expected.amount} USDC
+                    </span>
                   </div>
                 </>
               ) : (
-                <p className="work-copy">Revealed when the task settles so open tasks cannot be copied.</p>
+                <p className="muted" style={{ fontSize: 13 }}>
+                  Revealed when the task settles.
+                </p>
               )}
             </div>
             <div className="compare-col">
-              <h3>Submitted{shown ? ` by ${shown.worker.slice(0, 6)}...${shown.worker.slice(-4)}` : ''}</h3>
-              {shown?.submitted ? (
-                <>
-                  <div className="compare-field">
+              <h3>Submission</h3>
+              {(['recipient', 'amount'] as const).map((name) => {
+                const f = field(name)
+                return (
+                  <div key={name} className="compare-row">
                     <span>
-                      Recipient{' '}
-                      {fieldMatch('recipient') !== undefined && (
-                        <span className={`mark ${fieldMatch('recipient') ? 'ok' : 'no'}`}>
-                          {fieldMatch('recipient') ? 'match' : 'no match'}
-                        </span>
-                      )}
+                      {name === 'recipient' ? 'Recipient' : 'Amount'}
+                      {f && <span className={f.match ? 'ok-mark' : 'no-mark'}>{f.match ? 'match' : 'no match'}</span>}
                     </span>
-                    <strong className="mono">{shown.submitted.recipient}</strong>
-                  </div>
-                  <div className="compare-field">
-                    <span>
-                      Amount{' '}
-                      {fieldMatch('amount') !== undefined && (
-                        <span className={`mark ${fieldMatch('amount') ? 'ok' : 'no'}`}>
-                          {fieldMatch('amount') ? 'match' : 'no match'}
-                        </span>
-                      )}
+                    <span className={name === 'recipient' ? 'mono' : 'tnum'} style={{ color: 'var(--text)' }}>
+                      {name === 'recipient' ? (shown?.submitted?.recipient ?? '--') : `${shown?.submitted?.amount ?? '--'} USDC`}
                     </span>
-                    <strong className="tnum">{shown.submitted.amount} USDC</strong>
                   </div>
-                </>
-              ) : (
-                <p className="work-copy">No submission.</p>
-              )}
+                )
+              })}
             </div>
           </div>
-          {others.length > 0 && (
-            <>
-              <h2 style={{ marginTop: 6 }}>Other attempts</h2>
-              {others.map((a) => (
-                <AttemptBlock key={a.claimId} attempt={a} />
-              ))}
-            </>
-          )}
         </section>
+      )}
 
-        <section className="slip-section">
-          <h2>Payment</h2>
-          {receipt.worker && (
-            <div className="slip-line">
-              <span>Worker</span>
-              <span className="mono">{receipt.worker}</span>
-            </div>
-          )}
-          {receipt.funding && <PaymentLine payment={receipt.funding} label="Reserved" />}
-          {receipt.payout && <PaymentLine payment={receipt.payout} label="Paid" />}
-          {receipt.payout?.txHash && (
-            <div className="slip-line">
-              <span>Payment tx</span>
-              <span>
-                {receipt.payout.explorerTxUrl ? (
-                  <a className="mono" href={receipt.payout.explorerTxUrl} target="_blank" rel="noreferrer">
-                    {receipt.payout.txHash}
-                  </a>
-                ) : (
-                  <span className="mono">{receipt.payout.txHash}</span>
-                )}
-                {receipt.payout.simulated && (
-                  <span style={{ display: 'block', color: 'var(--muted)', fontSize: 13 }}>
-                    Mock ledger id. No funds moved on chain.
-                  </span>
-                )}
-              </span>
-            </div>
-          )}
-          {receipt.refund && (
-            <div className="slip-line">
-              <span>Refunded</span>
-              <span>
-                {receipt.refund.amount} USDC reservation released back to the agent treasury. Funds never left it, so no
-                transfer was needed.
-              </span>
-            </div>
-          )}
-          {!receipt.payout && !receipt.refund && (
-            <div className="slip-line">
-              <span>Status</span>
-              <span>Not settled yet</span>
-            </div>
-          )}
-        </section>
-
-        <section className="slip-section">
-          <h2>Timeline</h2>
+      {refunded && (
+        <section className="panel verification">
+          <div className="panel-title">
+            <span className="label">Timeline</span>
+          </div>
           <ol className="timeline">
-            {receipt.timeline.map((entry, i) => (
-              <li key={`${entry.at}-${i}`}>
-                <span>
-                  {entry.label}
-                  <span className="actor">{entry.actor.startsWith('worker:') ? 'worker' : entry.actor}</span>
-                </span>
-                <LocalTime ts={entry.at} full />
-              </li>
-            ))}
+            {REFUND_STEPS.map((step) => {
+              const at = firstAt(timeline, step.type)
+              return (
+                <li key={step.type} className={at ? (step.type === 'refunded' ? 'final' : 'done') : ''}>
+                  <span>{step.label}</span>
+                  {at ? <LocalTime ts={at} full /> : <span className="muted">--</span>}
+                </li>
+              )
+            })}
           </ol>
         </section>
+      )}
 
-        <footer className="slip-foot">
-          {receipt.final ? (
-            <>
-              <span>Frozen at settlement. This receipt can no longer change.</span>
-              <span className="mono">{receipt.digest}</span>
-            </>
-          ) : (
-            <span>Live view. It freezes into a permanent receipt when the task is paid or refunded.</span>
-          )}
-        </footer>
-      </article>
-
-      <div className="slip-actions" style={{ marginTop: 34 }}>
-        <CopyButton className="btn ghost" value={receiptUrl} label="Copy receipt link" />
-        <Link className="btn ghost" href={`/task/${task.id}`}>
-          Open task
-        </Link>
-        <a className="btn ghost" href={task.explorerTxUrl} target="_blank" rel="noreferrer">
-          Check the transaction yourself
-        </a>
+      <div className="seal">
+        {receipt.final ? (
+          <>
+            <span className="label">Settled</span>
+            {v?.valid && <span className="label">Verified</span>}
+            <span className="label">{simulated ? 'Simulated payout' : 'Onchain'}</span>
+            <span className="mono">{receipt.digest}</span>
+          </>
+        ) : (
+          <span>Live view. It becomes a permanent receipt when the task settles.</span>
+        )}
+        <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+          Share <CopyButton value={receiptUrl} label="Copy receipt link" />
+        </span>
       </div>
-    </div>
+    </Reveal>
   )
 }

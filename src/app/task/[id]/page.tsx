@@ -1,8 +1,13 @@
+import { ArrowLeft, CircleDollarSign, Link2, Timer } from 'lucide-react'
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { AutoRefresh } from '@/components/auto-refresh'
-import { TaskWork } from '@/components/task-work'
-import { taskMascot } from '@/lib/mascots'
+import { ClaimCta } from '@/components/claim-cta'
+import { Countdown, LocalTime } from '@/components/clock'
+import { CopyButton } from '@/components/copy-button'
+import { Reveal } from '@/components/reveal'
+import { TASK_STATUS } from '@/lib/format'
 import { getTaskDetail } from '@/server/queries'
 
 export const dynamic = 'force-dynamic'
@@ -18,15 +23,63 @@ export default async function TaskPage({ params }: Props) {
   const detail = getTaskDetail((await params).id)
   if (!detail) notFound()
   const { task, attempts } = detail
+  const status = TASK_STATUS[task.state]
   const settled = task.state === 'PAID' || task.state === 'REFUNDED'
 
   return (
-    <section className="page">
+    <Reveal className="detail">
       {!settled && <AutoRefresh />}
-      <img className="hero-mark" src={taskMascot(task.id)} alt="" />
-      <h1>{task.displayId}</h1>
-      <p className="lede">Reply with the recipient and the exact USDC amount of this Arc transaction.</p>
-      <TaskWork task={task} attempts={attempts} />
-    </section>
+      <div className="detail-top">
+        <Link className="text-link" href="/tasks">
+          <ArrowLeft size={14} /> Back to tasks
+        </Link>
+        <div>
+          <span className="label">{task.displayId}</span>
+          <span className={`chip ${status.tone}`}>{status.label}</span>
+        </div>
+      </div>
+
+      <h1>Read this Arc transaction</h1>
+      <p>Reply with the recipient address and the USDC amount.</p>
+
+      <div className="hash-field">
+        <a className="mono" href={task.explorerTxUrl} target="_blank" rel="noreferrer" title="Open in Arcscan">
+          {task.txHash}
+        </a>
+        <CopyButton value={task.txHash} label="Copy transaction hash" />
+      </div>
+
+      <div className="facts">
+        <div className="fact">
+          <CircleDollarSign size={20} />
+          <div>
+            <span>Reward</span>
+            <strong>{task.reward} USDC</strong>
+          </div>
+        </div>
+        <div className="fact">
+          <Timer size={20} />
+          <div>
+            <span>{settled ? 'Settled' : 'Time left'}</span>
+            <strong className="tnum">
+              {settled && task.settledAt ? <LocalTime ts={task.settledAt} /> : <Countdown to={task.deadlineAt} done="closing" />}
+            </strong>
+          </div>
+        </div>
+        <div className="fact">
+          <Link2 size={20} />
+          <div>
+            <span>Chain</span>
+            <strong>{task.chain}</strong>
+          </div>
+        </div>
+      </div>
+
+      <ClaimCta task={task} attempts={attempts} />
+
+      <div className="scene" aria-hidden>
+        <img src="/scenes/monolith.jpg" alt="" />
+      </div>
+    </Reveal>
   )
 }
