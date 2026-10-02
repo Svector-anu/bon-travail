@@ -110,6 +110,7 @@ img {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
+  overflow-x: clip;
 }
 
 .main {
@@ -447,7 +448,7 @@ img {
   isolation: isolate;
 }
 
-.shell:has(.bleed) .topbar {
+.shell:has(.stage) .topbar {
   position: relative;
   z-index: 5;
   padding-left: 32px;
@@ -1584,7 +1585,7 @@ img {
     padding-top: 16px;
   }
 
-  .shell:has(.bleed) .topbar {
+  .shell:has(.stage) .topbar {
     padding-left: 18px;
     padding-right: 18px;
   }
@@ -1845,4 +1846,76 @@ img {
 
 .proof-object.refund img {
   display: none;
+}
+
+/* The home hero fills the first screen edge to edge; copy stays on the page grid. */
+.hero.bleed {
+  --gutter: max(24px, calc((100vw - 1120px) / 2));
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  border: 0;
+  border-radius: 0;
+  min-height: max(640px, 100svh);
+  margin-top: -96px;
+  padding-top: 96px;
+}
+
+.hero.bleed::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(10, 20, 48, 0.55) 0%, rgba(10, 20, 48, 0.25) 40%, rgba(10, 20, 48, 0) 60%);
+}
+
+.shell:has(.hero.bleed) .topbar {
+  position: relative;
+  z-index: 5;
+}
+
+.hero.bleed .hero-copy {
+  padding-left: var(--gutter);
+  padding-right: var(--gutter);
+  max-width: none;
+}
+
+.hero.bleed .hero-copy > * {
+  max-width: 620px;
+}
+
+.hero.bleed .hero-media {
+  inset: 0 0 0 30%;
+}
+
+.hero.bleed .hero-media::after {
+  background: linear-gradient(0deg, var(--bg) 0%, rgba(7, 10, 18, 0.55) 14%, rgba(7, 10, 18, 0) 40%);
+}
+
+.hero.bleed .hero-stats {
+  margin: 0 var(--gutter) 56px;
+}
+
+.hero.bleed + .home-grid {
+  margin-top: 28px;
+}
+
+@media (max-width: 720px) {
+  .hero.bleed {
+    min-height: 0;
+    margin-top: -138px;
+    padding-top: 138px;
+  }
+
+  .hero.bleed .hero-copy {
+    padding: 28px 20px 0;
+  }
+
+  .hero.bleed .hero-media {
+    inset: auto;
+  }
+
+  .hero.bleed .hero-stats {
+    margin: -84px 16px 24px;
+  }
 }
