@@ -3,8 +3,9 @@ import Link from 'next/link'
 import { shortAddress } from '@/domain/address'
 import { AutoRefresh } from '@/components/auto-refresh'
 import { Ago, Countdown } from '@/components/clock'
+import { HeroLiveCard } from '@/components/hero-live-card'
 import { Reveal } from '@/components/reveal'
-import { homeSnapshot, recentReceipts } from '@/server/queries'
+import { agentActivity, homeSnapshot, recentReceipts } from '@/server/queries'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,6 +20,8 @@ export default function HomePage() {
   const home = homeSnapshot()
   const receipts = recentReceipts(4)
   const current = home.live.find((t) => t.state === 'OPEN') ?? home.live[0] ?? null
+  const { status } = agentActivity(1)
+  const latestPaid = receipts.find((r) => r.outcome === 'PAID') ?? null
 
   return (
     <Reveal>
@@ -41,19 +44,37 @@ export default function HomePage() {
             </Link>
           </div>
         </div>
-        <div className="hero-stats">
-          <div>
-            <strong className="tnum">{home.paidCount + home.refundedCount}</strong>
-            <span>Tasks settled</span>
+        <div className="hero-foot">
+          <div className="hero-stats">
+            <div>
+              <strong className="tnum">{home.paidCount + home.refundedCount}</strong>
+              <span>Tasks settled</span>
+            </div>
+            <div>
+              <strong className="tnum">{home.paidCount}</strong>
+              <span>Payments made</span>
+            </div>
+            <div>
+              <strong className="tnum">{home.refundedCount}</strong>
+              <span>Refunded</span>
+            </div>
           </div>
-          <div>
-            <strong className="tnum">{home.paidCount}</strong>
-            <span>Payments made</span>
-          </div>
-          <div>
-            <strong className="tnum">{home.refundedCount}</strong>
-            <span>Refunded</span>
-          </div>
+          <HeroLiveCard
+            health={status.health}
+            lastRunAt={status.lastTickAt}
+            latest={
+              latestPaid
+                ? {
+                    taskId: latestPaid.taskId,
+                    displayId: latestPaid.displayId,
+                    reward: latestPaid.reward,
+                    to: latestPaid.worker ? shortAddress(latestPaid.worker) : null,
+                    at: latestPaid.settledAt,
+                    simulated: latestPaid.simulated,
+                  }
+                : null
+            }
+          />
         </div>
       </section>
 
