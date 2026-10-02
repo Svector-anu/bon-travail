@@ -6,8 +6,11 @@ const HOUR = 60 * 60 * 1000
 
 describe('agent tick', () => {
   it('creates, funds and publishes the next task when none is open', async () => {
+    // #given
     const app = makeApp()
+    // #when
     const report = await app.agent.tick('aeon')
+    // #then
     expect(report.status).toBe('ok')
     expect(report.actions.map((a) => a.action)).toEqual(['create_task', 'fund', 'publish'])
     expect(report.openTasks).toEqual(['task_001'])
@@ -16,19 +19,25 @@ describe('agent tick', () => {
   })
 
   it('does nothing when the supply is already met', async () => {
+    // #given a published task
     const app = makeApp()
     await app.agent.tick('aeon')
+    // #when
     const second = await app.agent.tick('aeon')
+    // #then
     expect(second.actions).toEqual([])
     expect(second.notable).toEqual([])
     expect(app.store.listTasks()).toHaveLength(1)
   })
 
   it('verifies, pays and then creates the next task in one tick', async () => {
+    // #given a submitted correct answer
     const app = makeApp()
     await app.agent.tick('aeon')
     await claimAndSubmit(app, 'task_001', WORKER_A, correctAnswer())
+    // #when
     const report = await app.agent.tick('aeon')
+    // #then
     expect(report.actions.map((a) => `${a.action}:${a.result}`)).toEqual([
       'verify:ok',
       'pay:ok',
@@ -41,6 +50,7 @@ describe('agent tick', () => {
   })
 
   it('leaves an already-settled task alone', async () => {
+    // #given a paid task
     const app = makeApp()
     await app.agent.tick('aeon')
     await claimAndSubmit(app, 'task_001', WORKER_A, correctAnswer())
@@ -48,98 +58,130 @@ describe('agent tick', () => {
     expect(app.store.requireTask('task_001').state).toBe('PAID')
 
     const eventsBefore = app.store.listEvents('task_001').length
+    // #when
     const report = await app.agent.tick('aeon')
+    // #then
     expect(report.actions.filter((a) => a.taskId === 'task_001')).toEqual([])
     expect(app.store.listEvents('task_001')).toHaveLength(eventsBefore)
     expect(app.store.listPayments('task_001').filter((p) => p.kind === 'release')).toHaveLength(1)
   })
 
   it('reopens a rejected task', async () => {
+    // #given a submitted wrong answer
     const app = makeApp()
     await app.agent.tick('aeon')
     await claimAndSubmit(app, 'task_001', WORKER_A, { recipient: FIXTURE.recipient, amount: '0.01' })
+    // #when
     const report = await app.agent.tick('aeon')
+    // #then
     expect(report.actions.map((a) => a.action)).toEqual(['verify', 'reopen'])
     expect(app.store.requireTask('task_001').state).toBe('OPEN')
   })
 
   it('expires and refunds an overdue task, then replaces it', async () => {
+    // #given an overdue task
     const app = makeApp()
     await app.agent.tick('aeon')
     app.clock.advance(6 * HOUR)
+    // #when
     const report = await app.agent.tick('aeon')
+    // #then
     expect(report.actions.map((a) => a.action)).toEqual(['expire', 'refund', 'create_task', 'fund', 'publish'])
     expect(app.store.requireTask('task_001').state).toBe('REFUNDED')
     expect(app.tasks.getReceipt('task_001')).toMatchObject({ final: true, outcome: 'REFUNDED' })
   })
 
   it('recovers from a failed payout on a later tick', async () => {
+    // #given a rail that fails once
     const rail = new FlakyRail(1)
     const app = makeApp({ rail })
     await app.agent.tick('aeon')
     await claimAndSubmit(app, 'task_001', WORKER_A, correctAnswer())
 
+    // #when
     const failing = await app.agent.tick('aeon')
+    // #then
     expect(failing.status).toBe('error')
     expect(failing.actions.find((a) => a.action === 'pay')).toMatchObject({ result: 'error', error: 'simulated rpc timeout' })
     expect(app.store.requireTask('task_001').state).toBe('ACCEPTED')
     expect(failing.notable.some((n) => n.includes('Agent error'))).toBe(true)
 
+    // #when the next tick runs
     const recovered = await app.agent.tick('aeon')
+    // #then
     expect(recovered.status).toBe('ok')
     expect(app.store.requireTask('task_001').state).toBe('PAID')
     expect(rail.signs).toBe(1)
   })
 
   it('recovers from an RPC outage during verification', async () => {
+    // #given a submitted answer
     const chain = new SwitchableChain()
     const app = makeApp({ chain })
     await app.agent.tick('aeon')
     await claimAndSubmit(app, 'task_001', WORKER_A, correctAnswer())
 
+    // #when the chain is down
     chain.down = true
     const failing = await app.agent.tick('aeon')
+    // #then
     expect(failing.actions.find((a) => a.action === 'verify')?.result).toBe('error')
     expect(app.store.requireTask('task_001').state).toBe('SUBMITTED')
 
+    // #when the chain is back
     chain.down = false
     await app.agent.tick('aeon')
+    // #then
     expect(app.store.requireTask('task_001').state).toBe('PAID')
     expect(app.store.listAttempts('task_001')[0]?.outcome).toBe('PASS')
   })
 
   it('does not run two ticks at once', async () => {
+    // #given a lease held elsewhere
     const app = makeApp()
     app.store.acquireLease('agent-tick', 'someone-else', app.clock.now(), 60_000)
+    // #when
     const report = await app.agent.tick('aeon')
+    // #then
     expect(report.status).toBe('skipped')
     expect(app.agent.status().health).toBe('running')
   })
 
   it('reports health from real tick history', async () => {
+    // #given
     const app = makeApp()
+    // #then never ticked
     expect(app.agent.status().health).toBe('never')
+    // #when a tick runs
     await app.agent.tick('aeon')
+    // #then
     expect(app.agent.status()).toMatchObject({ health: 'alive', lastTickSource: 'aeon', simulatedPayments: true })
+    // #when the tick goes stale
     app.clock.advance(11 * 60 * 1000)
+    // #then
     expect(app.agent.status().health).toBe('stale')
   })
 })
 
 describe('agent tick with no chain access', () => {
   it('logs the failed task sourcing and creates the task once the RPC is back', async () => {
+    // #given the chain is down
     const chain = new SwitchableChain()
     const app = makeApp({ chain })
     chain.down = true
+    // #when
     const failing = await app.agent.tick('aeon')
+    // #then
     expect(failing.status).toBe('error')
     expect(failing.actions).toEqual([
       expect.objectContaining({ action: 'source_task', result: 'error', error: 'rpc down' }),
     ])
     expect(app.agent.status().health).toBe('error')
 
+    // #when the RPC is back
     chain.down = false
     const recovered = await app.agent.tick('aeon')
+    // #then
     expect(recovered.openTasks).toEqual(['task_001'])
     expect(app.agent.status().health).toBe('alive')
   })

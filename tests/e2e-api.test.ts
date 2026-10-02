@@ -105,7 +105,9 @@ describe('happy path over HTTP', () => {
   })
 
   it('returns 404 for an unknown receipt', async () => {
+    // #when
     const res = await routes.receipt(new Request('http://test.local'), ctx('task_999'))
+    // #then
     expect(res.status).toBe(404)
   })
 })
