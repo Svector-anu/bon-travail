@@ -488,6 +488,23 @@ export class Store {
     return rows.reduce((sum, row) => sum + BigInt(str(row, 'amount_micro')), 0n)
   }
 
+  /** Totals across settled work, straight from the ledger. */
+  settlementTotals(): { paidMicro: bigint; paidCount: number; refundedCount: number } {
+    const rows = this.all("SELECT kind, amount_micro FROM payments WHERE kind IN ('release', 'refund') AND status = 'confirmed'")
+    let paidMicro = 0n
+    let paidCount = 0
+    let refundedCount = 0
+    for (const row of rows) {
+      if (str(row, 'kind') === 'release') {
+        paidMicro += BigInt(str(row, 'amount_micro'))
+        paidCount++
+      } else {
+        refundedCount++
+      }
+    }
+    return { paidMicro, paidCount, refundedCount }
+  }
+
   // ---- receipts ------------------------------------------------------------
 
   insertReceipt(receipt: StoredReceipt): void {

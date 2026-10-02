@@ -75,10 +75,20 @@ export function createApp(config: AppConfig, overrides: AppOverrides = {}): App 
   return { config, store, chain, payments, tasks, agent, clock }
 }
 
-const globalForApp = globalThis as typeof globalThis & { proofworkApp?: App }
+const globalForStore = globalThis as typeof globalThis & { proofworkStore?: Store }
+let app: App | undefined
 
-/** Process-wide instance for route handlers and scripts. Survives dev hot reloads. */
+/**
+ * Process-wide instance for route handlers and scripts. Only the database
+ * connection is pinned to globalThis; services are rebuilt when a dev hot
+ * reload re-evaluates this module, so they never mix class identities with
+ * freshly loaded code.
+ */
 export function getApp(): App {
-  globalForApp.proofworkApp ??= createApp(loadConfig())
-  return globalForApp.proofworkApp
+  if (!app) {
+    const config = loadConfig()
+    globalForStore.proofworkStore ??= new Store(config.databasePath)
+    app = createApp(config, { store: globalForStore.proofworkStore })
+  }
+  return app
 }
