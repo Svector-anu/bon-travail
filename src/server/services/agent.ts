@@ -233,14 +233,22 @@ export class Agent {
 
   private async refund(task: TaskRecord, log: Logger, notable: string[]): Promise<void> {
     const refunded = await this.tasks.refundTask(task.id, 'agent')
+    if (refunded.state !== 'REFUNDED') {
+      log('refund', task.id, 'skipped', 'Refund broadcast, waiting for confirmation')
+      return
+    }
     log('refund', task.id, 'ok', `${formatUsdc(refunded.rewardMicro)} USDC reward returned to the agent treasury`)
     notable.push(`${displayId(task)} expired with no accepted submission; reward refunded. Receipt ${this.receiptUrl(task.id)}`)
   }
 
   private async publish(task: TaskRecord, log: Logger, notable: string[]): Promise<void> {
     if (task.state === 'DRAFT') {
-      await this.tasks.fundTask(task.id, 'agent')
-      log('fund', task.id, 'ok', `Reserved ${formatUsdc(task.rewardMicro)} USDC for ${displayId(task)}`)
+      const funded = await this.tasks.fundTask(task.id, 'agent')
+      if (funded.state !== 'FUNDED') {
+        log('fund', task.id, 'skipped', `Funding for ${displayId(task)} broadcast, waiting for confirmation`)
+        return
+      }
+      log('fund', task.id, 'ok', `${this.payments.simulated ? 'Reserved' : 'Escrowed'} ${formatUsdc(task.rewardMicro)} USDC for ${displayId(task)}`)
     }
     this.tasks.publishTask(task.id, 'agent')
     log('publish', task.id, 'ok', `${displayId(task)} is open: ${task.title}`)

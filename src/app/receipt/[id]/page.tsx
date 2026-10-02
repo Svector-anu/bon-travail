@@ -57,6 +57,7 @@ export default async function ReceiptPage({ params }: Props) {
   const field = (name: string) => v?.fields.find((f) => f.field === name)
   const payout = receipt.payout
   const simulated = Boolean(payout?.simulated ?? receipt.funding?.simulated)
+  const settlementTx = payout?.explorerTxUrl ?? receipt.refund?.explorerTxUrl ?? null
   const receiptUrl = `${getApp().config.publicBaseUrl}/receipt/${task.id}`
   const settledAt = firstAt(timeline, paid ? 'paid' : 'refunded')
   const verifiedAt = firstAt(timeline, 'accepted')
@@ -124,6 +125,16 @@ export default async function ReceiptPage({ params }: Props) {
                 {shortAddress(task.txHash)} <ArrowUpRight size={13} />
               </a>
             </dd>
+            {receipt.funding?.explorerTxUrl && receipt.funding.txHash && (
+              <>
+                <dt>Escrowed</dt>
+                <dd>
+                  <a className="mono" href={receipt.funding.explorerTxUrl} target="_blank" rel="noreferrer">
+                    {shortAddress(receipt.funding.txHash)} <ArrowUpRight size={13} />
+                  </a>
+                </dd>
+              </>
+            )}
           </dl>
         </section>
 
@@ -142,13 +153,8 @@ export default async function ReceiptPage({ params }: Props) {
               Simulated payout
             </span>
           )}
-          <a
-            className="btn btn-glass"
-            href={payout?.explorerTxUrl ?? task.explorerTxUrl}
-            target="_blank"
-            rel="noreferrer"
-          >
-            {payout?.explorerTxUrl ? 'View on block explorer' : 'View task transaction'} <ArrowUpRight size={15} />
+          <a className="btn btn-glass" href={settlementTx ?? task.explorerTxUrl} target="_blank" rel="noreferrer">
+            {settlementTx ? 'View on block explorer' : 'View task transaction'} <ArrowUpRight size={15} />
           </a>
         </section>
       </div>

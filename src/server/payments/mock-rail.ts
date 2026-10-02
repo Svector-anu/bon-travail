@@ -1,6 +1,6 @@
 import { keccak256, toHex } from 'viem'
-import type { Address, Hex } from '@/domain/types'
-import type { PaymentRail, SignedTransfer } from './payment-provider'
+import type { Hex } from '@/domain/types'
+import type { PaymentRail, RailCall, SignedTransfer } from './payment-provider'
 
 /**
  * Deterministic in-process rail. The "transaction hash" is keccak256 of the
@@ -10,11 +10,12 @@ import type { PaymentRail, SignedTransfer } from './payment-provider'
 export class MockPaymentRail implements PaymentRail {
   readonly name = 'mock'
   readonly simulated = true
+  readonly onchainEscrow: boolean = false
 
   async assertCanReserve(): Promise<void> {}
 
-  async signTransfer(idempotencyKey: string, to: Address, amountMicro: bigint): Promise<SignedTransfer> {
-    const rawTx = toHex(`mock-transfer:${idempotencyKey}:${to}:${amountMicro}`)
+  async sign(call: RailCall): Promise<SignedTransfer> {
+    const rawTx = toHex(`mock-${call.kind}:${call.idempotencyKey}:${call.to ?? 'agent'}:${call.amountMicro}`)
     return { rawTx, txHash: keccak256(rawTx) }
   }
 

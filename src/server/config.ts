@@ -6,8 +6,9 @@ export interface AppConfig {
   chainReader: 'rpc' | 'fixture'
   arcRpcUrl: string
   arcExplorerUrl: string
-  paymentProvider: 'mock' | 'arc'
+  paymentProvider: 'mock' | 'arc' | 'arc-escrow'
   arcPayerPrivateKey: string | undefined
+  arcEscrowAddress: string | undefined
   maxRewardMicro: bigint
   dailyPayoutCapMicro: bigint
   maxOutstandingEscrowMicro: bigint
@@ -52,8 +53,9 @@ export function loadConfig(env: Env = process.env): AppConfig {
     chainReader: oneOf(env, 'CHAIN_READER', ['rpc', 'fixture'] as const, 'rpc'),
     arcRpcUrl: env.ARC_RPC_URL || 'https://rpc.testnet.arc.network',
     arcExplorerUrl: env.ARC_EXPLORER_URL || 'https://testnet.arcscan.app',
-    paymentProvider: oneOf(env, 'PAYMENT_PROVIDER', ['mock', 'arc'] as const),
+    paymentProvider: oneOf(env, 'PAYMENT_PROVIDER', ['mock', 'arc', 'arc-escrow'] as const),
     arcPayerPrivateKey: env.ARC_PAYER_PRIVATE_KEY || undefined,
+    arcEscrowAddress: env.ARC_ESCROW_ADDRESS || undefined,
     maxRewardMicro: usdcFromConfig(env.MAX_REWARD_USDC ?? '1', 'MAX_REWARD_USDC'),
     dailyPayoutCapMicro: usdcFromConfig(env.DAILY_PAYOUT_CAP_USDC ?? '10', 'DAILY_PAYOUT_CAP_USDC'),
     maxOutstandingEscrowMicro: usdcFromConfig(env.MAX_OUTSTANDING_ESCROW_USDC ?? '5', 'MAX_OUTSTANDING_ESCROW_USDC'),
@@ -72,8 +74,11 @@ export function loadConfig(env: Env = process.env): AppConfig {
   if (config.taskRewardMicro > config.maxRewardMicro) {
     throw new PaymentConfigError('TASK_REWARD_USDC exceeds MAX_REWARD_USDC')
   }
-  if (config.paymentProvider === 'arc' && !config.arcPayerPrivateKey) {
-    throw new PaymentConfigError('PAYMENT_PROVIDER=arc requires ARC_PAYER_PRIVATE_KEY')
+  if (config.paymentProvider !== 'mock' && !config.arcPayerPrivateKey) {
+    throw new PaymentConfigError(`PAYMENT_PROVIDER=${config.paymentProvider} requires ARC_PAYER_PRIVATE_KEY`)
+  }
+  if (config.paymentProvider === 'arc-escrow' && !config.arcEscrowAddress) {
+    throw new PaymentConfigError('PAYMENT_PROVIDER=arc-escrow requires ARC_ESCROW_ADDRESS')
   }
   if (config.privyAppId && !config.privyAppSecret) {
     throw new Error('NEXT_PUBLIC_PRIVY_APP_ID is set but PRIVY_APP_SECRET is missing; claims cannot be verified')

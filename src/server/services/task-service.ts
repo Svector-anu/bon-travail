@@ -123,7 +123,8 @@ export class TaskService {
   async fundTask(taskId: string, actor: string): Promise<TaskRecord> {
     const task = this.store.requireTask(taskId)
     if (task.state !== 'DRAFT') return task
-    const { payment } = await this.payments.fundTask(task)
+    const { payment, settled } = await this.payments.fundTask(task)
+    if (!settled) return task
     const now = this.clock.now()
     return this.store.transition({
       taskId,
@@ -400,7 +401,8 @@ export class TaskService {
     const task = this.store.requireTask(taskId)
     if (task.state === 'REFUNDED') return task
     requireState(task, ['EXPIRED'], 'refund')
-    const { payment } = await this.payments.refundTask(task)
+    const { payment, settled } = await this.payments.refundTask(task)
+    if (!settled) return task
     const at = this.clock.now()
     return this.store.transaction(() => {
       const refunded = this.store.transition({
@@ -410,7 +412,12 @@ export class TaskService {
         at,
         actor,
         event: 'refunded',
-        detail: { amount: formatUsdc(payment.amountMicro), provider: payment.provider, reason: 'expired before accepted submission' },
+        detail: {
+          amount: formatUsdc(payment.amountMicro),
+          provider: payment.provider,
+          txHash: payment.txHash,
+          reason: 'expired before accepted submission',
+        },
         patch: { settledAt: at },
       })
       this.writeReceipt(refunded)

@@ -8,6 +8,7 @@ import {
   type PaymentProvider,
   type PaymentRail,
   type PaymentResult,
+  type RailCall,
 } from './payment-provider'
 
 export interface SpendingPolicy {
@@ -63,11 +64,14 @@ export class LedgerPaymentProvider implements PaymentProvider {
         `funding ${task.id} would exceed the outstanding escrow cap of ${formatUsdc(this.policy.maxOutstandingEscrowMicro)} USDC`,
       )
     }
-    await this.rail.assertCanReserve(outstanding + task.rewardMicro)
+    if (!existing) await this.rail.assertCanReserve({ newMicro: task.rewardMicro, outstandingMicro: outstanding })
 
     const now = this.clock.now()
     const payment = this.store.ensurePayment(this.newPayment(task, 'fund', null, now))
-    return { payment: this.store.updatePayment(payment.id, { status: 'confirmed' }, now), settled: true }
+    if (!this.rail.onchainEscrow) {
+      return { payment: this.store.updatePayment(payment.id, { status: 'confirmed' }, now), settled: true }
+    }
+    return this.withLease(`fund:${task.id}`, () => this.settle(payment, this.callFor(task, payment)))
   }
 
   async releasePayment(task: TaskRecord, recipient: Address): Promise<PaymentResult> {
@@ -81,15 +85,7 @@ export class LedgerPaymentProvider implements PaymentProvider {
       throw new PaymentPolicyError(`${task.id} was refunded and can never be paid`)
     }
 
-    const holder = `release:${task.id}`
-    if (!this.store.acquireLease(PAYOUT_LEASE, holder, this.clock.now(), PAYOUT_LEASE_TTL_MS)) {
-      throw new PaymentRailError('another payout is in flight; retry shortly')
-    }
-    try {
-      return await this.releaseUnderLease(task, recipient)
-    } finally {
-      this.store.releaseLease(PAYOUT_LEASE, holder)
-    }
+    return this.withLease(`release:${task.id}`, () => this.releaseUnderLease(task, recipient))
   }
 
   private async releaseUnderLease(task: TaskRecord, recipient: Address): Promise<PaymentResult> {
@@ -116,8 +112,59 @@ export class LedgerPaymentProvider implements PaymentProvider {
       throw new PaymentPolicyError(`stored payout for ${task.id} does not match the task; refusing to send`)
     }
 
+    return this.settle(payment, this.callFor(task, payment))
+  }
+
+  async refundTask(task: TaskRecord): Promise<PaymentResult> {
+    if (task.state !== 'EXPIRED') {
+      throw new PaymentPolicyError(`${task.id} is ${task.state}; only EXPIRED tasks can be refunded`)
+    }
+    if (this.store.getPayment(task.id, 'release')) {
+      throw new PaymentPolicyError(`${task.id} already has a payout and can never be refunded`)
+    }
+    const now = this.clock.now()
+    const payment = this.store.ensurePayment(this.newPayment(task, 'refund', null, now))
+    if (payment.status === 'confirmed') return { payment, settled: true }
+    if (!this.rail.onchainEscrow) {
+      return { payment: this.store.updatePayment(payment.id, { status: 'confirmed' }, now), settled: true }
+    }
+    return this.withLease(`refund:${task.id}`, () => this.settle(payment, this.callFor(task, payment)))
+  }
+
+  /** Serialises every transaction the payer signs, so nonces never collide. */
+  private async withLease<T>(holder: string, fn: () => Promise<T>): Promise<T> {
+    if (!this.store.acquireLease(PAYOUT_LEASE, holder, this.clock.now(), PAYOUT_LEASE_TTL_MS)) {
+      throw new PaymentRailError('another payment is in flight; retry shortly')
+    }
+    try {
+      return await fn()
+    } finally {
+      this.store.releaseLease(PAYOUT_LEASE, holder)
+    }
+  }
+
+  private callFor(task: TaskRecord, payment: PaymentRecord): RailCall {
+    return {
+      kind: payment.kind,
+      taskId: task.id,
+      idempotencyKey: payment.idempotencyKey,
+      amountMicro: payment.amountMicro,
+      to: payment.recipient,
+      deadlineMs: task.deadlineAt,
+    }
+  }
+
+  /**
+   * Sign once, store, then broadcast and confirm. A retry finds the stored
+   * transaction and rebroadcasts it, so the same money can never move twice.
+   */
+  private async settle(initial: PaymentRecord, call: RailCall): Promise<PaymentResult> {
+    let payment = initial
+    if (payment.status === 'confirmed') return { payment, settled: true }
+
     if (!payment.rawTx || !payment.txHash) {
-      const signed = await this.rail.signTransfer(payment.idempotencyKey, recipient, payment.amountMicro)
+      await this.rail.beforeSign?.(call)
+      const signed = await this.rail.sign(call)
       payment = this.store.updatePayment(
         payment.id,
         { status: 'pending', txHash: signed.txHash, rawTx: signed.rawTx },
@@ -139,23 +186,10 @@ export class LedgerPaymentProvider implements PaymentProvider {
       return { payment: this.store.updatePayment(payment.id, { status: 'confirmed' }, this.clock.now()), settled: true }
     }
     if (confirmation === 'failed') {
-      this.store.updatePayment(payment.id, { status: 'failed', error: 'payout transaction reverted' }, this.clock.now())
-      throw new PaymentPolicyError(`payout transaction ${signed.txHash} reverted; needs operator review`)
+      this.store.updatePayment(payment.id, { status: 'failed', error: `${call.kind} transaction reverted` }, this.clock.now())
+      throw new PaymentPolicyError(`${call.kind} transaction ${signed.txHash} reverted; needs operator review`)
     }
     return { payment, settled: false }
-  }
-
-  async refundTask(task: TaskRecord): Promise<PaymentResult> {
-    if (task.state !== 'EXPIRED') {
-      throw new PaymentPolicyError(`${task.id} is ${task.state}; only EXPIRED tasks can be refunded`)
-    }
-    if (this.store.getPayment(task.id, 'release')) {
-      throw new PaymentPolicyError(`${task.id} already has a payout and can never be refunded`)
-    }
-    const now = this.clock.now()
-    const payment = this.store.ensurePayment(this.newPayment(task, 'refund', null, now))
-    if (payment.status === 'confirmed') return { payment, settled: true }
-    return { payment: this.store.updatePayment(payment.id, { status: 'confirmed' }, now), settled: true }
   }
 
   private newPayment(task: TaskRecord, kind: PaymentKind, recipient: Address | null, now: number): PaymentRecord {

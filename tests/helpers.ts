@@ -8,7 +8,7 @@ import { loadConfig } from '@/server/config'
 import { createApp, type App } from '@/server/container'
 import type { IdentityVerifier } from '@/server/identity'
 import { MockPaymentRail } from '@/server/payments/mock-rail'
-import { PaymentRailError, type PaymentRail } from '@/server/payments/payment-provider'
+import { PaymentRailError, type PaymentRail, type RailCall } from '@/server/payments/payment-provider'
 import { Store } from '@/server/store/store'
 
 export const T0 = Date.parse('2026-10-02T09:00:00Z')
@@ -69,9 +69,9 @@ export class FlakyRail extends MockPaymentRail implements PaymentRail {
     super()
   }
 
-  override async signTransfer(key: string, to: Address, amount: bigint) {
+  override async sign(call: RailCall) {
     this.signs++
-    return super.signTransfer(key, to, amount)
+    return super.sign(call)
   }
 
   override async broadcast(): Promise<void> {

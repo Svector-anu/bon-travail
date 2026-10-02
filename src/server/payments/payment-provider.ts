@@ -50,17 +50,32 @@ export interface SignedTransfer {
   rawTx: Hex
 }
 
+/** Everything a rail needs to build one money movement for one task. */
+export interface RailCall {
+  kind: PaymentKind
+  taskId: string
+  idempotencyKey: string
+  amountMicro: bigint
+  /** Worker for a release; null for fund and refund. */
+  to: Address | null
+  deadlineMs: number
+}
+
 /**
- * The part of a payment that touches the outside world. Transfers are signed
- * first and stored, then broadcast, so a retry rebroadcasts the exact same
- * transaction (same nonce) instead of creating a second one.
+ * The part of a payment that touches the outside world. Transactions are
+ * signed first and stored, then broadcast, so a retry rebroadcasts the exact
+ * same transaction (same nonce) instead of creating a second one.
  */
 export interface PaymentRail {
   readonly name: string
   readonly simulated: boolean
-  /** Throws PaymentRailError when the treasury cannot cover the reservation. */
-  assertCanReserve(totalReservedMicro: bigint): Promise<void>
-  signTransfer(idempotencyKey: string, to: Address, amountMicro: bigint): Promise<SignedTransfer>
+  /** True when fund and refund are real escrow transactions rather than ledger reservations. */
+  readonly onchainEscrow: boolean
+  /** Throws PaymentRailError when the payer cannot cover a new reservation. */
+  assertCanReserve(amounts: { newMicro: bigint; outstandingMicro: bigint }): Promise<void>
+  /** Last checks before signing (token approval, chain time). Throw PaymentRailError to retry later. */
+  beforeSign?(call: RailCall): Promise<void>
+  sign(call: RailCall): Promise<SignedTransfer>
   broadcast(signed: SignedTransfer): Promise<void>
   confirmation(txHash: Hex): Promise<'confirmed' | 'pending' | 'failed'>
 }

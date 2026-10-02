@@ -4,7 +4,7 @@ import { FixtureChainReader } from './chain/fixture-reader'
 import { systemClock, type Clock } from './clock'
 import { loadConfig, type AppConfig } from './config'
 import { OpenIdentityVerifier, PrivyIdentityVerifier, type IdentityVerifier } from './identity'
-import { ArcPaymentRail } from './payments/arc-rail'
+import { ArcEscrowRail, ArcPaymentRail } from './payments/arc-rail'
 import { LedgerPaymentProvider } from './payments/ledger-provider'
 import { MockPaymentRail } from './payments/mock-rail'
 import type { PaymentProvider, PaymentRail } from './payments/payment-provider'
@@ -40,9 +40,19 @@ function defaultChain(config: AppConfig): ChainReader {
 }
 
 function defaultRail(config: AppConfig): PaymentRail {
-  return config.paymentProvider === 'arc'
-    ? new ArcPaymentRail({ rpcUrl: config.arcRpcUrl, explorerUrl: config.arcExplorerUrl, privateKey: config.arcPayerPrivateKey })
-    : new MockPaymentRail()
+  const arc = { rpcUrl: config.arcRpcUrl, explorerUrl: config.arcExplorerUrl, privateKey: config.arcPayerPrivateKey }
+  switch (config.paymentProvider) {
+    case 'arc-escrow':
+      return new ArcEscrowRail({
+        ...arc,
+        escrowAddress: config.arcEscrowAddress,
+        allowanceCapMicro: config.maxOutstandingEscrowMicro,
+      })
+    case 'arc':
+      return new ArcPaymentRail(arc)
+    default:
+      return new MockPaymentRail()
+  }
 }
 
 function defaultIdentity(config: AppConfig): IdentityVerifier {
