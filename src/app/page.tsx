@@ -1,128 +1,80 @@
-import Link from 'next/link'
 import { shortAddress } from '@/domain/address'
 import type { TaskView } from '@/domain/views'
-import { ActivityFeed } from '@/components/activity-feed'
 import { AgentStrip } from '@/components/agent-strip'
 import { AutoRefresh } from '@/components/auto-refresh'
-import { Countdown } from '@/components/clock'
-import { ReceiptRow } from '@/components/receipt-row'
-import { StatusPill } from '@/components/status-pill'
-import { agentActivity, homeSnapshot, recentReceipts } from '@/server/queries'
+import { DishGrid, type DishCard } from '@/components/dish-grid'
+import { taskMascot } from '@/lib/mascots'
+import { agentActivity, homeSnapshot, listTaskViews } from '@/server/queries'
 
 export const dynamic = 'force-dynamic'
 
-function LiveTask({ task }: { task: TaskView }) {
-  const claimed = task.state === 'CLAIMED' && task.claimant && task.claimExpiresAt
-  return (
-    <section className="card live-task" aria-label={`Live task ${task.displayId}`}>
-      <StatusPill state={task.state} />
-      <div className="reward tnum">
-        {task.reward}
-        <small>USDC</small>
-      </div>
-      <h2>{task.title}</h2>
-      <div className="meta-row">
-        <span>
-          {task.displayId} on {task.chain}
-        </span>
-        <span>
-          Closes in <strong><Countdown to={task.deadlineAt} done="closing" /></strong>
-        </span>
-        {claimed ? (
-          <span>
-            Claimed by <strong>{shortAddress(task.claimant!)}</strong> for{' '}
-            <Countdown to={task.claimExpiresAt!} done="a moment" />
-          </span>
-        ) : (
-          <span>
-            {task.attemptCount === 0 ? 'No attempts yet' : `${task.attemptCount} attempt${task.attemptCount === 1 ? '' : 's'} so far`}
-          </span>
-        )}
-      </div>
-      <Link className="btn primary" href={`/task/${task.id}`}>
-        {task.state === 'OPEN' ? 'Do this task' : 'View task'}
-      </Link>
-    </section>
-  )
+const MAX_CARDS = 6
+
+function toCard(task: TaskView): DishCard {
+  const base = {
+    id: task.id,
+    title: task.displayId,
+    lines: [`Read tx ${shortAddress(task.txHash)}`, `Earn ${task.reward} USDC`] as [string, string],
+    icon: taskMascot(task.id),
+  }
+  switch (task.state) {
+    case 'OPEN':
+      return { ...base, href: `/task/${task.id}`, action: 'Select', meta: { label: 'Closes in', countdownTo: task.deadlineAt } }
+    case 'CLAIMED':
+      return {
+        ...base,
+        href: `/task/${task.id}`,
+        action: 'Watch',
+        meta: { label: 'Lock frees in', countdownTo: task.claimExpiresAt ?? task.deadlineAt },
+      }
+    case 'PAID':
+      return {
+        ...base,
+        href: `/receipt/${task.id}`,
+        action: 'Receipt',
+        meta: { label: 'Paid to', value: task.claimant ? shortAddress(task.claimant) : '--' },
+      }
+    case 'REFUNDED':
+    case 'EXPIRED':
+      return { ...base, href: `/receipt/${task.id}`, action: 'Receipt', meta: { label: 'Status', value: 'Refunded' } }
+    default:
+      return { ...base, href: `/task/${task.id}`, action: 'Watch', meta: { label: 'Status', value: 'Verifying' } }
+  }
 }
 
 export default function HomePage() {
   const home = homeSnapshot()
-  const { status, runs } = agentActivity(6)
-  const receipts = recentReceipts(6)
-  const [current, ...others] = home.live
+  const { status } = agentActivity(1)
+  const live = home.live
+  const settled = listTaskViews(MAX_CARDS).filter((t) => !live.some((l) => l.id === t.id))
+  const cards = [...live, ...settled].slice(0, MAX_CARDS).map(toCard)
+  const selectedId = live.find((t) => t.state === 'OPEN')?.id ?? null
 
   return (
-    <div className="page">
+    <section className="page">
       <AutoRefresh />
-      <img className="hero-mark lg" src="/mascots/farmer.png" alt="" />
-      <h1>Read the chain, get paid</h1>
-      <p className="lede">
-        An autonomous agent posts small Arc transaction checks. Answer exactly and it pays you USDC, no account needed.
-      </p>
+      <img className="chef" src="/mascots/chef.png" alt="" />
+      <h1 className="script">Pick a Task, Get Paid</h1>
+      <p className="lede">An agent posts Arc transaction checks. Answer exactly and it pays you USDC.</p>
 
       <AgentStrip status={status} />
 
-      {current ? (
-        <LiveTask task={current} />
+      {cards.length > 0 ? (
+        <DishGrid cards={cards} selectedId={selectedId} />
       ) : (
-        <div className="card empty" style={{ marginTop: 18 }}>
-          No live task right now. The agent posts the next one on its next sweep.
+        <div className="tvl-card">
+          <h2 className="ink">No tasks yet</h2>
+          <p>The agent posts the first one on its next sweep.</p>
         </div>
       )}
 
-      {others.length > 0 && (
-        <div className="stack">
-          {others.map((task) => (
-            <Link key={task.id} href={`/task/${task.id}`} className="card row-card">
-              <div className="row-top">
-                <StatusPill state={task.state} />
-                <h3>{task.displayId}</h3>
-              </div>
-              <div className="amount">{task.reward} USDC</div>
-              <div className="row-meta">
-                <span>{task.title}</span>
-              </div>
-            </Link>
-          ))}
-        </div>
-      )}
-
-      <div className="pair">
-        <div className="card stat-card">
-          <img src="/mascots/gift.png" alt="" />
-          <div className="stat-val tnum">{home.paidCount > 0 ? `${home.paidTotal}` : '--'}</div>
-          <p>
-            USDC paid to workers{home.simulatedPayments && <span className="sim">Simulated</span>}
-          </p>
-        </div>
-        <div className="card stat-card">
-          <img src="/mascots/snail.png" alt="" />
-          <div className="stat-val tnum">
-            {home.paidCount + home.refundedCount > 0 ? `${home.paidCount} / ${home.refundedCount}` : '--'}
-          </div>
-          <p>Tasks paid / expired and refunded</p>
-        </div>
+      <div className="tvl-card">
+        <h2 className="tnum">{home.paidCount > 0 ? `${home.paidTotal} USDC` : '--'}</h2>
+        <p>
+          Paid to humans by the agent across {home.paidCount} task{home.paidCount === 1 ? '' : 's'}
+          {home.simulatedPayments && <span className="sim">Simulated</span>}
+        </p>
       </div>
-
-      <h2 className="section-title">Receipts</h2>
-      {receipts.length > 0 ? (
-        <div className="stack">
-          {receipts.map((r) => (
-            <ReceiptRow key={r.taskId} receipt={r} />
-          ))}
-        </div>
-      ) : (
-        <div className="card empty" style={{ marginTop: 16 }}>
-          Every paid or refunded task gets a public receipt. The first one lands here.
-        </div>
-      )}
-
-      <h2 className="section-title">
-        What the agent did
-        <Link href="/agent">All activity</Link>
-      </h2>
-      <ActivityFeed runs={runs} empty="The agent has not run yet. Start it with npm run agent:loop or schedule the Aeon skill." />
-    </div>
+    </section>
   )
 }

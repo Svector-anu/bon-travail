@@ -31,7 +31,9 @@ function subscribeTheme(listener: () => void) {
 
 const NAV = [
   { href: '/', label: 'Tasks' },
+  { href: '/receipts', label: 'Receipts' },
   { href: '/agent', label: 'Agent' },
+  { href: '/you', label: 'You' },
 ]
 
 export function Header() {
@@ -51,7 +53,11 @@ export function Header() {
     }
   }
 
-  const isActive = (href: string) => (href === '/' ? pathname === '/' || pathname.startsWith('/task') : pathname.startsWith(href))
+  const isActive = (href: string) => {
+    if (href === '/') return pathname === '/' || pathname.startsWith('/task')
+    if (href === '/receipts') return pathname.startsWith('/receipt')
+    return pathname.startsWith(href)
+  }
 
   return (
     <header className="topbar">

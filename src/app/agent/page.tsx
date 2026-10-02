@@ -24,15 +24,15 @@ export default function AgentPage() {
   return (
     <div className="page">
       <AutoRefresh everyMs={4000} />
-      <img className="hero-mark" src="/mascots/gorilla.png" alt="" />
-      <h1>The agent</h1>
+      <img className="hero-mark" src="/mascots/farmer.png" alt="" />
+      <h1>Agent</h1>
       <p className="lede">
         It posts tasks, verifies answers against Arc, pays, reopens and refunds on its own. Every action below is a real
         record.
       </p>
 
-      <section className={`card health ${healthy ? '' : 'muted'}`}>
-        <h2>{HEADLINE[status.health]}</h2>
+      <section className="tvl-card">
+        <h2 className={healthy ? '' : 'ink'}>{HEADLINE[status.health]}</h2>
         <p>
           {healthCopy(status.health)}.{' '}
           {status.lastTickAt !== null ? (

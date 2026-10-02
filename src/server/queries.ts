@@ -1,3 +1,4 @@
+import { checkAddress } from '@/domain/address'
 import { formatUsdc } from '@/domain/money'
 import { isTerminal } from '@/domain/task-state'
 import type { AgentRunView, AgentStatusView, AttemptView, ReceiptView, TaskView } from '@/domain/views'
@@ -17,6 +18,8 @@ export interface ReceiptSummary {
   reward: string
   worker: string | null
   settledAt: number
+  postedAt: number
+  deadlineAt: number
   simulated: boolean
 }
 
@@ -63,6 +66,8 @@ export function recentReceipts(limit = 6): ReceiptSummary[] {
         reward: body.task.reward,
         worker: body.worker,
         settledAt: r.createdAt,
+        postedAt: body.task.createdAt,
+        deadlineAt: body.task.deadlineAt,
         simulated: body.payout?.simulated ?? body.funding?.simulated ?? false,
       }
     })
@@ -94,5 +99,42 @@ export function homeSnapshot(): HomeSnapshot {
     paidCount: totals.paidCount,
     refundedCount: totals.refundedCount,
     simulatedPayments: payments.simulated,
+  }
+}
+
+export interface WorkerSummary {
+  address: string
+  earned: string | null
+  paidCount: number
+  answered: number
+  rejected: number
+  activeClaim: { taskId: string; displayId: string; expiresAt: number } | null
+  history: { taskId: string; displayId: string; outcome: string; at: number }[]
+}
+
+/** Everything one wallet has done, read straight from attempts and the payout ledger. */
+export function workerSummary(addressInput: string): WorkerSummary | null {
+  const check = checkAddress(addressInput)
+  if (!check.ok) return null
+  const { store } = getApp()
+  const attempts = store.listAttemptsByWorker(check.address)
+  const payouts = store.confirmedPayoutsTo(check.address)
+  const earnedMicro = payouts.reduce((sum, p) => sum + p.amountMicro, 0n)
+  const active = attempts
+    .map((a) => ({ attempt: a, task: store.getTask(a.taskId) }))
+    .find(({ attempt, task }) => task?.state === 'CLAIMED' && task.claimId === attempt.claimId)
+  const displayId = (taskId: string) => taskId.replace(/^task_/, 'TASK-')
+  return {
+    address: check.address,
+    earned: earnedMicro > 0n ? formatUsdc(earnedMicro) : null,
+    paidCount: payouts.length,
+    answered: attempts.filter((a) => a.submittedAt !== null).length,
+    rejected: attempts.filter((a) => a.outcome === 'FAIL').length,
+    activeClaim: active
+      ? { taskId: active.attempt.taskId, displayId: displayId(active.attempt.taskId), expiresAt: active.attempt.claimExpiresAt }
+      : null,
+    history: attempts
+      .filter((a) => a.outcome !== null)
+      .map((a) => ({ taskId: a.taskId, displayId: displayId(a.taskId), outcome: a.outcome!, at: a.submittedAt ?? a.claimedAt })),
   }
 }

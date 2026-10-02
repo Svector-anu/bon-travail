@@ -386,6 +386,10 @@ export class Store {
     )
   }
 
+  listAttemptsByWorker(worker: Address, limit = 50): AttemptRecord[] {
+    return this.all('SELECT * FROM attempts WHERE worker = ? ORDER BY claimed_at DESC LIMIT ?', worker, limit).map(rowToAttempt)
+  }
+
   recordSubmission(claimId: string, submission: Submission, at: number): void {
     const changed = this.run(
       'UPDATE attempts SET submission_json = ?, submitted_at = ? WHERE claim_id = ? AND submitted_at IS NULL',
@@ -467,6 +471,13 @@ export class Store {
     const row = this.get('SELECT * FROM payments WHERE id = ?', id)
     if (!row) throw new NotFoundError(`payment ${id}`)
     return rowToPayment(row)
+  }
+
+  confirmedPayoutsTo(recipient: Address): PaymentRecord[] {
+    return this.all(
+      "SELECT * FROM payments WHERE kind = 'release' AND status = 'confirmed' AND recipient = ? ORDER BY updated_at DESC",
+      recipient,
+    ).map(rowToPayment)
   }
 
   /** Sum of payouts committed (submitted or confirmed) since a timestamp. */

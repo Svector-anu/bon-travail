@@ -4,12 +4,16 @@ export function Footer() {
   return (
     <footer className="site-footer">
       <Link href="/">Tasks</Link>
-      <Link href="/agent">Agent activity</Link>
+      <Link href="/receipts">Receipts</Link>
+      <Link href="/agent">Agent</Link>
       <a href="https://testnet.arcscan.app" target="_blank" rel="noreferrer">
-        Arc explorer
+        Arcscan
       </a>
       <a href="https://github.com/aeonfun/aeon" target="_blank" rel="noreferrer">
-        Runs on Aeon
+        Aeon
+      </a>
+      <a href="https://github.com/aaronjmars/turnip-ui" target="_blank" rel="noreferrer">
+        Turnip UI
       </a>
     </footer>
   )
