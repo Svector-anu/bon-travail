@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Address } from '@/domain/types'
 import type { ExternalizeInput } from '@/server/services/work-service'
 import { parseInvestigation } from '@/server/services/work-service'
+import { throttle } from '@/server/throttle'
 import { VerificationPendingError } from '@/server/verification/verifier'
 import { FakeGitHub, JOB, NAME, OWNER, STEP, WORKFLOW_PATH, sha } from './fake-github'
 import { T0, makeApp } from './helpers'
@@ -202,6 +203,16 @@ describe('engineer decisions', () => {
     await expect(attempt({ contributors: [{ login: ADA, wallet: treasury }] })).rejects.toThrow(/treasury/)
     await expect(attempt({ deadlineHours: 0.5 })).rejects.toMatchObject({ code: 'BAD_REQUEST' })
     expect((await app.watch.requireFinding(finding.id)).status).toBe('candidate')
+  })
+
+  it('refuses the escrow contract as a contributor wallet', async () => {
+    // #given an escrow address in the configuration
+    const escrow = '0xe8165f9eba6f2e26b552146506abd5df05ae4dd8'
+    const { app, finding } = await watched({ ARC_ESCROW_ADDRESS: escrow })
+    // #when/#then
+    await expect(
+      app.work.externalize(finding.id, externalizeInput({ contributors: [{ login: ADA, wallet: escrow }] }), 'owner'),
+    ).rejects.toThrow(/escrow contract/)
   })
 
   it('can keep a finding internal or dismiss it, but not externalize a watching one', async () => {
@@ -415,5 +426,18 @@ describe('agent tick', () => {
     await app.agent.tick('aeon')
     // #then nothing was externalized
     expect(await app.store.listTasks()).toHaveLength(0)
+  })
+})
+
+describe('public endpoint throttle', () => {
+  it('lets one call through per key and spacing window', async () => {
+    // #given a fresh app
+    const app = await makeApp()
+    // #when/#then
+    await expect(throttle(app, 'claim:task_001')).resolves.toBeUndefined()
+    await expect(throttle(app, 'claim:task_001')).rejects.toMatchObject({ code: 'CONFLICT' })
+    await expect(throttle(app, 'claim:task_002')).resolves.toBeUndefined()
+    app.clock.advance(5_001)
+    await expect(throttle(app, 'claim:task_001')).resolves.toBeUndefined()
   })
 })

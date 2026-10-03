@@ -1,4 +1,5 @@
 import { getApp } from '@/server/container'
+import { throttle } from '@/server/throttle'
 import { field, handle, json, readBody } from '@/server/http'
 import { getTaskDetail } from '@/server/queries'
 
@@ -9,7 +10,9 @@ import { getTaskDetail } from '@/server/queries'
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   return handle(async () => {
     const { id } = await params
-    await (await getApp()).work.claimWithPullRequest(id, field(await readBody(request), 'prUrl', 300))
+    const app = await getApp()
+    await throttle(app, `claim:${id}`)
+    await app.work.claimWithPullRequest(id, field(await readBody(request), 'prUrl', 300))
     return json(await getTaskDetail(id))
   })
 }

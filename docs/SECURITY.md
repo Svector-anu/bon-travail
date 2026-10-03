@@ -43,6 +43,10 @@ Why: GitHub already authenticates the author of a pull request. A separate login
 - Caps (`MAX_REWARD_USDC`, `DAILY_PAYOUT_CAP_USDC`, `MAX_OUTSTANDING_ESCROW_USDC`) are checked before any payment row is created, and the escrow contract has its own `maxReward`.
 - Every payment is keyed by (task, kind) in the database; a retry rebroadcasts the stored signed transaction instead of signing a new one.
 
+## What becomes public
+
+Findings, evidence and the console stay behind the owner session. Externalizing a finding publishes its evidence on the work page and, once settled, in the receipt: job and step names, the failing log excerpt, the commit window and Aeon's summary. That is the point for a public repository; for a private one, read the log excerpt before you externalize. Wallets on the allowlist are not shown, only logins; the paid wallet appears on the receipt, as it does on chain.
+
 ## Running untrusted code
 
 `proofwork-investigate` runs the failing step of the watched repository inside Aeon's runner. It does so with `PATH`, `HOME` and `CI` only, so the repository's code cannot read Aeon's tokens, and with a timeout per command. Connect only repositories whose code your own CI already runs.

@@ -19,8 +19,9 @@ import { displayId, findingDisplayIdOf as findingDisplayId, type ReceiptContext 
 
 export interface WorkSettings {
   maxRewardMicro: bigint
-  /** The agent's own payer address: it can never be a contributor. */
+  /** The agent's own payer address and the escrow contract: neither can be a contributor wallet. */
   operatorAddress: string | null
+  escrowAddress?: string | null
 }
 
 export interface ExternalizeInput {
@@ -278,6 +279,9 @@ export class WorkService {
       if (!wallet.ok) throw new DomainError('BAD_REQUEST', `Wallet for @${login} ${wallet.reason}`)
       if (this.settings.operatorAddress && wallet.address.toLowerCase() === this.settings.operatorAddress.toLowerCase()) {
         throw new DomainError('BAD_REQUEST', 'The agent treasury cannot be a contributor wallet')
+      }
+      if (this.settings.escrowAddress && wallet.address.toLowerCase() === this.settings.escrowAddress.toLowerCase()) {
+        throw new DomainError('BAD_REQUEST', 'The escrow contract cannot be a contributor wallet')
       }
       return { login, wallet: wallet.address }
     })

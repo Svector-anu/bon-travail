@@ -117,6 +117,7 @@ export function createApp(config: AppConfig, store: Store, overrides: AppOverrid
   const work = new WorkService(watch, tasks, observer, github, clock, {
     maxRewardMicro: config.maxRewardMicro,
     operatorAddress: operatorAddress(config),
+    escrowAddress: config.arcEscrowAddress ?? null,
   })
   const agent = new Agent(
     store,
