@@ -27,9 +27,27 @@ Source: `contracts/ProofworkEscrow.sol`, tests: `contracts/test/ProofworkEscrow.
 - Pause stops new funding only; it can never trap escrowed rewards.
 - Ownership is two-step and cannot be renounced.
 
+## Payment lifecycle
+
+| Moment | Ledger row | On-chain call |
+|---|---|---|
+| Engineer approves a work package | `fund` | `fund(taskKey, reward, deadline)` pulls USDC from the operator into escrow |
+| GitHub Actions passes the fix | `release` | `release(taskKey, contributorWallet)` |
+| Deadline passes without an accepted fix | `refund` | `refund(taskKey)`, only once the chain clock passes the deadline |
+
+`taskKey` is `keccak256("<ESCROW_NAMESPACE>:<taskId>")`. Task ids restart in every
+database, so each deployment that shares this contract needs its own
+`ESCROW_NAMESPACE`; otherwise two deployments would address the same escrow slot.
+
+Each call is signed once, stored with its hash, then broadcast and confirmed. A
+retry rebroadcasts the stored transaction, so a payout can never be sent twice.
+The ledger's caps are checked before the row exists; the contract's
+`maxReward` is a second limit.
+
 ## Turning it on
 
 1. Fund the operator address with testnet USDC (faucet.circle.com, Arc Testnet).
-2. In `.env.local`: `PAYMENT_PROVIDER=arc-escrow` (ARC_ESCROW_ADDRESS is already set).
-3. Restart `npm run dev` and `npm run agent:loop`. The first funding also sends a
-   USDC approval to the escrow, capped at `MAX_OUTSTANDING_ESCROW_USDC`.
+2. Set `PAYMENT_PROVIDER=arc-escrow`, `ARC_ESCROW_ADDRESS`, `ARC_PAYER_PRIVATE_KEY`
+   and a unique `ESCROW_NAMESPACE`.
+3. The first funding also sends a USDC approval to the escrow, capped at
+   `MAX_OUTSTANDING_ESCROW_USDC`.

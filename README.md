@@ -1,127 +1,83 @@
-# Proofwork
+# Bon Travail
 
-An autonomous agent posts small, machine-checkable tasks on Arc Testnet, a human answers one, the server verifies the answer exactly against the chain, and the agent pays USDC or refunds the reward. Every outcome gets a public receipt.
+Agents find the work. People fix it. Proof pays.
 
-The one task type is an onchain fact check: *read this Arc transaction and reply with the recipient address and the exact USDC amount.*
+Bon Travail (the codebase is `proofwork`) watches the GitHub Actions workflow of a repository your team connects. When the same job and step fail twice in a row, it records a finding with GitHub's evidence, and Aeon reproduces and bisects it. An engineer then decides: keep the fix in the team, or externalize it to named people with a reward and a deadline. An approved contributor opens a pull request; GitHub Actions decides whether it passes; the reward is paid from an escrow contract on Arc, or refunded at the deadline. Every outcome is sealed in a public receipt, and the observer keeps watching for the failure to come back.
 
 ```
-agent tick -> create -> fund -> publish -> OPEN
-worker     -> claim (10 min lock) -> submit
-server     -> verify against Arc RPC -> ACCEPTED -> pay -> PAID -> frozen receipt
-                                     -> REJECTED -> reopen (or expire) -> refund -> REFUNDED
-agent tick -> expire overdue, refund, retry stuck work, post the next task
+observer   GitHub runs on the default branch -> repeated failure -> finding + evidence
+Aeon       clone, reproduce red and green, git bisect -> investigation (recommendation only)
+engineer   keep internal | dismiss | externalize: reward, deadline, allowlist, acceptance, scope
+escrow     USDC moves into ProofworkEscrow on Arc
+contributor link a PR that mentions WORK-00n -> claim -> request verification
+GitHub     acceptance job passes on the merge commit (or PR head), protected paths untouched
+settle     PAID to the allowlisted wallet | REFUNDED at the deadline -> sealed receipt
+observer   green resolves the finding; the same failure later is a recurrence
 ```
 
-See [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) for architecture and what is mocked versus real, and [aeon/README.md](aeon/README.md) for the Aeon schedule.
+Machines discover, prepare and verify. People do the work. Engineers own every decision: architecture, secrets, scope, who may claim, the reward and the release. No agent can approve work, choose who is paid, set an amount, or release funds; see [docs/SECURITY.md](docs/SECURITY.md).
+
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): modules, data model, state machines, verification
+- [docs/SECURITY.md](docs/SECURITY.md): authority boundaries and why they exist
+- [docs/ESCROW.md](docs/ESCROW.md): the Arc escrow contract and payment lifecycle
+- [aeon/README.md](aeon/README.md): the Aeon skills and how to schedule them
 
 ## Run locally
 
-Requires Node 22.13+ (uses the built-in `node:sqlite`).
+Requires Node 22.
 
 ```bash
 npm install
 cp .env.example .env.local
-# set AGENT_API_TOKEN, e.g. openssl rand -hex 32
-npm run dev                # http://localhost:3000
-npm run agent:loop         # in a second terminal: the agent, ticking every 30s
+# set AGENT_API_TOKEN and OWNER_ACCESS_TOKEN (openssl rand -hex 32 each)
+GITHUB_TOKEN=$(gh auth token) npm run dev   # http://localhost:3000, embedded Postgres in ./data/pglite
+npm run agent:loop                          # second terminal: the agent tick every 30s
 ```
 
-With an empty database, the first tick scans recent Arc blocks for a single-transfer USDC transaction and publishes it as TASK-001.
+Open `/console`, sign in with `OWNER_ACCESS_TOKEN`, and connect a repository (`owner/name`). The first poll reads the last 30 completed runs of its workflow on the default branch.
 
-## Demo mode
+`npm run demo:seed -- --reset` still seeds scripted rail-test history (Arc transaction fact-checks) for UI work; it refuses to run against a hosted database.
 
-```bash
-npm run demo:seed -- --reset           # stop `npm run dev` first if it holds the database
-npm run dev
-AGENT_LOOP_SECONDS=15 npm run agent:loop
-```
+## Dogfood the whole loop
 
-The seed drives the real engine with deterministic demo wallets:
+The public sandbox [Svector-anu/usdc-sdk-examples](https://github.com/Svector-anu/usdc-sdk-examples) has one workflow, `Examples`, with an `examples` job.
 
-| Task | What happens | End state |
-|---|---|---|
-| TASK-001 | correct answer | PAID |
-| TASK-002 | wrong amount, then its deadline passes | REJECTED, then REFUNDED |
-| TASK-003 | no submission, expires `DEMO_EXPIRY_SECONDS` (120) after seeding | OPEN until the agent loop refunds it |
-| TASK-004 | correct answer | PAID |
-| TASK-005 | posted by a seed-time agent tick | OPEN, the live task for the demo |
-
-Demo recording, about 45 seconds: open `/`, point at the agent strip, open TASK-005, paste a payout address and claim, open the transaction in the explorer, submit recipient and amount, watch it verify and pay, open the receipt and its explorer link, return to `/agent` to see TASK-003 expire and refund and the next task appear, all from the loop.
-
-Add `CHAIN_READER=fixture` to run offline against recorded Arc transactions.
+1. **Break it.** Push a regression to `main` twice (two red runs of the same step).
+2. **Observe.** The agent tick (or "Check now" in the console) turns the repeat into a candidate finding with the log excerpt, the failing command and the commit window.
+3. **Investigate.** Dispatch the Aeon skill: `gh workflow run aeon.yml -R <aeon-fork> -f skill=proofwork-investigate -f harness=claude -f var=<base URL>`. The finding gains Aeon's reproduction, first bad commit and proposed acceptance.
+4. **Decide.** In the console, open the finding, edit acceptance and scope, set the reward, deadline and allowlist (GitHub login + payout wallet), and approve. The reward is escrowed.
+5. **Fix.** As the contributor, open a PR that mentions the `WORK-00n` id, paste it on the work page to claim, then "Request verification".
+6. **Verify.** Merge the PR. When the `examples` job passes on the merge commit, the next tick (or "Check again") pays the allowlisted wallet and seals the receipt.
+7. **Watch.** The green run resolves the finding. Reintroduce the bug and the observer reports a recurrence on the same finding, visible on the receipt's live recurrence panel.
 
 ## Environment
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `PAYMENT_PROVIDER` | none, required | `mock` or `arc`. Missing or unknown values stop the app (fail closed) |
-| `ARC_PAYER_PRIVATE_KEY` | | Required for `arc`. Testnet hot wallet holding only the reward float |
-| `AGENT_API_TOKEN` | | Bearer token for agent-only endpoints. Unset disables them |
-| `MAX_REWARD_USDC` | 1 | Per-task cap |
-| `DAILY_PAYOUT_CAP_USDC` | 10 | Rolling 24h payout cap |
-| `MAX_OUTSTANDING_ESCROW_USDC` | 5 | Total reserved for funded, unsettled tasks |
-| `TASK_REWARD_USDC` | 1 | Reward per task, must not exceed the per-task cap |
-| `TASK_DEADLINE_SECONDS` | 21600 | 6 hours |
-| `CLAIM_TTL_SECONDS` | 600 | Claim lock |
-| `TARGET_OPEN_TASKS` | 1 | The agent posts until this many tasks are live |
-| `AGENT_EXPECTED_INTERVAL_SECONDS` | 300 | Health turns Stale after twice this with no sweep |
-| `CHAIN_READER` | rpc | `rpc` or `fixture` |
-| `ARC_RPC_URL` / `ARC_EXPLORER_URL` | Arc Testnet | |
-| `DATABASE_PATH` | ./data/proofwork.db | |
-| `PUBLIC_BASE_URL` | http://localhost:3000 | Used in links sent to Aeon |
-| `AGENT_LOOP_SECONDS` | 30 | `agent:loop` only |
+All variables are documented in [.env.example](.env.example). The ones that matter:
 
-## Switch from mock to real Arc payouts
+| Variable | Purpose |
+|---|---|
+| `DATABASE_URL` | Postgres (Neon). Unset: embedded PGlite at `DATABASE_PATH` |
+| `GITHUB_TOKEN` | Read-only token for runs, logs and PRs. Unset: GitHub features off |
+| `OWNER_ACCESS_TOKEN` | The engineer console. Unset: console and owner endpoints off |
+| `AGENT_API_TOKEN` | Aeon's bearer token for tick, findings and investigations. Unset: agent endpoints off |
+| `PAYMENT_PROVIDER` | `mock`, `arc` or `arc-escrow`. Required; there is no default |
+| `ARC_PAYER_PRIVATE_KEY`, `ARC_ESCROW_ADDRESS` | Operator wallet and escrow contract for `arc-escrow` |
+| `ESCROW_NAMESPACE` | Prefix of escrow task keys; unique per deployment sharing a contract |
+| `MAX_REWARD_USDC`, `DAILY_PAYOUT_CAP_USDC`, `MAX_OUTSTANDING_ESCROW_USDC` | Spending caps enforced before every payment |
+| `CRON_SECRET` | Lets Vercel Cron call `/api/cron/tick` as a fallback schedule |
+| `PUBLIC_BASE_URL` | Used in receipt links sent to Aeon notifications |
 
-1. Create a fresh testnet wallet. Fund it from the Circle faucet with a few USDC (gas on Arc is paid in USDC).
-2. Put the key in the runtime environment, never in the repo:
-   ```bash
-   PAYMENT_PROVIDER=arc
-   ARC_PAYER_PRIVATE_KEY=0x...
-   ```
-3. Keep the caps small. Funding fails unless the wallet holds the outstanding escrow plus a 0.05 USDC gas buffer.
-4. Payout receipts then link the real transfer on testnet.arcscan.app and drop the Simulated label.
+## Deploy on Vercel
 
-## Security model
-
-- Spending caps are enforced in `LedgerPaymentProvider` in front of any rail: per task, per 24h and total escrow.
-- One payment row per (task, kind) via a unique constraint; release and refund are mutually exclusive.
-- Payouts are signed, stored, then broadcast. A retry rebroadcasts the same signed transaction.
-- Claims are single-winner (state transition with optimistic version check inside `BEGIN IMMEDIATE`) and carry a secret claim token that only the claimer holds.
-- One submitted answer per wallet per task (partial unique index), and one submission per claim.
-- Task events and receipts are append-only and immutable (SQLite triggers). Receipts carry a sha256 digest.
-- Expected answers are withheld from every public response until the task settles.
-- No private key in the repo. `.env*` is git-ignored except `.env.example`.
-
-## API
-
-| Method | Path | Who |
-|---|---|---|
-| GET | `/api/tasks` | public |
-| POST | `/api/tasks` `{txHash}` | agent: create, fund, publish |
-| GET | `/api/tasks/:id` | public |
-| POST | `/api/tasks/:id/claim` `{wallet}` | worker |
-| POST | `/api/tasks/:id/submit` `{claimId, claimToken, recipient, amount}` | worker, verifies and pays inline |
-| POST | `/api/tasks/:id/verify` | agent |
-| POST | `/api/tasks/:id/release` | agent |
-| POST | `/api/tasks/:id/refund` | agent, expires an overdue OPEN task first |
-| GET | `/api/receipts/:id` | public |
-| GET | `/api/agent/activity?limit=&task=` | public |
-| POST | `/api/agent/tick` `{source}` | agent, one sweep |
-
-Agent routes need `Authorization: Bearer $AGENT_API_TOKEN`.
+1. `vercel link`, then add Neon from the Vercel marketplace (it sets `DATABASE_URL`). The schema is created on first request.
+2. Add the variables above as encrypted environment variables (`vercel env add NAME production`). Never commit them.
+3. `vercel deploy --prod`. `vercel.json` registers a daily cron for `/api/cron/tick`; Aeon's `proofwork-loop` is the real schedule (every 10 minutes).
+4. Point Aeon's `proofwork-loop` and `proofwork-investigate` `var` at the deployment URL and set `PROOFWORK_AGENT_TOKEN` to the deployment's `AGENT_API_TOKEN`.
 
 ## Checks
 
 ```bash
-npm run check    # typecheck, lint, tests, build
+npm run check    # typecheck, lint, tests (PGlite, no network), build
 ```
 
-## Known limitations
-
-- SQLite on local disk: deploy to a host with a persistent volume (Fly, Railway, a VM). Serverless platforms with ephemeral disks will lose state.
-- Aeon runs on GitHub Actions, so the server needs a public URL.
-- Sybil griefing: a stream of fresh addresses can each hold the claim lock for 10 minutes. There is no rate limiting yet.
-- Refunds are ledger releases, not on-chain transfers, because rewards stay in the payer wallet until paid. An escrow contract would make funding verifiable on chain.
-- A signed payout whose nonce gets consumed by another transaction stays `submitted` and needs operator review; the agent reports it as an error each sweep.
-- The worker answer is public on chain by design; the task proves the loop, not hard work.
+Contract tests for `contracts/ProofworkEscrow.sol` run with Foundry: `forge test`.
