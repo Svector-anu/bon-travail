@@ -69,7 +69,7 @@ export function activityHeadline(action: string, taskId: string | null, detail: 
       return `Published ${id}`
     case 'verify':
       if (result === 'skipped') return detail.startsWith('Waiting') ? `Waiting on checks for ${id}` : `Verification deferred on ${id}`
-      return detail.includes('verification passed') ? `Verification passed on ${id}` : `Submission rejected on ${id}`
+      return /passed:/.test(detail) ? `Fix verified on ${id}` : `Submission rejected on ${id}`
     case 'pay':
       return result === 'ok' ? detail.replace(/ to 0x\S+/, '') + ` on ${id}` : `Payout pending on ${id}`
     case 'reopen':

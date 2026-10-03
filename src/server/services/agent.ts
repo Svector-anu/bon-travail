@@ -232,7 +232,7 @@ export class Agent {
       }
       const verdict = (await this.store.listAttempts(task.id)).find((a) => a.claimId === task.claimId)?.verification
       if (current.state === 'ACCEPTED') {
-        await log('verify', task.id, 'ok', `${ci ? 'GitHub Actions' : 'RPC'} verification passed: ${verdict?.reason ?? 'match'}`)
+        await log('verify', task.id, 'ok', `${ci ? 'Tests passed' : 'Chain check passed'}: ${verdict?.reason ?? 'match'}`)
       } else {
         await log('verify', task.id, 'ok', `Submission rejected: ${verdict?.reason ?? 'mismatch'}`)
         notable.push(`${displayId(task)}: submission from ${this.who(task)} rejected (${verdict?.code ?? 'MISMATCH'})`)

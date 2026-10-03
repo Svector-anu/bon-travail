@@ -2158,6 +2158,16 @@ textarea.input.mono {
     grid-template-columns: 1fr;
   }
 
+  .finding-row {
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      'status id go'
+      'title title go'
+      'meta meta go'
+      'extra extra go';
+    padding: 16px 18px;
+  }
+
   .allow-row {
     grid-template-columns: 1fr auto;
   }
