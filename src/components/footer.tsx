@@ -2,7 +2,7 @@
 
 import { motion, useReducedMotion, useScroll, useTransform } from 'motion/react'
 import Link from 'next/link'
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useSyncExternalStore } from 'react'
 
 const LINKS = [
   { href: '/tasks', label: 'work' },
@@ -11,6 +11,8 @@ const LINKS = [
   { href: '/docs', label: 'docs' },
   { href: 'https://github.com/apps/bon-travail', label: 'github', external: true },
 ] as const
+
+const subscribeNothing = () => () => {}
 
 /** The resting scene: what the server renders, what no-JS and reduced-motion visitors see. */
 const STILL = { opacity: 1, y: 0, scale: 1 }
@@ -27,8 +29,8 @@ export function Footer() {
   // Scroll motion switches on after mount: the server and the first render show the
   // resting scene, so nothing is ever stuck hidden. The footer starts below the fold,
   // so the switch is never visible.
-  const [live, setLive] = useState(false)
-  useEffect(() => setLive(!reduce), [reduce])
+  const hydrated = useSyncExternalStore(subscribeNothing, () => true, () => false)
+  const live = hydrated && !reduce
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end end'] })
   const imageY = useTransform(scrollYProgress, [0, 1], ['-7%', '0%'])
   const imageScale = useTransform(scrollYProgress, [0, 1], [1.06, 1])
