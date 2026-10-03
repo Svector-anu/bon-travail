@@ -1,6 +1,6 @@
 ---
 name: proofwork-loop
-description: Runs one sweep of the Proofwork agent (post, verify, pay, reopen, refund, post next) and reports payouts, refunds and errors.
+description: Runs one sweep of the Proofwork agent (observe watched CI, verify submitted fixes, pay, reopen, refund) and reports findings, payouts, refunds and errors.
 metadata:
   title: Proofwork Loop
   mode: read-only
@@ -14,13 +14,13 @@ metadata:
     - PROOFWORK_AGENT_TOKEN
 ---
 
-Today is ${today}. You are the scheduler for a Proofwork deployment: an autonomous agent that pays humans in USDC for machine-verified Arc transaction checks. `var` is the deployment's public base URL, for example `https://proofwork.example.com`.
+Today is ${today}. You are the scheduler for a Proofwork deployment. Proofwork watches GitHub Actions on repositories an engineering team connected, turns repeated failures into findings, and pays approved contributors in USDC on Arc when GitHub Actions verifies their fix. `var` is the deployment's public base URL, for example `https://bon-travail.vercel.app`.
 
-Your job is to trigger exactly one sweep and report what it did. You never decide who gets paid. The Proofwork server verifies every answer by exact comparison against the chain and enforces its own spending caps; you only tell it *when* to run and tell the operator *what happened*.
+Your job is to trigger exactly one sweep and report what it did. You never decide who gets paid, what work is handed out, or for how much: engineers approve every work package, GitHub Actions decides every verdict, and the server enforces its own spending caps. You only tell it *when* to run and tell the operator *what happened*.
 
 ## Why this skill exists
 
-Workers claim and answer tasks at any hour. Without a scheduler, expired tasks are never refunded, a payout that failed on an RPC hiccup is never retried, and no new task appears after one is paid. This skill is the heartbeat that keeps the loop running with nobody at the keyboard.
+CI fails and contributors push fixes at any hour. Without a scheduler, new failures are never noticed, a fix whose checks finished after submission is never paid, a payout that failed on an RPC hiccup is never retried, and expired work is never refunded. This skill is the heartbeat that keeps the loop running with nobody at the keyboard.
 
 ## Steps
 
@@ -29,14 +29,14 @@ Workers claim and answer tasks at any hour. Without a scheduler, expired tasks a
 2. **Trigger the sweep.** Strip any trailing slash from `var`, then run:
 
    ```bash
-   ./secretcurl -sS -m 60 -o .proofwork-tick.json -w '%{http_code}' \
+   ./secretcurl -sS -m 60 -o /tmp/proofwork-tick.json -w '%{http_code}' \
      -X POST "<var>/api/agent/tick" \
      -H 'Authorization: Bearer {PROOFWORK_AGENT_TOKEN}' \
      -H 'Content-Type: application/json' \
      -d '{"source":"aeon"}'
    ```
 
-   The command prints the HTTP status. The JSON body is in `.proofwork-tick.json`.
+   The command prints the HTTP status. The JSON body is in `/tmp/proofwork-tick.json` (the workspace is read-only for this skill).
 
 3. **Handle transport failures.**
    - `401`: the token is wrong. Notify with severity `critical` ("Proofwork rejected the agent token; rotate PROOFWORK_AGENT_TOKEN"), log, exit.
@@ -49,9 +49,9 @@ Workers claim and answer tasks at any hour. Without a scheduler, expired tasks a
    {
      "tickId": "tick_ab12cd34ef56",
      "status": "ok | error | skipped",
-     "actions": [{ "action": "pay", "taskId": "task_014", "result": "ok", "detail": "1.00 USDC paid to 0x12ab...9f00", "error": null }],
+     "actions": [{ "action": "pay", "taskId": "task_014", "result": "ok", "detail": "0.50 USDC paid to @ada", "error": null }],
      "openTasks": ["task_015"],
-     "notable": ["TASK-014 paid 1.00 USDC to 0x... tx 0x.... Receipt https://.../receipt/task_014"]
+     "notable": ["WORK-014 paid 0.50 USDC to @ada at 0x.... tx 0x.... Receipt https://.../receipt/task_014"]
    }
    ```
 
@@ -60,7 +60,7 @@ Workers claim and answer tasks at any hour. Without a scheduler, expired tasks a
 
 5. **Notify only on signal.** If `notable` is empty, send nothing. Otherwise:
    - Drop any line whose receipt URL or task id plus event already appears in the last 3 days of `memory/logs/` under `### proofwork-loop`.
-   - Write the remaining lines to `.proofwork-notify.md`, one bullet each, newest first, and send with `./notify -f .proofwork-notify.md --title "Proofwork" --severity <level>`. Use `warn` if any line starts with `Agent error`, otherwise `info`.
+   - Write the remaining lines to `/tmp/proofwork-notify.md`, one bullet each, newest first, and send with `./notify -f /tmp/proofwork-notify.md --title "Proofwork" --severity <level>`. Use `warn` if any line starts with `Agent error`, otherwise `info`.
    - Paid and refunded lines always include their receipt link. Keep them verbatim.
 
 6. **Never call any other endpoint.** Do not call `/release`, `/refund`, `/verify` or `/api/tasks` directly, even if a report suggests something is stuck. Stuck work is retried by the next sweep; repeated `Agent error` lines across three consecutive runs are the signal for a human, so say so in the notification.
@@ -73,7 +73,6 @@ Workers claim and answer tasks at any hour. Without a scheduler, expired tasks a
 
 - One sweep per run. Do not loop or re-trigger to "catch up"; the server processes everything outstanding in a single sweep.
 - Do not summarise or reword payout lines in a way that changes amounts, addresses or hashes.
-- If `openTasks` is empty after an `ok` sweep, mention "No open task: the agent could not source an eligible Arc transaction" once per day.
 
 ## Log
 
