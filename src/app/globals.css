@@ -24,8 +24,8 @@
   --claimed: #e6c25b;
   --radius: 22px;
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
-  --font: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  --display: var(--font-display), 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font: var(--font-body), 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --display: var(--font-display), Didot, 'Bodoni 72', Georgia, serif;
   /* Critically damped spring (stiffness 100, damping 20): fast start, long soft settle. */
   --spring: linear(0, 0.045 4.2%, 0.144 8.3%, 0.264 12.5%, 0.385 16.7%, 0.496 20.8%, 0.594 25%, 0.677 29.2%, 0.745 33.3%, 0.801 37.5%, 0.845 41.7%, 0.881 45.8%, 0.908 50%, 0.93 54.2%, 0.947 58.3%, 0.96 62.5%, 0.969 66.7%, 0.977 70.8%, 0.983 75%, 0.987 79.2%, 0.99 83.3%, 0.993 87.5%, 0.995 91.7%, 0.996 95.8%, 1);
   --spring-time: 800ms;
@@ -142,12 +142,19 @@ img {
   font-weight: 500;
   letter-spacing: -0.01em;
   justify-self: start;
+  padding: 6px 0;
+  color: var(--text);
 }
 
-.brand img {
-  width: 26px;
-  height: 26px;
-  object-fit: contain;
+.wordmark {
+  display: block;
+  width: auto;
+  aspect-ratio: 506.3 / 79.3;
+  overflow: visible;
+}
+
+.brand .wordmark {
+  height: 20px;
 }
 
 .nav {
@@ -846,7 +853,7 @@ button.text-link:disabled {
 }
 
 .roles strong {
-  font-family: var(--display);
+  font-family: var(--font);
   font-size: 19px;
   font-weight: 300;
 }
@@ -2163,7 +2170,7 @@ textarea.input.mono {
 }
 
 .proof-index {
-  font-family: var(--display);
+  font-family: var(--font);
   font-weight: 200;
   font-size: 34px;
   line-height: 1;
@@ -2258,7 +2265,7 @@ textarea.input.mono {
 }
 
 .ledger-totals strong {
-  font-family: var(--display);
+  font-family: var(--font);
   font-weight: 300;
   font-size: 34px;
 }
@@ -2365,7 +2372,7 @@ textarea.input.mono {
 }
 
 .pipeline-stages strong {
-  font-family: var(--display);
+  font-family: var(--font);
   font-weight: 300;
   font-size: 28px;
   color: var(--dim);
@@ -2636,12 +2643,12 @@ textarea.input.mono {
   gap: 8px;
   align-items: center;
   font-size: 15px;
-  color: rgba(255, 255, 255, 0.86);
+  color: rgba(255, 255, 255, 0.92);
 }
 
-.scene-brand img {
-  width: 18px;
-  height: 18px;
+.scene-brand .wordmark {
+  height: 22px;
+  filter: drop-shadow(0 1px 12px rgba(10, 12, 30, 0.5));
 }
 
 .scene-statement {
@@ -2662,7 +2669,7 @@ textarea.input.mono {
   flex-wrap: wrap;
   gap: 8px 28px;
   margin-top: 10px;
-  font-family: var(--display);
+  font-family: var(--font);
   font-weight: 300;
   font-size: 17px;
 }
@@ -2865,6 +2872,10 @@ textarea.input.mono {
   .topbar {
     grid-template-columns: auto 1fr;
     padding-top: 16px;
+  }
+
+  .brand .wordmark {
+    height: 18px;
   }
 
   .shell:has(.stage) .topbar {
@@ -3300,9 +3311,12 @@ textarea.input.mono {
   text-shadow: 0 2px 24px rgba(5, 10, 30, 0.35);
 }
 
-.shell:has(.hero.bleed) .nav a,
-.shell:has(.hero.bleed) .brand {
+.shell:has(.hero.bleed) .nav a {
   text-shadow: 0 1px 10px rgba(5, 10, 30, 0.45);
+}
+
+.shell:has(.hero.bleed) .brand .wordmark {
+  filter: drop-shadow(0 1px 10px rgba(5, 10, 30, 0.45));
 }
 
 @media (max-width: 720px) {

@@ -33,7 +33,7 @@ export default async function GitHubSetupPage({ searchParams }: { searchParams: 
         <h1>{account ? `Connected to ${account}.` : 'GitHub did not confirm that installation.'}</h1>
         <p className="muted">
           {account
-            ? 'Choose which repositories to watch. Bon Travail only reads them; it never pushes, comments or merges.'
+            ? 'Choose which repositories to watch. bon travail only reads them; it never pushes, comments or merges.'
             : 'Try installing the app again from the console.'}
         </p>
         <Link className="btn btn-primary btn-wide" href="/console">

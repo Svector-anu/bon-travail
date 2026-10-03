@@ -4,6 +4,7 @@ import { LayoutPanelTop, LogIn } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Roll } from './roll'
+import { BonTravailWordmark } from './wordmark'
 
 const NAV = [
   { href: '/tasks', label: 'work', match: ['/tasks', '/task/'] },
@@ -20,8 +21,7 @@ export function Header({ owner }: { owner: boolean }) {
   return (
     <header className="topbar">
       <Link href="/" className="brand">
-        <img src="/mascots/seedling.png" alt="" />
-        <span>bon travail</span>
+        <BonTravailWordmark />
       </Link>
 
       <nav className="nav" aria-label="Primary">

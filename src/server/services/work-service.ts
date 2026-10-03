@@ -128,7 +128,7 @@ export class WorkService {
       found = await gh.getRepo(owner, name)
     } catch (error) {
       if (error instanceof GitHubNotFoundError) {
-        throw new DomainError('NOT_FOUND', `${owner}/${name} is not visible to Bon Travail. Install the GitHub App on it first.`)
+        throw new DomainError('NOT_FOUND', `${owner}/${name} is not visible to bon travail. Install the GitHub App on it first.`)
       }
       throw error
     }

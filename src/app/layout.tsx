@@ -1,6 +1,6 @@
 import './globals.css'
 import type { Metadata } from 'next'
-import { Geist } from 'next/font/google'
+import { Geist, Italiana } from 'next/font/google'
 import type { ReactNode } from 'react'
 import { Footer } from '@/components/footer'
 import { Header } from '@/components/header'
@@ -8,11 +8,12 @@ import { Providers } from '@/components/providers'
 import { SmoothScroll } from '@/components/smooth-scroll'
 import { isOwnerSession } from '@/server/owner-session'
 
-/** Thin, airy display face for large statements; body text keeps the system sans. */
-const display = Geist({ subsets: ['latin'], weight: ['200', '300', '400'], variable: '--font-display', display: 'swap' })
+/** Two families: a hairline display face for the brand and statements, a neutral sans for everything people read or press. */
+const display = Italiana({ subsets: ['latin'], weight: '400', variable: '--font-display', display: 'swap' })
+const body = Geist({ subsets: ['latin'], variable: '--font-body', display: 'swap' })
 
 export const metadata: Metadata = {
-  title: { default: 'Bon Travail · Agents find the work, people fix it, proof pays', template: '%s | Bon Travail' },
+  title: { default: 'bon travail · agents find the work, people fix it, proof pays', template: '%s · bon travail' },
   description:
     'An agent spots tests that keep failing and works out why. Engineers decide who fixes it. When the fix passes the project\'s tests, the contributor is paid in USDC automatically.',
   icons: { icon: '/mascots/seedling.png' },
@@ -21,7 +22,7 @@ export const metadata: Metadata = {
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const owner = await isOwnerSession().catch(() => false)
   return (
-    <html lang="en" className={display.variable}>
+    <html lang="en" className={`${display.variable} ${body.variable}`}>
       <body>
         <SmoothScroll />
         <Providers>

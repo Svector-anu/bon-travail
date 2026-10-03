@@ -10,7 +10,7 @@ const SECTIONS = [
     label: 'The loop',
     title: 'machines find the work. humans finish it.',
     body: [
-      'Bon Travail watches the GitHub Actions workflow of each repository your team connects. When the same job and step fail twice in a row on the default branch, it records a finding with GitHub’s evidence: the failing log, the step’s command, and the commits between the last green run and the first red one.',
+      'bon travail watches the GitHub Actions workflow of each repository your team connects. When the same job and step fail twice in a row on the default branch, it records a finding with GitHub’s evidence: the failing log, the step’s command, and the commits between the last green run and the first red one.',
       'Our agent, Aeon, then reproduces the failure in its own runner, finds the first bad commit, and writes down why it fails. An engineer reads that and decides whether the fix stays in the team or goes to people they name. An approved contributor opens a pull request; when the project’s tests pass on it, the reward is paid from escrow on Arc. If the deadline passes first, the reward goes back. Either way a receipt is sealed, and Aeon keeps watching for the failure to come back.',
     ],
   },
@@ -19,7 +19,7 @@ const SECTIONS = [
     label: 'For engineers',
     title: 'connect, read, decide.',
     body: [
-      'Sign in to the console with GitHub. Install the Bon Travail GitHub App on the repositories you want watched; it can only read workflow runs, logs, contents and pull requests, and it never writes. Pick a repository and the workflow to watch.',
+      'Sign in to the console with GitHub. Install the bon travail GitHub App on the repositories you want watched; it can only read workflow runs, logs, contents and pull requests, and it never writes. Pick a repository and the workflow to watch.',
       'When a finding needs you, open it: you will see what failed, the evidence, and Aeon’s investigation. Keep it internal, dismiss it, or externalize it. Externalizing means you set the reward, the deadline, the acceptance condition, the scope, the protected paths and the GitHub logins (with the wallet each is paid at) allowed to take it. The reward is escrowed the moment you approve.',
     ],
   },

@@ -143,7 +143,7 @@ export default async function ConsolePage({ searchParams }: { searchParams: Prom
           <ConnectRepo />
         )}
         <p className="muted console-note">
-          Read-only: Bon Travail can read workflow runs, logs and pull requests on the repositories you choose. It never writes to them.
+          Read-only: bon travail can read workflow runs, logs and pull requests on the repositories you choose. It never writes to them.
         </p>
       </section>
 

@@ -3,6 +3,7 @@
 import { motion, useReducedMotion, useScroll, useTransform } from 'motion/react'
 import Link from 'next/link'
 import { useRef, useSyncExternalStore } from 'react'
+import { BonTravailWordmark } from './wordmark'
 
 const LINKS = [
   { href: '/tasks', label: 'work' },
@@ -50,8 +51,7 @@ export function Footer() {
 
       <motion.div className="scene-copy" style={live ? { opacity: copyOpacity, y: copyY } : STILL}>
         <Link href="/" className="scene-brand">
-          <img src="/mascots/seedling.png" alt="" />
-          bon travail
+          <BonTravailWordmark />
         </Link>
         <p className="scene-statement">
           <span>machines find the work.</span> <span>humans finish it.</span>
