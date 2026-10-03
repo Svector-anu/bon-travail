@@ -20,9 +20,12 @@ export default async function WorkPage({ searchParams }: { searchParams: Promise
       <AutoRefresh />
       <div className="page-head">
         <div>
-          <h1>Work</h1>
+          <h1>work</h1>
           <p>Scoped fixes an engineering team chose to hand out. The reward is held up front and paid when the fix passes the project's tests.</p>
         </div>
+        <Link className="text-link" href="/you">
+          your work on record →
+        </Link>
         <nav className="segmented" aria-label="Filter work">
           <Link href="/tasks" aria-current={view === 'open'}>
             Open

@@ -27,7 +27,7 @@ export default async function AgentPage() {
       <AutoRefresh everyMs={4000} />
       <div className="agent-head">
         <div>
-          <h1>Agent</h1>
+          <h1>aeon</h1>
           <p>Aeon watches CI, investigates what keeps failing, and settles what the tests confirm. Every action is logged here.</p>
         </div>
         <div className="presence">

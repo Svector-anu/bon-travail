@@ -15,7 +15,7 @@ export default async function ReceiptsPage() {
       <AutoRefresh everyMs={8000} />
       <div className="page-head">
         <div>
-          <h1>Receipts</h1>
+          <h1>receipts</h1>
           <p>Every payout and refund, sealed the moment it settled: the failure, the evidence, the fix and the transaction.</p>
         </div>
       </div>

@@ -53,7 +53,7 @@ export default async function ConsolePage({ searchParams }: { searchParams: Prom
       <AutoRefresh everyMs={10_000} />
       <div className="page-head">
         <div>
-          <h1>Console</h1>
+          <h1>console</h1>
           <p>What your agents found, and what you decided. Nothing leaves the team until you approve it.</p>
         </div>
         <div className="signed-in">

@@ -2221,6 +2221,99 @@ textarea.input.mono {
   }
 }
 
+/* ---- contributor lookup -------------------------------------------------------- */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.lookup {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  max-width: 620px;
+}
+
+.ledger-view {
+  margin-top: 36px;
+  display: grid;
+  gap: 24px;
+}
+
+.ledger-totals {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--line);
+}
+
+.ledger-totals > div {
+  display: grid;
+  gap: 4px;
+  padding-top: 16px;
+}
+
+.ledger-totals strong {
+  font-family: var(--display);
+  font-weight: 300;
+  font-size: 34px;
+}
+
+.ledger-totals span {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.ledger-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+
+.ledger-rows li {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) auto;
+  gap: 4px 18px;
+  align-items: baseline;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+
+.ledger-rows li a strong {
+  font-weight: 500;
+  margin-right: 6px;
+}
+
+.ledger-rows small {
+  grid-column: 2 / -1;
+  font-size: 12px;
+  color: var(--dim);
+}
+
+@media (max-width: 720px) {
+  .lookup {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ledger-rows li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .ledger-rows li > a {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .ledger-rows small {
+    grid-column: 1 / -1;
+  }
+}
+
 /* ---- agent pipeline ---------------------------------------------------------- */
 
 .pipeline {
@@ -2574,8 +2667,14 @@ textarea.input.mono {
   font-size: 17px;
 }
 
+.scene-links a,
+.scene-flow,
+.scene-brand {
+  text-shadow: 0 1px 14px rgba(10, 12, 30, 0.5);
+}
+
 .scene-links a {
-  color: rgba(255, 255, 255, 0.72);
+  color: rgba(255, 255, 255, 0.78);
   transition: color 300ms var(--ease), transform 500ms var(--spring);
 }
 

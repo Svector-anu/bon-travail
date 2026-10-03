@@ -383,3 +383,67 @@ export async function agentPipeline(): Promise<AgentPipeline> {
     ],
   }
 }
+
+export interface ContributorEntry {
+  taskId: string
+  displayId: string
+  title: string
+  state: string
+  reward: string
+  claimedAt: number
+  outcome: string | null
+  payoutTxUrl: string | null
+  simulated: boolean
+}
+
+export interface ContributorLedger {
+  query: string
+  kind: 'login' | 'wallet'
+  earned: string
+  paidCount: number
+  entries: ContributorEntry[]
+}
+
+/**
+ * A contributor's record, looked up by GitHub login or payout wallet. Public
+ * by design: every line is already on a public work page or receipt.
+ */
+export async function contributorLedger(input: string): Promise<ContributorLedger | null> {
+  const query = input.trim().replace(/^@/, '')
+  if (!query) return null
+  const app = await getApp()
+  const wallet = checkAddress(query)
+  const attempts = wallet.ok
+    ? await app.store.listAttemptsByWorker(wallet.address)
+    : /^[A-Za-z0-9-]{1,39}$/.test(query)
+      ? await app.store.listAttemptsByHandle(query)
+      : null
+  if (!attempts) return null
+  const entries: ContributorEntry[] = []
+  let earned = 0n
+  let paidCount = 0
+  for (const taskId of [...new Set(attempts.map((a) => a.taskId))]) {
+    const task = await app.store.getTask(taskId)
+    if (!task) continue
+    const mine = attempts.filter((a) => a.taskId === taskId)
+    const payout = await app.store.getPayment(taskId, 'release')
+    const paidToMe = payout?.status === 'confirmed' && mine.some((a) => a.worker === payout.recipient && a.outcome === 'PASS')
+    if (paidToMe) {
+      earned += payout.amountMicro
+      paidCount++
+    }
+    entries.push({
+      taskId,
+      displayId: displayId(task),
+      title: task.title,
+      state: task.state,
+      reward: formatUsdc(task.rewardMicro),
+      claimedAt: Math.max(...mine.map((a) => a.claimedAt)),
+      outcome: paidToMe ? 'PAID' : (mine.at(-1)?.outcome ?? null),
+      payoutTxUrl: paidToMe && payout.txHash && payout.provider !== 'mock' ? `${app.chain.explorerUrl.replace(/\/$/, '')}/tx/${payout.txHash}` : null,
+      simulated: paidToMe && payout.provider === 'mock',
+    })
+  }
+  entries.sort((a, b) => b.claimedAt - a.claimedAt)
+  return { query, kind: wallet.ok ? 'wallet' : 'login', earned: formatUsdc(earned), paidCount, entries }
+}

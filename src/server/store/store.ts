@@ -441,6 +441,12 @@ export class Store extends Repository {
     )
   }
 
+  async listAttemptsByHandle(handle: string, limit = 50): Promise<AttemptRecord[]> {
+    return (
+      await this.all('SELECT * FROM attempts WHERE lower(handle) = lower($1) ORDER BY claimed_at DESC LIMIT $2', handle, limit)
+    ).map(rowToAttempt)
+  }
+
   async identityHasSubmitted(taskId: string, identity: string): Promise<boolean> {
     return (
       (await this.get(
