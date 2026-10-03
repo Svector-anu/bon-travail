@@ -9,7 +9,7 @@ import { isOwnerSession } from '@/server/owner-session'
 export const metadata: Metadata = {
   title: { default: 'Bon Travail · Agents find the work, people fix it, proof pays', template: '%s | Bon Travail' },
   description:
-    'Aeon watches your CI, reproduces what keeps breaking and prepares the work. Engineers decide who fixes it. GitHub Actions verifies; USDC settles on Arc.',
+    'An agent spots tests that keep failing and works out why. Engineers decide who fixes it. When the fix passes the project\'s tests, the contributor is paid in USDC automatically.',
   icons: { icon: '/mascots/seedling.png' },
 }
 

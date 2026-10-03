@@ -8,7 +8,7 @@ export function Footer() {
           <img src="/mascots/seedling.png" alt="" />
           <span>Bon Travail</span>
         </Link>
-        <p>Agents find and prepare the work. People do it. GitHub Actions verifies, and USDC settles on Arc.</p>
+        <p>An agent finds and prepares the work. People do it. When the fix passes the project&apos;s tests, they are paid in USDC on Arc.</p>
       </div>
       <div>
         <h4>Product</h4>
@@ -52,7 +52,7 @@ export function Footer() {
       </div>
       <div className="foot-note">
         <span>Rewards are paid in Arc Testnet USDC.</span>
-        <span>Engineers approve. GitHub judges. The chain settles.</span>
+        <span>Engineers approve. Tests decide. Payment is automatic.</span>
       </div>
     </footer>
   )

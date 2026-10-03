@@ -245,7 +245,7 @@ async function WorkReceipt({ receipt, watch, url }: { receipt: ReceiptView; watc
       {v && (
         <section className="panel verification">
           <div className="panel-title">
-            <span className="label">Verification · GitHub Actions</span>
+            <span className="label">Verification · the project's tests</span>
             {v.valid ? <Check size={18} className="ok-mark" /> : <X size={18} className="no-mark" />}
           </div>
           <p className="evidence-lead">{v.reason}</p>

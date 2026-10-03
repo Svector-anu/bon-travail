@@ -10,16 +10,16 @@ import { homeSnapshot, recentReceipts } from '@/server/queries'
 export const dynamic = 'force-dynamic'
 
 const LOOP = [
-  ['Observe', 'Aeon watches the GitHub Actions workflow you connect. One red run is noise; the same job and step failing again is a finding.'],
-  ['Investigate', 'Aeon reproduces the failure in its own runner, bisects the commits since the last green run and writes down what it found.'],
+  ['Observe', 'Our agent, Aeon, watches the automated tests of the repository you connect. One failed run is noise; the same test failing again is worth a look.'],
+  ['Investigate', 'Aeon reruns the failing test itself, finds the exact commit that broke it, and writes up what went wrong in plain words.'],
   ['Decide', 'You read the evidence and choose: keep it in the team, or externalize it with a reward, a deadline and the people allowed to take it.'],
   ['Fix', 'An approved contributor opens a pull request against the scoped work. They cannot touch the workflow or the acceptance test.'],
-  ['Verify', 'GitHub Actions is the judge. The acceptance job has to pass on the exact commit; by default that means after you merge the fix.'],
+  ['Verify', 'Your project\'s own tests decide, not a person and not the agent. Once you merge the fix, the same test that was failing has to pass.'],
   ['Settle', 'Green pays the contributor from escrow on Arc. A missed deadline refunds you. Either way a receipt is sealed, and Aeon keeps watching for the failure to come back.'],
 ] as const
 
 const ROLES = [
-  ['Machines', 'Find, reproduce, prepare, verify', 'Aeon and GitHub Actions do the watching, the bisecting and the judging. They recommend; they never approve or pay.'],
+  ['Machines', 'Find, reproduce, prepare, check', 'Aeon watches, reproduces and explains failures; your test suite checks the fix. Neither can approve work or pay anyone.'],
   ['People', 'Do the work', 'An engineer you approved fixes what still benefits from a person, inside the scope you set.'],
   ['Your team', 'Owns every decision', 'Architecture, secrets, severity, scope, who can claim, the reward and the release stay with you.'],
 ] as const
@@ -45,7 +45,7 @@ export default async function HomePage() {
             <br />
             fix it. Proof pays.
           </h1>
-          <p>Aeon watches your CI and prepares what keeps breaking. You decide who fixes it. GitHub Actions verifies, and USDC settles on Arc.</p>
+          <p>Our agent, Aeon, spots tests that keep failing and works out why. You decide who fixes it. When their fix passes your tests, they are paid in USDC automatically.</p>
           <div className="hero-ctas">
             <Link className="btn btn-primary" href={current ? `/task/${current.id}` : '/tasks'}>
               See open work <ArrowRight size={16} />

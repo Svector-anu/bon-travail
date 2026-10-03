@@ -117,7 +117,7 @@ export function WorkPanel({ task, attempts, claimedPrUrl, waitingFor, lastError 
             disabled={busy !== null}
             onClick={() => void run('submit', () => post(`/api/work/${task.id}/submit`, { prUrl: claimedPrUrl }))}
           >
-            {busy === 'submit' ? 'Handing it to GitHub Actions...' : 'Ready: request verification'}
+            {busy === 'submit' ? 'Sending it to the tests...' : 'Ready: request verification'}
             {busy !== 'submit' && <ArrowRight size={16} />}
           </button>
         )}
@@ -135,11 +135,11 @@ export function WorkPanel({ task, attempts, claimedPrUrl, waitingFor, lastError 
         <p className={`work-state ${task.state === 'ACCEPTED' ? 'paid' : 'busy'}`}>
           {verifying && (
             <>
-              <LoaderCircle size={15} className="spin" aria-hidden /> Waiting on GitHub Actions
+              <LoaderCircle size={15} className="spin" aria-hidden /> Waiting for the tests to finish
               {waitingFor ? `: ${waitingFor}.` : '.'}
             </>
           )}
-          {task.state === 'ACCEPTED' && 'Verified by GitHub Actions. Paying out from escrow.'}
+          {task.state === 'ACCEPTED' && 'The tests passed. Paying the reward now.'}
           {task.state === 'REJECTED' && `Rejected: ${lastVerdict?.reason ?? 'the acceptance check failed.'}`}
         </p>
         {lastError && verifying && <p className="work-hint">Last check could not reach GitHub ({lastError}); it will retry.</p>}

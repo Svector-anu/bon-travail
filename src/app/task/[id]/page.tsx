@@ -147,7 +147,7 @@ async function WorkPackage({ task, attempts, work }: { task: TaskView; attempts:
             </span>
             <p>{ci.acceptance}</p>
             <small>
-              Judged by GitHub Actions: &ldquo;{ci.jobName}&rdquo; must pass
+              Checked automatically: the project&apos;s &ldquo;{ci.jobName}&rdquo; tests must pass
               {ci.requireMerge ? ` on ${ci.baseBranch} after the fix is merged` : ' on the PR head'}. The PR may not change{' '}
               {ci.protectedPaths.map((p, i) => (
                 <span key={p}>

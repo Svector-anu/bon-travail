@@ -179,7 +179,7 @@ function outcomeReason(task: TaskRecord, attempts: AttemptRecord[]): string {
   switch (task.state) {
     case 'PAID':
       return ci
-        ? 'GitHub Actions passed the acceptance job on the approved fix. Reward released to the contributor.'
+        ? 'The fix passed the project\'s tests. Reward released to the contributor.'
         : 'Submission matched the chain exactly. Reward released to the worker.'
     case 'REFUNDED':
       return attempts.some((a) => a.outcome === 'FAIL')
@@ -195,7 +195,7 @@ function outcomeReason(task: TaskRecord, attempts: AttemptRecord[]): string {
       return 'Deadline passed. The reward will be refunded.'
     case 'SUBMITTED':
     case 'VERIFYING':
-      return ci ? 'Pull request submitted. Waiting for GitHub Actions to decide.' : 'Submission received. Waiting for verification.'
+      return ci ? 'Pull request submitted. Waiting for the project\'s tests to decide.' : 'Submission received. Waiting for verification.'
     case 'CLAIMED':
       return ci ? 'An approved contributor is working on it.' : 'A worker holds the claim lock.'
     case 'DRAFT':

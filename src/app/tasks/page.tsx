@@ -21,7 +21,7 @@ export default async function WorkPage({ searchParams }: { searchParams: Promise
       <div className="page-head">
         <div>
           <h1>Work</h1>
-          <p>Scoped fixes an engineering team chose to hand out. Each one is escrowed and judged by GitHub Actions.</p>
+          <p>Scoped fixes an engineering team chose to hand out. The reward is held up front and paid when the fix passes the project's tests.</p>
         </div>
         <nav className="segmented" aria-label="Filter work">
           <Link href="/tasks" aria-current={view === 'open'}>
