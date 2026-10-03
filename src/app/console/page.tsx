@@ -4,7 +4,7 @@ import Link from 'next/link'
 import type { FindingSummaryView } from '@/domain/views'
 import { AutoRefresh } from '@/components/auto-refresh'
 import { Ago } from '@/components/clock'
-import { CheckNow, ConnectRepo, GithubMark, OwnerLogin, SignOut, WatchRepo } from '@/components/owner-actions'
+import { CheckNow, ConnectRepo, GithubMark, OwnerLogin, SignOut, WatchPicker } from '@/components/owner-actions'
 import { Reveal } from '@/components/reveal'
 import { FINDING_STATUS, TASK_STATUS } from '@/lib/format'
 import { getApp } from '@/server/container'
@@ -132,9 +132,7 @@ export default async function ConsolePage({ searchParams }: { searchParams: Prom
             <CheckNow repoId={repo.id} />
           </div>
         ))}
-        {snapshot.installable.map((repo) => (
-          <WatchRepo key={repo.slug} slug={repo.slug} isPrivate={repo.private} />
-        ))}
+        {snapshot.installable.length > 0 && <WatchPicker repos={snapshot.installable} />}
         {snapshot.githubError && <p className="form-error">GitHub: {snapshot.githubError}</p>}
         {snapshot.installUrl ? (
           <a className="btn btn-glass connect-github" href={snapshot.installUrl}>

@@ -134,13 +134,17 @@ export class GitHubApp implements RepoTokenSource {
     const repos: InstallationRepo[] = []
     for (const installation of installations) {
       const token = await this.installationToken(installation.id)
-      const body = await this.call('/installation/repositories?per_page=100', { auth: token })
-      for (const repo of (body.repositories as { name: string; private: boolean; owner: { login: string } }[]) ?? []) {
-        repos.push({ owner: repo.owner.login, name: repo.name, private: repo.private, installationId: installation.id })
-        this.repoInstallations.set(`${repo.owner.login}/${repo.name}`.toLowerCase(), installation.id)
+      for (let page = 1; page <= 10; page++) {
+        const body = await this.call(`/installation/repositories?per_page=100&page=${page}`, { auth: token })
+        const batch = (body.repositories as { name: string; private: boolean; owner: { login: string } }[]) ?? []
+        for (const repo of batch) {
+          repos.push({ owner: repo.owner.login, name: repo.name, private: repo.private, installationId: installation.id })
+          this.repoInstallations.set(`${repo.owner.login}/${repo.name}`.toLowerCase(), installation.id)
+        }
+        if (batch.length < 100) break
       }
     }
-    return repos
+    return repos.sort((a, b) => `${a.owner}/${a.name}`.localeCompare(`${b.owner}/${b.name}`))
   }
 
   private async callList(path: string, auth: string): Promise<unknown[]> {

@@ -76,58 +76,88 @@ export function GithubMark() {
   )
 }
 
-/** Watch one installed repository; asks which workflow when it has several. */
-export function WatchRepo({ slug, isPrivate }: { slug: string; isPrivate: boolean }) {
+/**
+ * Picks one of the repositories the app is installed on and starts watching
+ * it. Asks which workflow when the repository has several.
+ */
+export function WatchPicker({ repos }: { repos: { slug: string; private: boolean }[] }) {
   const { busy, error, run } = useAction()
+  const [slug, setSlug] = useState('')
   const [choices, setChoices] = useState<{ name: string; path: string }[] | null>(null)
   const [workflow, setWorkflow] = useState('')
+  const known = repos.some((r) => r.slug.toLowerCase() === slug.trim().toLowerCase())
+
+  function reset(next: string) {
+    setSlug(next)
+    setChoices(null)
+  }
 
   async function start() {
-    await run(async () => {
-      const res = await fetch(`/api/owner/repos/workflows?repo=${encodeURIComponent(slug)}`)
-      const data = (await res.json()) as { workflows?: { name: string; path: string }[]; message?: string }
-      if (!res.ok || !data.workflows) throw new Error(data.message ?? 'Could not read workflows')
-      if (data.workflows.length === 0) throw new Error(`${slug} has no active GitHub Actions workflow`)
-      if (data.workflows.length === 1) return postJson('/api/owner/repos', { repo: slug, workflow: data.workflows[0]!.path })
-      setChoices(data.workflows)
-      setWorkflow(data.workflows[0]!.path)
-      return undefined
-    }, (result) => {
-      if (result !== undefined) window.location.reload()
-    })
+    const repo = slug.trim()
+    await run(
+      async () => {
+        const res = await fetch(`/api/owner/repos/workflows?repo=${encodeURIComponent(repo)}`)
+        const data = (await res.json()) as { workflows?: { name: string; path: string }[]; message?: string }
+        if (!res.ok || !data.workflows) throw new Error(data.message ?? 'Could not read workflows')
+        if (data.workflows.length === 0) throw new Error(`${repo} has no active GitHub Actions workflow`)
+        if (data.workflows.length === 1) return postJson('/api/owner/repos', { repo, workflow: data.workflows[0]!.path })
+        setChoices(data.workflows)
+        setWorkflow(data.workflows[0]!.path)
+        return undefined
+      },
+      (result) => {
+        if (result !== undefined) window.location.reload()
+      },
+    )
   }
 
   return (
-    <div className="repo-row installable">
-      <span className="repo-dot" aria-hidden />
-      <div>
-        <strong>{slug}</strong>
-        <small>{isPrivate ? 'Private · ' : ''}Installed, not watched yet</small>
+    <div className="watch-picker">
+      <div className="field">
+        <label htmlFor="watch-repo">Watch a repository ({repos.length} installed)</label>
+        <input
+          id="watch-repo"
+          className="input mono"
+          list="installed-repos"
+          placeholder="Start typing a repository name"
+          autoComplete="off"
+          spellCheck={false}
+          value={slug}
+          onChange={(e) => reset(e.target.value)}
+        />
+        <datalist id="installed-repos">
+          {repos.map((r) => (
+            <option key={r.slug} value={r.slug}>
+              {r.private ? 'private' : 'public'}
+            </option>
+          ))}
+        </datalist>
       </div>
-      {choices ? (
-        <span className="watch-pick">
-          <select className="input" aria-label={`Workflow to watch in ${slug}`} value={workflow} onChange={(e) => setWorkflow(e.target.value)}>
+      {choices && (
+        <div className="field">
+          <label htmlFor="watch-workflow">Workflow</label>
+          <select id="watch-workflow" className="input" value={workflow} onChange={(e) => setWorkflow(e.target.value)}>
             {choices.map((w) => (
               <option key={w.path} value={w.path}>
                 {w.name} ({w.path})
               </option>
             ))}
           </select>
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={busy}
-            onClick={() => void run(() => postJson('/api/owner/repos', { repo: slug, workflow }), () => window.location.reload())}
-          >
-            Watch
-          </button>
-        </span>
-      ) : (
-        <button type="button" className="btn btn-glass" disabled={busy} onClick={() => void start()}>
-          {busy ? 'Reading GitHub...' : 'Watch'}
-        </button>
+        </div>
       )}
-      {error && <small className="form-error">{error}</small>}
+      <button
+        type="button"
+        className="btn btn-primary"
+        disabled={busy || !known}
+        onClick={() =>
+          void (choices
+            ? run(() => postJson('/api/owner/repos', { repo: slug.trim(), workflow }), () => window.location.reload())
+            : start())
+        }
+      >
+        {busy ? 'Reading GitHub...' : 'Watch'}
+      </button>
+      {error && <p className="form-error">{error}</p>}
     </div>
   )
 }
