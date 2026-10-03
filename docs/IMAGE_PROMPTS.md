@@ -18,12 +18,28 @@ text, no logos, no people, no watermarks. Export JPEG at ~85% quality.
 
 ## hero-field.jpg
 
-> A beige 1980s all-in-one personal computer standing alone in a grassy meadow
-> at golden hour, low camera angle from the grass, deep blue sky with a few
-> soft clouds, warm sunlight rimming the right edge of the computer, small
-> white and lilac wildflowers in the foreground slightly out of focus, shallow
-> depth of field, 35mm film look, calm and surreal, plenty of empty sky above
-> and to the left.
+The current file is a close-up cropped from the reference board, so no crop can
+produce the reference composition. Regenerate it as a wide scene:
+
+- 16:9, at least 2400 x 1350, cinematic landscape photograph
+- camera pulled far back, low-ish horizon, environmental depth
+- an old beige Macintosh-style computer, small and distant, standing in the grass
+- computer around right-center (about 62-70% across, horizon on the lower third),
+  roughly 20-30% of the image height
+- at least the top half is open blue sky with soft warm clouds, brightest upper right
+- grassy field with small wildflowers running across the full width of the foreground
+- warm low sunlight from the right, soft rim light on the computer
+- left 40% calm (sky and grass only) so the headline can sit there
+- no close-up, no UI, no text, no logos, no people
+
+> Wide cinematic 16:9 landscape photograph at golden hour. A vast grassy meadow
+> with small white and lilac wildflowers stretches across the whole foreground.
+> Far away, slightly right of center, a lone beige 1980s all-in-one personal
+> computer stands in the grass, small in the frame. Above, a huge open blue sky
+> with soft warm clouds fills more than half the image, brightest toward the
+> upper right where low sunlight rims the computer. The left side is calm, open
+> sky and grass. Camera pulled far back, shallow depth of field on the
+> foreground grass, 35mm film look, quiet and surreal. No text, no people.
 
 ## task-stage.jpg
 

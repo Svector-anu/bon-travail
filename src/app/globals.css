@@ -460,8 +460,8 @@ img {
   display: grid;
   grid-template-rows: 1fr auto;
   background:
-    radial-gradient(900px 500px at 75% 10%, rgba(120, 150, 230, 0.35), transparent 60%),
-    linear-gradient(180deg, #0c1a3d 0%, #18346f 55%, #1b2a3c 82%, #10170f 100%);
+    radial-gradient(1100px 600px at 70% 20%, rgba(150, 175, 235, 0.38), transparent 62%),
+    linear-gradient(180deg, #13244d 0%, #2a4c8f 50%, #2c3a4a 80%, #141a12 100%);
 }
 
 .hero-media {
@@ -1866,7 +1866,9 @@ img {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background: linear-gradient(90deg, rgba(10, 20, 48, 0.55) 0%, rgba(10, 20, 48, 0.25) 40%, rgba(10, 20, 48, 0) 60%);
+  background:
+    linear-gradient(180deg, rgba(5, 8, 16, 0.45) 0%, rgba(5, 8, 16, 0) 140px),
+    linear-gradient(90deg, rgba(5, 8, 16, 0.62) 0%, rgba(5, 8, 16, 0.38) 32%, rgba(5, 8, 16, 0.08) 52%, rgba(5, 8, 16, 0) 64%);
 }
 
 .shell:has(.hero.bleed) .topbar {
@@ -1894,6 +1896,19 @@ img {
 
 .hero.bleed .hero-stats {
   margin: 0 var(--gutter) 56px;
+  background: rgba(10, 14, 26, 0.26);
+  backdrop-filter: blur(10px) saturate(115%);
+  -webkit-backdrop-filter: blur(10px) saturate(115%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.hero.bleed .hero-stats div {
+  border-left-color: rgba(255, 255, 255, 0.08);
+}
+
+.hero.bleed .hero-stats strong,
+.hero.bleed .hero-stats span {
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.35);
 }
 
 .hero.bleed + .home-grid {
