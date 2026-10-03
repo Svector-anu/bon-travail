@@ -1,6 +1,6 @@
 import './globals.css'
 import type { Metadata } from 'next'
-import { Geist, Italiana } from 'next/font/google'
+import localFont from 'next/font/local'
 import type { ReactNode } from 'react'
 import { Footer } from '@/components/footer'
 import { Header } from '@/components/header'
@@ -8,9 +8,16 @@ import { Providers } from '@/components/providers'
 import { SmoothScroll } from '@/components/smooth-scroll'
 import { isOwnerSession } from '@/server/owner-session'
 
-/** Two families: a hairline display face for the brand and statements, a neutral sans for everything people read or press. */
-const display = Italiana({ subsets: ['latin'], weight: '400', variable: '--font-display', display: 'swap' })
-const body = Geist({ subsets: ['latin'], variable: '--font-body', display: 'swap' })
+/** Open Runde (Inter with rounded terminals, SIL OFL): one clear family for the brand, statements and body. */
+const sans = localFont({
+  src: [
+    { path: './fonts/OpenRunde-Regular.woff2', weight: '400', style: 'normal' },
+    { path: './fonts/OpenRunde-Medium.woff2', weight: '500', style: 'normal' },
+    { path: './fonts/OpenRunde-Semibold.woff2', weight: '600', style: 'normal' },
+  ],
+  variable: '--font-sans',
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
   title: { default: 'bon travail · agents find the work, people fix it, proof pays', template: '%s · bon travail' },
@@ -22,7 +29,7 @@ export const metadata: Metadata = {
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const owner = await isOwnerSession().catch(() => false)
   return (
-    <html lang="en" className={`${display.variable} ${body.variable}`}>
+    <html lang="en" className={sans.variable}>
       <body>
         <SmoothScroll />
         <Providers>

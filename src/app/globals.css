@@ -24,8 +24,8 @@
   --claimed: #e6c25b;
   --radius: 22px;
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
-  --font: var(--font-body), 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  --display: var(--font-display), Didot, 'Bodoni 72', Georgia, serif;
+  --font: var(--font-sans), 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --display: var(--font);
   /* Critically damped spring (stiffness 100, damping 20): fast start, long soft settle. */
   --spring: linear(0, 0.045 4.2%, 0.144 8.3%, 0.264 12.5%, 0.385 16.7%, 0.496 20.8%, 0.594 25%, 0.677 29.2%, 0.745 33.3%, 0.801 37.5%, 0.845 41.7%, 0.881 45.8%, 0.908 50%, 0.93 54.2%, 0.947 58.3%, 0.96 62.5%, 0.969 66.7%, 0.977 70.8%, 0.983 75%, 0.987 79.2%, 0.99 83.3%, 0.993 87.5%, 0.995 91.7%, 0.996 95.8%, 1);
   --spring-time: 800ms;
@@ -149,12 +149,12 @@ img {
 .wordmark {
   display: block;
   width: auto;
-  aspect-ratio: 506.3 / 79.3;
+  aspect-ratio: 500.15 / 79.34;
   overflow: visible;
 }
 
 .brand .wordmark {
-  height: 20px;
+  height: 18px;
 }
 
 .nav {
@@ -2617,7 +2617,7 @@ textarea.input.mono {
 }
 
 .scene-brand .wordmark {
-  height: 22px;
+  height: 20px;
   filter: drop-shadow(0 1px 12px rgba(10, 12, 30, 0.5));
 }
 
@@ -2845,7 +2845,7 @@ textarea.input.mono {
   }
 
   .brand .wordmark {
-    height: 18px;
+    height: 16px;
   }
 
   .shell:has(.stage) .topbar {
