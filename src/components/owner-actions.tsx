@@ -80,12 +80,19 @@ export function SignOut() {
 }
 
 export function ConnectRepo() {
-  const { busy, error, run } = useAction()
+  const { busy, error, run, router } = useAction()
   const [repo, setRepo] = useState('')
   const [workflow, setWorkflow] = useState('')
   function onSubmit(event: FormEvent) {
     event.preventDefault()
-    void run(() => postJson('/api/owner/repos', { repo: repo.trim(), ...(workflow.trim() ? { workflow: workflow.trim() } : {}) }))
+    void run(
+      () => postJson('/api/owner/repos', { repo: repo.trim(), ...(workflow.trim() ? { workflow: workflow.trim() } : {}) }),
+      () => {
+        setRepo('')
+        setWorkflow('')
+        router.refresh()
+      },
+    )
   }
   return (
     <form className="connect" onSubmit={onSubmit}>

@@ -169,7 +169,7 @@ export class Agent {
     for (const repo of await this.watch.listRepos(true)) {
       if (repo.lastPolledAt !== null && now - repo.lastPolledAt < this.settings.observeIntervalMs) continue
       try {
-        const report = await this.work.observe(repo, 'agent:observer')
+        const report = await this.work.observe(repo)
         notable.push(...report.notable)
         const slug = `${repo.owner}/${repo.name}`
         for (const id of report.detected) await log('detect', null, 'ok', `New failure on ${slug} is being watched`, null, id)

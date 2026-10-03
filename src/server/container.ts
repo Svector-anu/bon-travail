@@ -56,6 +56,7 @@ function defaultRail(config: AppConfig): PaymentRail {
         ...arc,
         escrowAddress: config.arcEscrowAddress,
         allowanceCapMicro: config.maxOutstandingEscrowMicro,
+        namespace: config.escrowNamespace,
       })
     case 'arc':
       return new ArcPaymentRail(arc)

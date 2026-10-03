@@ -14,7 +14,7 @@ const LOOP = [
   ['Investigate', 'Aeon reproduces the failure in its own runner, bisects the commits since the last green run and writes down what it found.'],
   ['Decide', 'You read the evidence and choose: keep it in the team, or externalize it with a reward, a deadline and the people allowed to take it.'],
   ['Fix', 'An approved contributor opens a pull request against the scoped work. They cannot touch the workflow or the acceptance test.'],
-  ['Verify', 'GitHub Actions is the judge. The acceptance job has to pass on the exact commit, after you merge it.'],
+  ['Verify', 'GitHub Actions is the judge. The acceptance job has to pass on the exact commit; by default that means after you merge the fix.'],
   ['Settle', 'Green pays the contributor from escrow on Arc. A missed deadline refunds you. Either way a receipt is sealed, and Aeon keeps watching for the failure to come back.'],
 ] as const
 

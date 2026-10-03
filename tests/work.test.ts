@@ -96,7 +96,7 @@ describe('observing CI', () => {
     // #given a connected repository
     const { app, repo, finding } = await watched()
     // #when it is polled again with nothing new
-    const report = await app.work.observe(repo, 'agent')
+    const report = await app.work.observe(repo)
     // #then
     expect(report.newRuns).toBe(0)
     expect((await app.watch.requireFinding(finding.id)).failureCount).toBe(2)
@@ -107,13 +107,13 @@ describe('observing CI', () => {
     const { app, github, repo, finding } = await watched()
     // #when main goes green
     github.addRun({ sha: sha('d1'), at: T0 - HOUR, conclusion: 'success' })
-    const green = await app.work.observe(repo, 'agent')
+    const green = await app.work.observe(repo)
     // #then
     expect(green.resolved).toEqual([finding.id])
     expect(await app.watch.requireFinding(finding.id)).toMatchObject({ status: 'resolved', resolvedSha: sha('d1') })
     // #when the same job and step fail again
     github.addRun({ sha: sha('e1'), at: T0 - HOUR / 2, conclusion: 'failure' })
-    const back = await app.work.observe(repo, 'agent')
+    const back = await app.work.observe(repo)
     // #then it is a recurrence of the same finding, not a new one
     expect(back.recurred).toEqual([finding.id])
     expect(back.notable[0]).toContain('came back')

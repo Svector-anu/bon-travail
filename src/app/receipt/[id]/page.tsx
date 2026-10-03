@@ -83,8 +83,8 @@ function Seal({ receipt, simulated, url }: { receipt: ReceiptView; simulated: bo
   )
 }
 
-function TxLink({ hash, url }: { hash: string | null; url: string | null }) {
-  if (!hash) return <span className="muted">--</span>
+function TxLink({ hash, url, simulated = false }: { hash: string | null; url: string | null; simulated?: boolean }) {
+  if (!hash) return <span className="muted">{simulated ? 'Reserved in the ledger (simulated)' : '--'}</span>
   if (!url) return <span className="mono">{shortAddress(hash)} (simulated)</span>
   return (
     <a className="mono" href={url} target="_blank" rel="noreferrer">
@@ -216,7 +216,7 @@ async function WorkReceipt({ receipt, watch, url }: { receipt: ReceiptView; watc
             )}
             <dt>Escrowed</dt>
             <dd>
-              <TxLink hash={receipt.funding?.txHash ?? null} url={receipt.funding?.explorerTxUrl ?? null} />
+              <TxLink hash={receipt.funding?.txHash ?? null} url={receipt.funding?.explorerTxUrl ?? null} simulated={receipt.funding?.simulated} />
             </dd>
             <dt>{refunded ? 'Refund' : 'Payout'}</dt>
             <dd>
@@ -279,7 +279,10 @@ async function WorkReceipt({ receipt, watch, url }: { receipt: ReceiptView; watc
           <span className="label">Acceptance condition · set by the engineer</span>
         </div>
         <p className="evidence-lead">{ci.acceptance}</p>
-        <p className="muted">{ci.scope}</p>
+        <span className="label" style={{ marginTop: 16, display: 'block' }}>
+          Scope
+        </span>
+        <p className="muted scope">{ci.scope}</p>
       </section>
 
       {receipt.finding && (

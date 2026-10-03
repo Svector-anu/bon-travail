@@ -37,9 +37,13 @@ export const PROOFWORK_ESCROW_ABI = parseAbi([
   'function maxReward() view returns (uint256)',
 ])
 
-/** On-chain key for a task: stable, collision-free, readable from the task id. */
-export function escrowTaskKey(taskId: string): Hex {
-  return keccak256(stringToHex(`proofwork:${taskId}`))
+/**
+ * On-chain key for a task. Task ids restart in every database, so the key is
+ * namespaced per deployment: two deployments sharing one escrow contract can
+ * never fund, pay or refund each other's task_001.
+ */
+export function escrowTaskKey(taskId: string, namespace = 'proofwork'): Hex {
+  return keccak256(stringToHex(`${namespace}:${taskId}`))
 }
 
 function isAlreadyKnown(error: unknown): boolean {
@@ -167,8 +171,11 @@ export class ArcEscrowRail extends ArcSigner implements PaymentRail {
   readonly escrow: Address
   private readonly allowanceCapMicro: bigint
 
-  constructor(options: ArcOptions & { escrowAddress: string | undefined; allowanceCapMicro: bigint }) {
+  private readonly namespace: string
+
+  constructor(options: ArcOptions & { escrowAddress: string | undefined; allowanceCapMicro: bigint; namespace?: string }) {
     super(options)
+    this.namespace = options.namespace ?? 'proofwork'
     if (!options.escrowAddress || !/^0x[0-9a-fA-F]{40}$/.test(options.escrowAddress)) {
       throw new PaymentConfigError('PAYMENT_PROVIDER=arc-escrow requires ARC_ESCROW_ADDRESS')
     }
@@ -191,7 +198,7 @@ export class ArcEscrowRail extends ArcSigner implements PaymentRail {
   }
 
   async sign(call: RailCall): Promise<SignedTransfer> {
-    const taskKey = escrowTaskKey(call.taskId)
+    const taskKey = escrowTaskKey(call.taskId, this.namespace)
     switch (call.kind) {
       case 'fund':
         return this.signCall(

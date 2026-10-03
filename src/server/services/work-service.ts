@@ -148,12 +148,13 @@ export class WorkService {
       lastPolledAt: null,
       active: true,
     })
-    return { repo, report: await this.observe(repo, actor) }
+    return { repo, report: await this.observe(repo) }
   }
 
-  async observe(repo: RepoRecord, actor: string): Promise<ObserveReport> {
+  /** Whoever triggers it, what the observer records is its own reading of GitHub. */
+  async observe(repo: RepoRecord): Promise<ObserveReport> {
     if (!this.observer) throw new DomainError('UNAVAILABLE', 'GITHUB_TOKEN is not configured; GitHub features are disabled')
-    return this.observer.poll(repo, actor)
+    return this.observer.poll(repo, 'observer')
   }
 
   // ---- Aeon ----------------------------------------------------------------
@@ -232,7 +233,7 @@ export class WorkService {
     }
     const task = await this.tasks.createWorkTask(
       {
-        title: `Fix "${finding.jobName} / ${finding.stepName}" in ${repo.owner}/${repo.name}`,
+        title: `Fix the failing "${finding.stepName}" step in ${finding.jobName}`,
         description: input.scope,
         rewardMicro: input.rewardMicro,
         subject: `finding:${findingId}:${now}`,

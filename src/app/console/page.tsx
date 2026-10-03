@@ -126,7 +126,7 @@ export default async function ConsolePage() {
           </div>
         ))}
         <ConnectRepo />
-        <p className="muted console-note">Read-only: Proofwork reads workflow runs, logs and pull requests. It never writes to your repository.</p>
+        <p className="muted console-note">Read-only: Bon Travail reads workflow runs, logs and pull requests. It never writes to your repository.</p>
       </section>
 
       {(snapshot.watching.length > 0 || snapshot.settled.length > 0) && (

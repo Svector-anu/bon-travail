@@ -10,6 +10,8 @@ export interface AppConfig {
   paymentProvider: 'mock' | 'arc' | 'arc-escrow'
   arcPayerPrivateKey: string | undefined
   arcEscrowAddress: string | undefined
+  /** Prefix of every escrow task key; must differ between deployments sharing a contract. */
+  escrowNamespace: string
   maxRewardMicro: bigint
   dailyPayoutCapMicro: bigint
   maxOutstandingEscrowMicro: bigint
@@ -76,6 +78,7 @@ export function loadConfig(env: Env = process.env): AppConfig {
     paymentProvider: oneOf(env, 'PAYMENT_PROVIDER', ['mock', 'arc', 'arc-escrow'] as const),
     arcPayerPrivateKey: env.ARC_PAYER_PRIVATE_KEY || undefined,
     arcEscrowAddress: env.ARC_ESCROW_ADDRESS || undefined,
+    escrowNamespace: env.ESCROW_NAMESPACE || 'proofwork',
     maxRewardMicro: usdcFromConfig(env.MAX_REWARD_USDC ?? '1', 'MAX_REWARD_USDC'),
     dailyPayoutCapMicro: usdcFromConfig(env.DAILY_PAYOUT_CAP_USDC ?? '10', 'DAILY_PAYOUT_CAP_USDC'),
     maxOutstandingEscrowMicro: usdcFromConfig(env.MAX_OUTSTANDING_ESCROW_USDC ?? '5', 'MAX_OUTSTANDING_ESCROW_USDC'),
@@ -104,6 +107,9 @@ export function loadConfig(env: Env = process.env): AppConfig {
   }
   if (config.paymentProvider === 'arc-escrow' && !config.arcEscrowAddress) {
     throw new PaymentConfigError('PAYMENT_PROVIDER=arc-escrow requires ARC_ESCROW_ADDRESS')
+  }
+  if (!/^[a-z0-9-]{1,40}$/.test(config.escrowNamespace)) {
+    throw new PaymentConfigError('ESCROW_NAMESPACE must be 1-40 lowercase letters, digits or dashes')
   }
   if (config.privyAppId && !config.privyAppSecret) {
     throw new Error('NEXT_PUBLIC_PRIVY_APP_ID is set but PRIVY_APP_SECRET is missing; claims cannot be verified')

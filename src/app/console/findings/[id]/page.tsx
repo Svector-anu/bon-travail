@@ -35,7 +35,7 @@ function defaults(finding: FindingView) {
   return {
     acceptance:
       inv?.proposedAcceptance ??
-      `"${finding.jobName}" in ${finding.workflowName} passes on ${finding.defaultBranch} after the fix is merged, without changing the workflow or its tests.`,
+      `"${finding.jobName}" in ${finding.workflowName} passes again, without changing the workflow or its tests.`,
     scope:
       inv?.proposedScope ??
       `Find and fix why "${finding.stepName}" fails in the ${finding.jobName} job. Keep the change minimal and inside the code under test.`,
@@ -46,9 +46,22 @@ function defaults(finding: FindingView) {
 
 function actorLabel(actor: string): string {
   if (actor.startsWith('aeon')) return 'Aeon'
-  if (actor.startsWith('agent')) return 'Observer'
+  if (actor === 'observer' || actor.startsWith('agent')) return 'Observer'
   if (actor === 'owner') return 'You'
+  if (actor === 'proofwork') return 'Ledger'
   return actor
+}
+
+type HistoryItem =
+  | { kind: 'run'; at: number; run: FindingView['runs'][number] }
+  | { kind: 'event'; at: number; event: FindingView['events'][number] }
+
+/** Runs and decisions in one timeline, newest first. */
+function history(finding: FindingView): HistoryItem[] {
+  return [
+    ...finding.runs.map((run) => ({ kind: 'run' as const, at: run.at, run })),
+    ...finding.events.map((event) => ({ kind: 'event' as const, at: event.at, event })),
+  ].sort((a, b) => b.at - a.at)
 }
 
 export default async function FindingPage({ params }: { params: Promise<{ id: string }> }) {
@@ -178,28 +191,29 @@ export default async function FindingPage({ params }: { params: Promise<{ id: st
           <span className="label">Runs and history</span>
         </div>
         <ul className="history">
-          {finding.runs.map((r) => (
-            <li key={r.runId}>
-              <span className={`status ${r.conclusion === 'success' ? 'paid' : 'refund'}`}>{r.conclusion}</span>
-              <a href={r.url} target="_blank" rel="noreferrer">
-                Run #{r.runNumber} <ArrowUpRight size={12} />
-              </a>
-              <span className="mono muted">{r.sha.slice(0, 7)}</span>
-              <small>
-                <Ago ts={r.at} />
-              </small>
-            </li>
-          ))}
-          {finding.events.map((e, i) => (
-            <li key={`e${i}`}>
-              <span className="status">{actorLabel(e.actor)}</span>
-              <span>{EVENT_LABELS[e.type] ?? e.type}</span>
-              <span />
-              <small>
-                <Ago ts={e.at} />
-              </small>
-            </li>
-          ))}
+          {history(finding).map((item, i) =>
+            item.kind === 'run' ? (
+              <li key={`r${item.run.runId}`}>
+                <span className={`status ${item.run.conclusion === 'success' ? 'paid' : 'refund'}`}>{item.run.conclusion}</span>
+                <a href={item.run.url} target="_blank" rel="noreferrer">
+                  Run #{item.run.runNumber} <ArrowUpRight size={12} />
+                </a>
+                <span className="mono muted">{item.run.sha.slice(0, 7)}</span>
+                <small>
+                  <Ago ts={item.at} />
+                </small>
+              </li>
+            ) : (
+              <li key={`e${i}`}>
+                <span className="status">{actorLabel(item.event.actor)}</span>
+                <span>{EVENT_LABELS[item.event.type] ?? item.event.type}</span>
+                <span />
+                <small>
+                  <Ago ts={item.at} />
+                </small>
+              </li>
+            ),
+          )}
         </ul>
         {pastTasks.length > 0 && (
           <p className="muted">
