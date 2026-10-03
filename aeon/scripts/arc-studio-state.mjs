@@ -259,6 +259,10 @@ if (cmd === 'save-result') {
       : [],
     questions: phase === 'needs_input' ? cleanQuestions(raw.questions) : null,
     errorMessage: scrub(raw.errorMessage, 300),
+    // Arc Studio's own words for the turn. A read-only audit has no deployments,
+    // so without this the run reports nothing. Scrubbed and capped; it is a
+    // model's report, labeled as unverified wherever it is shown.
+    answer: phase === 'settled' ? scrub(raw.finalText, 1500) : null,
     updatedAt: new Date().toISOString(),
     lastStatus: status,
     lastNotified: null,
@@ -273,6 +277,7 @@ if (cmd === 'save-result') {
     filesChanged: next.filesChanged,
     questions: next.questions,
     errorMessage: next.errorMessage,
+    answer: next.answer,
   });
   process.exit(0);
 }

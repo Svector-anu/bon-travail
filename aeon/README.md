@@ -40,6 +40,11 @@ gh workflow run aeon.yml -R <your-aeon-repo> -f skill=proofwork-investigate -f h
 
 GitHub delivers cron ticks late and sometimes skips them; that is fine. Submissions are verified the moment a contributor asks, and the tick is the safety net. Set `AGENT_EXPECTED_INTERVAL_SECONDS` to match the schedule (600 for `*/10`) so the agent page reports "Offline" only when Aeon really stopped.
 
+Notes from running them:
+
+- `arc-studio` reports Arc Studio's own answer for a settled turn, scrubbed and capped, labeled as unverified. Keep its `var` prompt under about 250 characters: Aeon's workflow puts it in the run title, and a longer dispatch fails before any job starts.
+- After a recurrence, `proofwork-investigate` re-investigates: the observer starts a new episode and the previous investigation no longer counts.
+
 ## Requirements on the Proofwork side
 
 - A public URL reachable from GitHub Actions.

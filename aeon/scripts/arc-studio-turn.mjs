@@ -235,6 +235,7 @@ function settle(res) {
       lines.push([item.contract, item.address, item.network, item.txHash].filter(Boolean).join(' '));
     }
     if ((summary.deployments || []).length === 0) lines.push('No deployments.');
+    if (summary.answer) lines.push('', `Arc Studio says: ${summary.answer}`);
     finish('ARC_STUDIO_DONE', 'turn finished', {
       notifyKind: 'completed',
       severity: 'success',

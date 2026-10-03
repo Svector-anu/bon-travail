@@ -44,6 +44,17 @@ retry rebroadcasts the stored transaction, so a payout can never be sent twice.
 The ledger's caps are checked before the row exists; the contract's
 `maxReward` is a second limit.
 
+## Reading the contract
+
+The contract is not source-verified on Arcscan (Arc Studio's build settings
+could not be reproduced byte for byte), so read it with the ABI in
+`contracts/IProofworkEscrow.sol`: `escrows(bytes32)` returns
+`(uint256 amount, uint64 deadline, uint8 status)` with status
+`0 None, 1 Funded, 2 Released, 3 Refunded`. When an Arc Studio audit was
+asked to read the escrows without that ABI, it guessed the key encoding and
+the struct and reported every slot empty. Treat a model's read of chain state
+as a lead, and confirm it with a direct contract call.
+
 ## Turning it on
 
 1. Fund the operator address with testnet USDC (faucet.circle.com, Arc Testnet).
