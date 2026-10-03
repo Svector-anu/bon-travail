@@ -40,6 +40,8 @@ externalized --(work package refunded)--> candidate
 
 Transitions are listed in `src/domain/findings.ts` and enforced in `WatchStore.updateFinding`, which locks the row, checks the table and appends the event in one transaction.
 
+A recurrence starts a new failure episode: the finding's first red commit and failure count reset to the new failure, the evidence window runs from the fix's green commit to it, and an investigation older than the latest recurrence no longer counts, so Aeon investigates the new episode. Earlier episodes stay in `finding_events`.
+
 ## Task lifecycle
 
 ```

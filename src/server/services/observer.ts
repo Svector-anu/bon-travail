@@ -219,9 +219,10 @@ export class Observer {
       actor,
       to: recurring ? 'recurred' : promote ? 'candidate' : undefined,
       event: recurring ? 'recurred' : 'repeated',
-      detail: { runId: run.id, runUrl: run.htmlUrl, sha: run.headSha, failureCount },
+      detail: { runId: run.id, runUrl: run.htmlUrl, sha: run.headSha, failureCount: recurring ? 1 : failureCount, totalFailures: failureCount },
       patch: {
-        failureCount,
+        // "in a row" means this episode: a recurrence starts counting again.
+        failureCount: recurring ? 1 : failureCount,
         lastFailedRunId: run.id,
         lastFailedAt: run.createdAt,
         lastFailedRunUrl: run.htmlUrl,

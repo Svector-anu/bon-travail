@@ -23,6 +23,9 @@ Machines discover, prepare and verify. People do the work. Engineers own every d
 - [docs/SECURITY.md](docs/SECURITY.md): authority boundaries and why they exist
 - [docs/ESCROW.md](docs/ESCROW.md): the Arc escrow contract and payment lifecycle
 - [aeon/README.md](aeon/README.md): the Aeon skills and how to schedule them
+- [docs/VISUALS.md](docs/VISUALS.md): the image set, type and motion system
+
+The site itself has a short guide at `/docs`.
 
 ## Run locally
 

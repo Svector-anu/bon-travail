@@ -118,7 +118,7 @@ describe('observing CI', () => {
     // #then it is a recurrence of the same finding, not a new one
     expect(back.recurred).toEqual([finding.id])
     expect(back.notable[0]).toContain('came back')
-    expect(await app.watch.requireFinding(finding.id)).toMatchObject({ status: 'recurred', recurrenceCount: 1, failureCount: 3 })
+    expect(await app.watch.requireFinding(finding.id)).toMatchObject({ status: 'recurred', recurrenceCount: 1, failureCount: 1 })
     expect(await app.watch.listFindings()).toHaveLength(1)
   })
 

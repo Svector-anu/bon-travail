@@ -2647,11 +2647,7 @@ textarea.input.mono {
   }
 
   .scene-statement {
-    font-size: 40px;
-  }
-
-  .scene-statement span {
-    white-space: normal;
+    font-size: clamp(26px, 8vw, 40px);
   }
 
   .scene-links {

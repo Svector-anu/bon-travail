@@ -5,7 +5,7 @@ Aeon is the part of the system that watches and prepares. Three skills:
 | Skill | Mode | What it does | What it can never do |
 |---|---|---|---|
 | `proofwork-loop` | read-only | Calls `POST /api/agent/tick` once per run: the server observes connected repos, verifies submitted fixes, pays, reopens and refunds. Notifies on new findings, payouts, refunds and recurrences | Choose work, people or amounts; call any other endpoint |
-| `proofwork-investigate` | write | Picks one candidate finding, reproduces the failing step at the first red and last green commit in its runner, bisects, and posts an investigation with a proposed acceptance condition | Approve, price, assign or open PRs. Its only write is the investigation endpoint |
+| `proofwork-investigate` | write | Picks one finding that needs an investigation (a new candidate, or a recurrence whose episode is newer than its last investigation), reproduces the failing step at the first red and last green commit in its runner, bisects, and posts an investigation with a proposed acceptance condition | Approve, price, assign or open PRs. Its only write is the investigation endpoint |
 | `arc-studio` | write | Drives Circle Arc Studio (it wrote, tested and deployed `ProofworkEscrow`) | Touch Proofwork data |
 
 The deterministic work (detecting repeats, verifying with GitHub Actions, moving funds under caps) happens on the Proofwork server. The model decides when to run, explains failures, and tells you what happened.
