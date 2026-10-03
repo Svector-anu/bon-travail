@@ -3,7 +3,7 @@ name: arc-studio
 description: Drive Circle Arc Studio from a headless runner. Start one Arc testnet turn, poll it on a later run, and notify when it finishes or needs an answer.
 metadata:
   title: Arc Studio
-  mode: read-only
+  mode: write
   category: dev
   var: ""
   tags:
