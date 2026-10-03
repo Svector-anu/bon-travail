@@ -34,7 +34,11 @@ Why: GitHub already authenticates the author of a pull request. A separate login
 
 ## Owner sessions
 
-`OWNER_ACCESS_TOKEN` (at least 32 characters) is exchanged at `/api/owner/session` for an httpOnly, `SameSite=Strict` cookie holding an HMAC-signed timestamp, valid for 7 days. Rotating the token invalidates every session. Cookie-authenticated writes must carry an `Origin` matching the host. Scripts may send the token as a bearer instead. Without the variable, every owner endpoint returns 503.
+Engineers sign in with GitHub through the Bon Travail GitHub App. The OAuth callback checks a per-browser state cookie, exchanges the code once to learn the GitHub login, and discards the user token. Only logins in `OWNER_GITHUB_LOGINS` receive a session: an httpOnly, `SameSite=Strict` cookie holding an HMAC-signed timestamp and `github:<login>`, valid for 7 days. The list is re-checked on every request, so removing a login revokes it immediately, and rotating `SESSION_SECRET` ends every session. Cookie-authenticated writes must carry an `Origin` matching the host. Scripts may send `OWNER_ACCESS_TOKEN` as a bearer instead. With neither configured, every owner endpoint returns 503.
+
+## Repository access
+
+Repositories are read through the GitHub App with read-only permissions (Actions, checks, contents, pull requests, metadata) and no webhooks. Each request uses a short-lived installation token for the installation that covers that repository, so Bon Travail can read exactly the repositories the team installed it on, and nothing it can do writes to them. The installation id GitHub sends back after installing is looked up with the app's own credentials before anything is shown.
 
 ## Fail closed
 

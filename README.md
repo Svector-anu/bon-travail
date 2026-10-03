@@ -31,12 +31,13 @@ Requires Node 22.
 ```bash
 npm install
 cp .env.example .env.local
-# set AGENT_API_TOKEN and OWNER_ACCESS_TOKEN (openssl rand -hex 32 each)
-GITHUB_TOKEN=$(gh auth token) npm run dev   # http://localhost:3000, embedded Postgres in ./data/pglite
-npm run agent:loop                          # second terminal: the agent tick every 30s
+# set AGENT_API_TOKEN and SESSION_SECRET (openssl rand -hex 32 each), OWNER_GITHUB_LOGINS=<your login>
+npm run github:app -- --base http://localhost:3000   # once: creates your GitHub App, writes its keys
+npm run dev                                         # http://localhost:3000, embedded Postgres in ./data/pglite
+npm run agent:loop                                  # second terminal: the agent tick every 30s
 ```
 
-Open `/console`, sign in with `OWNER_ACCESS_TOKEN`, and connect a repository (`owner/name`). The first poll reads the last 30 completed runs of its workflow on the default branch.
+Open `/console`, **Sign in with GitHub**, then **Connect GitHub**: install the app on the repositories to watch and press **Watch**. The first poll reads the last 30 completed runs of the workflow on the default branch. Without an app, `GITHUB_TOKEN=$(gh auth token)` and a typed `owner/name` still work for local development.
 
 `npm run demo:seed -- --reset` still seeds scripted rail-test history (Arc transaction fact-checks) for UI work; it refuses to run against a hosted database.
 
@@ -59,8 +60,11 @@ All variables are documented in [.env.example](.env.example). The ones that matt
 | Variable | Purpose |
 |---|---|
 | `DATABASE_URL` | Postgres (Neon). Unset: embedded PGlite at `DATABASE_PATH` |
-| `GITHUB_TOKEN` | Read-only token for runs, logs and PRs. Unset: GitHub features off |
-| `OWNER_ACCESS_TOKEN` | The engineer console. Unset: console and owner endpoints off |
+| `GITHUB_APP_*` | The GitHub App: sign-in and repository access (`npm run github:app` creates it) |
+| `OWNER_GITHUB_LOGINS` | GitHub logins allowed into the engineer console |
+| `SESSION_SECRET` | Signs console sessions |
+| `GITHUB_TOKEN` | Local fallback when no app is configured |
+| `OWNER_ACCESS_TOKEN` | Optional bearer for scripts; the UI never asks for it |
 | `AGENT_API_TOKEN` | Aeon's bearer token for tick, findings and investigations. Unset: agent endpoints off |
 | `PAYMENT_PROVIDER` | `mock`, `arc` or `arc-escrow`. Required; there is no default |
 | `ARC_PAYER_PRIVATE_KEY`, `ARC_ESCROW_ADDRESS` | Operator wallet and escrow contract for `arc-escrow` |
@@ -72,6 +76,7 @@ All variables are documented in [.env.example](.env.example). The ones that matt
 ## Deploy on Vercel
 
 1. `vercel link`, then add Neon from the Vercel marketplace (it sets `DATABASE_URL`). The schema is created on first request.
+   Create the GitHub App with `npm run github:app -- --base https://<your deployment>` and copy its five `GITHUB_APP_*` values.
 2. Add the variables above as encrypted environment variables (`vercel env add NAME production`). Never commit them.
 3. `vercel deploy --prod`. `vercel.json` registers a daily cron for `/api/cron/tick`; Aeon's `proofwork-loop` is the real schedule (every 10 minutes).
 4. Point Aeon's `proofwork-loop` and `proofwork-investigate` `var` at the deployment URL and set `PROOFWORK_AGENT_TOKEN` to the deployment's `AGENT_API_TOKEN`.
