@@ -2,7 +2,7 @@
 
 import { motion, useReducedMotion, useScroll, useTransform } from 'motion/react'
 import Link from 'next/link'
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 const LINKS = [
   { href: '/tasks', label: 'work' },
@@ -12,7 +12,7 @@ const LINKS = [
   { href: 'https://github.com/apps/bon-travail', label: 'github', external: true },
 ] as const
 
-/** Resting values for reduced motion: the server renders the scroll-reveal start, so "no style" would leave it hidden. */
+/** The resting scene: what the server renders, what no-JS and reduced-motion visitors see. */
 const STILL = { opacity: 1, y: 0, scale: 1 }
 
 /**
@@ -24,6 +24,11 @@ const STILL = { opacity: 1, y: 0, scale: 1 }
 export function Footer() {
   const ref = useRef<HTMLElement>(null)
   const reduce = useReducedMotion()
+  // Scroll motion switches on after mount: the server and the first render show the
+  // resting scene, so nothing is ever stuck hidden. The footer starts below the fold,
+  // so the switch is never visible.
+  const [live, setLive] = useState(false)
+  useEffect(() => setLive(!reduce), [reduce])
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end end'] })
   const imageY = useTransform(scrollYProgress, [0, 1], ['-7%', '0%'])
   const imageScale = useTransform(scrollYProgress, [0, 1], [1.06, 1])
@@ -33,7 +38,7 @@ export function Footer() {
 
   return (
     <footer ref={ref} className="scene-footer">
-      <motion.div className="scene-media" style={reduce ? STILL : { y: imageY, scale: imageScale }} aria-hidden>
+      <motion.div className="scene-media" style={live ? { y: imageY, scale: imageScale } : STILL} aria-hidden>
         <picture>
           <source media="(max-width: 720px)" srcSet="/scenes/footer-scene-sm.jpg" />
           <img src="/scenes/footer-scene.jpg" alt="" loading="lazy" decoding="async" />
@@ -41,7 +46,7 @@ export function Footer() {
       </motion.div>
       <div className="scene-shade" aria-hidden />
 
-      <motion.div className="scene-copy" style={reduce ? STILL : { opacity: copyOpacity, y: copyY }}>
+      <motion.div className="scene-copy" style={live ? { opacity: copyOpacity, y: copyY } : STILL}>
         <Link href="/" className="scene-brand">
           <img src="/mascots/seedling.png" alt="" />
           bon travail
@@ -67,7 +72,7 @@ export function Footer() {
         </p>
       </motion.div>
 
-      <motion.div className="scene-meta" style={reduce ? { opacity: 1 } : { opacity: metaOpacity }}>
+      <motion.div className="scene-meta" style={live ? { opacity: metaOpacity } : { opacity: 1 }}>
         <span>built with aeon</span>
         <span>settled on arc</span>
         <span>work, verified.</span>
