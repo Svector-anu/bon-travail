@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import { useState, type FormEvent } from 'react'
 import { shortAddress } from '@/domain/address'
 import type { AttemptView, TaskView } from '@/domain/views'
+import { BonTravail } from './bon-travail'
 import { useStoredClaim } from './claim-store'
 import { Countdown } from './clock'
 
@@ -146,16 +147,16 @@ export function SubmitMission({ task, attempts }: { task: TaskView; attempts: At
 
         {(view === 'verified' || view === 'mismatch') && mine?.verification && (
           <motion.div key={view} className="verdict-state" {...stateMotion}>
-            <div className={`verdict-word ${view === 'verified' ? 'ok' : 'no'}`}>
-              {view === 'verified' ? 'Verified' : 'Not a match'}
-            </div>
-            <p>
-              {view === 'verified'
-                ? liveTask.state === 'PAID'
-                  ? `${liveTask.reward} USDC sent to ${shortAddress(mine.worker)}.`
-                  : 'Your answer matched. The payout is settling.'
-                : mine.verification.reason}
-            </p>
+            {view === 'verified' && liveTask.state === 'PAID' ? (
+              <BonTravail amount={liveTask.reward} to={shortAddress(mine.worker)} />
+            ) : (
+              <>
+                <div className={`verdict-word ${view === 'verified' ? 'ok' : 'no'}`}>
+                  {view === 'verified' ? 'Verified' : 'Not a match'}
+                </div>
+                <p>{view === 'verified' ? 'Your answer matched. The payout is settling.' : mine.verification.reason}</p>
+              </>
+            )}
             <div className="field-checks">
               {mine.verification.fields.map((f) => (
                 <div key={f.field} className="field-check">

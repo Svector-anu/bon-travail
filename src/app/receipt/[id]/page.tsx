@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation'
 import { shortAddress } from '@/domain/address'
 import type { ReceiptView, TimelineEntry } from '@/domain/views'
 import { AutoRefresh } from '@/components/auto-refresh'
+import { BonTravail } from '@/components/bon-travail'
 import { LocalTime } from '@/components/clock'
 import { CopyButton } from '@/components/copy-button'
 import { Reveal } from '@/components/reveal'
@@ -75,8 +76,20 @@ export default async function ReceiptPage({ params }: Props) {
         </div>
       </div>
 
-      <h1>{title}</h1>
-      <p className="receipt-sub">{sub}</p>
+      {paid && receipt.worker ? (
+        <>
+          <span className="label">Payment completed</span>
+          <div style={{ marginTop: 14 }}>
+            <BonTravail size="sm" amount={payout?.amount ?? task.reward} to={shortAddress(receipt.worker)} />
+          </div>
+          <p className="receipt-sub">{sub}</p>
+        </>
+      ) : (
+        <>
+          <h1>{title}</h1>
+          <p className="receipt-sub">{sub}</p>
+        </>
+      )}
 
       <div className="receipt-grid">
         <section className="panel">

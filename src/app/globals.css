@@ -1,5 +1,5 @@
 /*
- * Preuve visual system: dark editorial, restrained glass, thin borders.
+ * Bon Travail visual system: dark editorial, restrained glass, thin borders.
  * Structure and component discipline follow Turnip UI (one primary CTA per
  * screen, centered column, empty values as --); the skin follows the
  * reference board.
@@ -1917,5 +1917,56 @@ img {
 
   .hero.bleed .hero-stats {
     margin: -84px 16px 24px;
+  }
+}
+
+/* ---- payout moment ---------------------------------------------------------- */
+
+.bon-travail {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  color: var(--green);
+}
+
+.bon-check {
+  width: 56px;
+  height: 56px;
+  flex: none;
+}
+
+.bon-word {
+  font-size: clamp(44px, 7vw, 72px);
+  font-weight: 300;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: var(--green);
+}
+
+.bon-sub {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.bon-sub .tnum {
+  color: var(--text);
+}
+
+.bon-travail.sm .bon-check {
+  width: 40px;
+  height: 40px;
+}
+
+.bon-travail.sm .bon-word {
+  font-size: clamp(32px, 4vw, 42px);
+  letter-spacing: -0.03em;
+}
+
+@media (max-width: 520px) {
+  .bon-travail {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
   }
 }

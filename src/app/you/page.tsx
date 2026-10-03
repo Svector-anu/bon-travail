@@ -10,7 +10,7 @@ export default function YouPage() {
       <div className="page-head">
         <div>
           <h1>You</h1>
-          <p>What your wallet has earned on Preuve.</p>
+          <p>What your wallet has earned on Bon Travail.</p>
         </div>
       </div>
       <YourPage />
