@@ -15,7 +15,7 @@ export default async function SubmitPage({ params }: { params: Promise<{ id: str
     <Reveal>
       <section className="mission">
         <div className="mission-media" aria-hidden>
-          <img src="/scenes/monolith-tall.jpg" alt="" />
+          <img src="/scenes/monolith-close.jpg" alt="" />
         </div>
         <SubmitMission task={detail.task} attempts={detail.attempts} />
       </section>

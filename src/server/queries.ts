@@ -334,3 +334,52 @@ export async function workerSummary(addressInput: string): Promise<WorkerSummary
       .map((a) => ({ taskId: a.taskId, displayId: label(a.taskId), outcome: a.outcome!, at: a.submittedAt ?? a.claimedAt })),
   }
 }
+
+/** The most recent paid work package's sealed receipt: the home page tells its story. */
+export async function featuredReceipt(): Promise<ReceiptView | null> {
+  const app = await getApp()
+  for (const stored of await app.store.listReceipts(20)) {
+    if (stored.outcome !== 'PAID') continue
+    const body = JSON.parse(stored.bodyJson) as Omit<ReceiptView, 'digest' | 'final'>
+    if (body.task.kind === TASK_KIND_CI_FIX) return { ...body, final: true, digest: stored.digest }
+  }
+  return null
+}
+
+/** Where each piece of work stands right now, counted from real findings and tasks. Public: counts only. */
+export interface AgentPipeline {
+  reposWatched: number
+  runsObserved: number
+  stages: { key: string; label: string; count: number }[]
+}
+
+export async function agentPipeline(): Promise<AgentPipeline> {
+  const app = await getApp()
+  const [repos, findings, tasks, runs] = await Promise.all([
+    app.watch.listRepos(true),
+    app.watch.listFindings({ limit: 500 }),
+    app.store.listTasks({ kinds: [TASK_KIND_CI_FIX], limit: 500 }),
+    app.store.database.query('SELECT COUNT(*) AS n FROM workflow_runs'),
+  ])
+  const byTask = new Map(tasks.map((t) => [t.id, t]))
+  const count = (predicate: (f: (typeof findings)[number]) => boolean) => findings.filter(predicate).length
+  const taskState = (f: (typeof findings)[number]) => (f.taskId ? byTask.get(f.taskId)?.state : undefined)
+  return {
+    reposWatched: repos.length,
+    runsObserved: Number(runs.rows[0]?.n ?? 0),
+    stages: [
+      { key: 'observing', label: 'Observing', count: count((f) => f.status === 'watching') },
+      { key: 'investigating', label: 'Investigating', count: count((f) => f.status === 'candidate' || f.status === 'recurred') },
+      { key: 'awaiting', label: 'Awaiting approval', count: count((f) => f.status === 'investigated') },
+      { key: 'open', label: 'Open to people', count: count((f) => f.status === 'externalized' && ['DRAFT', 'FUNDED', 'OPEN'].includes(taskState(f) ?? '')) },
+      { key: 'assigned', label: 'Being fixed', count: count((f) => f.status === 'externalized' && taskState(f) === 'CLAIMED') },
+      {
+        key: 'verifying',
+        label: 'Verifying',
+        count: count((f) => f.status === 'externalized' && ['SUBMITTED', 'VERIFYING', 'ACCEPTED'].includes(taskState(f) ?? '')),
+      },
+      { key: 'paid', label: 'Paid', count: tasks.filter((t) => t.state === 'PAID').length },
+      { key: 'watching', label: 'Watching again', count: count((f) => f.status === 'resolved') },
+    ],
+  }
+}

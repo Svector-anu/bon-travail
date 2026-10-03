@@ -8,7 +8,7 @@ import { AutoRefresh } from '@/components/auto-refresh'
 import { BonTravail } from '@/components/bon-travail'
 import { Ago, LocalTime } from '@/components/clock'
 import { CopyButton } from '@/components/copy-button'
-import { Evidence } from '@/components/evidence'
+import { EvidenceFailure, EvidenceInvestigation } from '@/components/evidence'
 import { Reveal } from '@/components/reveal'
 import { FINDING_STATUS, TASK_STATUS } from '@/lib/format'
 import { getApp } from '@/server/container'
@@ -136,7 +136,19 @@ function Recurrence({ watch }: { watch: RecurrenceWatch }) {
   )
 }
 
-async function WorkReceipt({ receipt, watch, url }: { receipt: ReceiptView; watch: RecurrenceWatch | null; url: string }) {
+function ProofSection({ index, label, children }: { index: string; label: string; children: React.ReactNode }) {
+  return (
+    <section className="proof-section">
+      <header>
+        <span className="proof-index">{index}</span>
+        <span className="label">{label}</span>
+      </header>
+      <div className="proof-body">{children}</div>
+    </section>
+  )
+}
+
+function WorkReceipt({ receipt, watch, url }: { receipt: ReceiptView; watch: RecurrenceWatch | null; url: string }) {
   const { task } = receipt
   const ci = task.ci!
   const paid = receipt.outcome === 'PAID'
@@ -145,8 +157,10 @@ async function WorkReceipt({ receipt, watch, url }: { receipt: ReceiptView; watc
   const v = winning?.verification?.kind === 'ci-fix' ? winning.verification : null
   const ev = v?.evidence ?? null
   const payout = receipt.payout
+  const settlement = payout ?? receipt.refund
   const simulated = Boolean(payout?.simulated ?? receipt.funding?.simulated)
   const who = receipt.workerHandle ? `@${receipt.workerHandle}` : receipt.worker ? shortAddress(receipt.worker) : null
+  const settledAt = firstAt(receipt.timeline, paid ? 'paid' : 'refunded')
 
   return (
     <>
@@ -160,7 +174,8 @@ async function WorkReceipt({ receipt, watch, url }: { receipt: ReceiptView; watc
         </>
       ) : (
         <>
-          <h1>{refunded ? 'Work refunded' : 'Work in progress'}</h1>
+          <span className="label">{refunded ? 'Refunded' : 'In progress'}</span>
+          <h1>{refunded ? 'nobody finished it in time.' : 'work in progress.'}</h1>
           <p className="receipt-sub">{receipt.outcomeReason}</p>
         </>
       )}
@@ -180,117 +195,135 @@ async function WorkReceipt({ receipt, watch, url }: { receipt: ReceiptView; watc
             <dd className="tnum">{task.reward} USDC</dd>
             <dt>Approved by</dt>
             <dd>The engineering team</dd>
-            {who && (
-              <>
-                <dt>Contributor</dt>
-                <dd>
-                  {who}
-                  {receipt.worker && <span className="mono muted"> · {shortAddress(receipt.worker)}</span>}
-                </dd>
-              </>
-            )}
-            {ev && (
-              <>
-                <dt>Pull request</dt>
-                <dd>
-                  <a href={ev.prUrl} target="_blank" rel="noreferrer">
-                    #{ev.prNumber} <ArrowUpRight size={13} />
-                  </a>
-                </dd>
-              </>
-            )}
-            {ev?.verifiedSha && (
-              <>
-                <dt>Verified commit</dt>
-                <dd className="mono">{ev.verifiedSha.slice(0, 12)}</dd>
-              </>
-            )}
-            {ev?.runUrl && (
-              <>
-                <dt>Acceptance run</dt>
-                <dd>
-                  <a href={ev.runUrl} target="_blank" rel="noreferrer">
-                    {ev.runConclusion ?? 'run'} <ArrowUpRight size={13} />
-                  </a>
-                </dd>
-              </>
-            )}
-            <dt>Escrowed</dt>
+            <dt>Posted</dt>
             <dd>
-              <TxLink hash={receipt.funding?.txHash ?? null} url={receipt.funding?.explorerTxUrl ?? null} simulated={receipt.funding?.simulated} />
+              <LocalTime ts={task.createdAt} full />
             </dd>
-            <dt>{refunded ? 'Refund' : 'Payout'}</dt>
-            <dd>
-              <TxLink hash={(payout ?? receipt.refund)?.txHash ?? null} url={(payout ?? receipt.refund)?.explorerTxUrl ?? null} />
-            </dd>
+            {settledAt && (
+              <>
+                <dt>{paid ? 'Paid' : 'Refunded'}</dt>
+                <dd>
+                  <LocalTime ts={settledAt} full />
+                </dd>
+              </>
+            )}
           </dl>
         </section>
 
         <section className={`panel proof-object ${refunded ? 'refund' : ''}`}>
           <img src={refunded ? '/scenes/monolith-refund.jpg' : '/scenes/glass-ring.jpg'} alt="" />
-          <strong className="tnum">{(payout ?? receipt.refund)?.amount ?? task.reward} USDC</strong>
+          <strong className="tnum">{settlement?.amount ?? task.reward} USDC</strong>
           <small>{paid && who ? `Sent to ${who}` : refunded ? 'Back to the treasury' : 'Held in escrow'}</small>
           {simulated && (
             <span className="chip sim" style={{ marginTop: 10 }}>
               Simulated payout
             </span>
           )}
-          {(payout ?? receipt.refund ?? receipt.funding)?.explorerTxUrl && (
-            <a className="btn btn-glass" href={(payout ?? receipt.refund ?? receipt.funding)!.explorerTxUrl!} target="_blank" rel="noreferrer">
-              <Roll>View on Arcscan <ArrowUpRight size={15} /></Roll>
+          {(settlement ?? receipt.funding)?.explorerTxUrl && (
+            <a className="btn btn-glass" href={(settlement ?? receipt.funding)!.explorerTxUrl!} target="_blank" rel="noreferrer">
+              <Roll>
+                View on Arcscan <ArrowUpRight size={15} />
+              </Roll>
             </a>
           )}
         </section>
       </div>
 
-      {v && (
-        <section className="panel verification">
-          <div className="panel-title">
-            <span className="label">Verification · the project's tests</span>
-            {v.valid ? <Check size={18} className="ok-mark" /> : <X size={18} className="no-mark" />}
+      <div className="proof">
+        {receipt.finding && (
+          <ProofSection index="01" label="What failed">
+            <EvidenceFailure facts={receipt.finding} />
+          </ProofSection>
+        )}
+
+        <ProofSection index="02" label="What Aeon found">
+          <EvidenceInvestigation investigation={receipt.investigation} />
+        </ProofSection>
+
+        <ProofSection index="03" label={paid ? 'What the human did' : 'What was asked'}>
+          <div className="proof-panel">
+            {who && ev ? (
+              <p className="evidence-lead">
+                {who} opened{' '}
+                <a href={ev.prUrl} target="_blank" rel="noreferrer">
+                  pull request #{ev.prNumber} <ArrowUpRight size={13} />
+                </a>{' '}
+                against {ci.repo}.
+              </p>
+            ) : (
+              <p className="evidence-lead">Open to {ci.contributors.map((c) => `@${c}`).join(', ')}. Nobody delivered a passing fix before the deadline.</p>
+            )}
+            <p className="proof-quote">{ci.acceptance}</p>
+            <p className="muted scope">{ci.scope}</p>
           </div>
-          <p className="evidence-lead">{v.reason}</p>
-          {ev && (
-            <dl className="ledger compact">
-              <dt>Author</dt>
-              <dd>@{ev.author}</dd>
-              <dt>Merged</dt>
-              <dd>{ev.merged ? 'Yes' : 'No'}</dd>
-              <dt>Files checked</dt>
-              <dd className="tnum">{ev.filesChecked}</dd>
-              <dt>Protected paths</dt>
-              <dd>{ev.protectedTouched.length === 0 ? 'Untouched' : ev.protectedTouched.join(', ')}</dd>
-              <dt>Acceptance job</dt>
-              <dd>
-                {ev.jobUrl ? (
-                  <a href={ev.jobUrl} target="_blank" rel="noreferrer">
-                    {ev.jobName}: {ev.jobConclusion ?? 'pending'} <ArrowUpRight size={13} />
-                  </a>
-                ) : (
-                  `${ev.jobName ?? ci.jobName}: ${ev.jobConclusion ?? 'pending'}`
+        </ProofSection>
+
+        {v && ev && (
+          <ProofSection index="04" label="How it was verified">
+            <div className="proof-panel">
+              <p className="evidence-lead">
+                {v.valid ? <Check size={16} className="ok-mark" /> : <X size={16} className="no-mark" />} {v.reason}
+              </p>
+              <dl className="ledger compact">
+                <dt>Author</dt>
+                <dd>@{ev.author}</dd>
+                <dt>Merged</dt>
+                <dd>{ev.merged ? 'Yes' : 'No'}</dd>
+                {ev.verifiedSha && (
+                  <>
+                    <dt>Commit</dt>
+                    <dd className="mono">{ev.verifiedSha.slice(0, 12)}</dd>
+                  </>
                 )}
+                <dt>Protected paths</dt>
+                <dd>{ev.protectedTouched.length === 0 ? `Untouched (${ev.filesChecked} files checked)` : ev.protectedTouched.join(', ')}</dd>
+                <dt>Acceptance job</dt>
+                <dd>
+                  {ev.jobUrl ? (
+                    <a href={ev.jobUrl} target="_blank" rel="noreferrer">
+                      {ev.jobName}: {ev.jobConclusion ?? 'pending'} <ArrowUpRight size={13} />
+                    </a>
+                  ) : (
+                    `${ev.jobName ?? ci.jobName}: ${ev.jobConclusion ?? 'pending'}`
+                  )}
+                </dd>
+              </dl>
+            </div>
+          </ProofSection>
+        )}
+
+        <ProofSection index={v && ev ? '05' : '04'} label={refunded ? 'Where the money went' : 'Who got paid · what settled it'}>
+          <div className="proof-panel">
+            <dl className="ledger compact">
+              {paid && who && (
+                <>
+                  <dt>Paid to</dt>
+                  <dd>
+                    {who}
+                    {receipt.worker && <span className="mono muted"> · {shortAddress(receipt.worker)}</span>}
+                  </dd>
+                </>
+              )}
+              {refunded && (
+                <>
+                  <dt>Returned to</dt>
+                  <dd>The team&apos;s treasury</dd>
+                </>
+              )}
+              <dt>Escrowed</dt>
+              <dd>
+                <TxLink hash={receipt.funding?.txHash ?? null} url={receipt.funding?.explorerTxUrl ?? null} simulated={receipt.funding?.simulated} />
               </dd>
+              <dt>{refunded ? 'Refund' : 'Payout'}</dt>
+              <dd>
+                <TxLink hash={settlement?.txHash ?? null} url={settlement?.explorerTxUrl ?? null} />
+              </dd>
+              <dt>Rail</dt>
+              <dd>{simulated ? 'Simulated ledger' : 'ProofworkEscrow on Arc Testnet'}</dd>
             </dl>
-          )}
-        </section>
-      )}
-
-      <section className="panel verification">
-        <div className="panel-title">
-          <span className="label">Acceptance condition · set by the engineer</span>
-        </div>
-        <p className="evidence-lead">{ci.acceptance}</p>
-        <span className="label" style={{ marginTop: 16, display: 'block' }}>
-          Scope
-        </span>
-        <p className="muted scope">{ci.scope}</p>
-      </section>
-
-      {receipt.finding && (
-        <section className="verification">
-          <Evidence facts={receipt.finding} investigation={receipt.investigation} />
-        </section>
-      )}
+          </div>
+        </ProofSection>
+      </div>
 
       <section className="panel verification">
         <div className="panel-title">

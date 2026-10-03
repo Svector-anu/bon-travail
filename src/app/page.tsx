@@ -6,19 +6,11 @@ import { Ago, Countdown } from '@/components/clock'
 import { FadeIn } from '@/components/fade-in'
 import { HeroVideo } from '@/components/hero-video'
 import { Reveal } from '@/components/reveal'
-import { homeSnapshot, recentReceipts } from '@/server/queries'
+import { Story } from '@/components/story'
+import { featuredReceipt, homeSnapshot, recentReceipts } from '@/server/queries'
 import { Roll } from '@/components/roll'
 
 export const dynamic = 'force-dynamic'
-
-const LOOP = [
-  ['Observe', 'Our agent, Aeon, watches the automated tests of the repository you connect. One failed run is noise; the same test failing again is worth a look.'],
-  ['Investigate', 'Aeon reruns the failing test itself, finds the exact commit that broke it, and writes up what went wrong in plain words.'],
-  ['Decide', 'You read the evidence and choose: keep it in the team, or externalize it with a reward, a deadline and the people allowed to take it.'],
-  ['Fix', 'An approved contributor opens a pull request against the scoped work. They cannot touch the workflow or the acceptance test.'],
-  ['Verify', 'Your project\'s own tests decide, not a person and not the agent. Once you merge the fix, the same test that was failing has to pass.'],
-  ['Settle', 'Green pays the contributor from escrow on Arc. A missed deadline refunds you. Either way a receipt is sealed, and Aeon keeps watching for the failure to come back.'],
-] as const
 
 const ROLES = [
   ['Machines', 'Find, reproduce, prepare, check', 'Aeon watches, reproduces and explains failures; your test suite checks the fix. Neither can approve work or pay anyone.'],
@@ -27,7 +19,7 @@ const ROLES = [
 ] as const
 
 export default async function HomePage() {
-  const [home, receipts] = await Promise.all([homeSnapshot(), recentReceipts(4)])
+  const [home, receipts, featured] = await Promise.all([homeSnapshot(), recentReceipts(4), featuredReceipt()])
   const current = home.live.find((t) => t.state === 'OPEN') ?? home.live[0] ?? null
 
   return (
@@ -148,6 +140,8 @@ export default async function HomePage() {
         </section>
       </div>
 
+      <Story receipt={featured} />
+
       <FadeIn>
       <section className="roles" aria-label="Who does what">
         {ROLES.map(([who, what, copy]) => (
@@ -157,26 +151,6 @@ export default async function HomePage() {
             <p>{copy}</p>
           </div>
         ))}
-      </section>
-      </FadeIn>
-
-      <FadeIn>
-      <section className="how" id="how">
-        <div>
-          <span className="label">How it works</span>
-          <h2>Machines prepare and verify. People do the work. The chain settles.</h2>
-        </div>
-        <ol>
-          {LOOP.map(([title, copy], i) => (
-            <li key={title}>
-              <span>0{i + 1}</span>
-              <div>
-                <strong>{title}</strong>
-                <p>{copy}</p>
-              </div>
-            </li>
-          ))}
-        </ol>
       </section>
       </FadeIn>
     </Reveal>

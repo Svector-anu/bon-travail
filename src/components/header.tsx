@@ -6,9 +6,10 @@ import { usePathname } from 'next/navigation'
 import { Roll } from './roll'
 
 const NAV = [
-  { href: '/tasks', label: 'Work', match: ['/tasks', '/task/'] },
-  { href: '/receipts', label: 'Receipts', match: ['/receipts', '/receipt/'] },
-  { href: '/agent', label: 'Agent', match: ['/agent'] },
+  { href: '/tasks', label: 'work', match: ['/tasks', '/task/'] },
+  { href: '/receipts', label: 'receipts', match: ['/receipts', '/receipt/'] },
+  { href: '/agent', label: 'agent', match: ['/agent'] },
+  { href: '/docs', label: 'docs', match: ['/docs'] },
 ]
 
 /** Contributors need no account: GitHub proves who opened the PR. Only the engineer signs in. */
@@ -20,7 +21,7 @@ export function Header({ owner }: { owner: boolean }) {
     <header className="topbar">
       <Link href="/" className="brand">
         <img src="/mascots/seedling.png" alt="" />
-        <span>Bon Travail</span>
+        <span>bon travail</span>
       </Link>
 
       <nav className="nav" aria-label="Primary">
@@ -38,7 +39,7 @@ export function Header({ owner }: { owner: boolean }) {
       <div className="top-actions">
         <Link href="/console" className="pill-btn" aria-current={inConsole ? 'page' : undefined}>
           <Roll>{owner ? <LayoutPanelTop size={15} aria-hidden /> : <LogIn size={15} aria-hidden />}
-          {owner ? 'Console' : 'Engineers'}</Roll>
+          {owner ? 'console' : 'engineers'}</Roll>
         </Link>
       </div>
     </header>

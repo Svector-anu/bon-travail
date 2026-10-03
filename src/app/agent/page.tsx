@@ -3,7 +3,7 @@ import { ActivityTimeline } from '@/components/activity-timeline'
 import { AutoRefresh } from '@/components/auto-refresh'
 import { Ago } from '@/components/clock'
 import { Reveal } from '@/components/reveal'
-import { agentActivity } from '@/server/queries'
+import { agentActivity, agentPipeline } from '@/server/queries'
 
 export const dynamic = 'force-dynamic'
 export const metadata: Metadata = { title: 'Agent' }
@@ -19,7 +19,7 @@ const PRESENCE = {
 const SOURCE = { aeon: 'Aeon', 'local-loop': 'local loop', manual: 'manual run', cron: 'Vercel cron' } as Record<string, string>
 
 export default async function AgentPage() {
-  const { status, runs } = await agentActivity(30)
+  const [{ status, runs }, pipeline] = await Promise.all([agentActivity(30), agentPipeline()])
   const visible = runs.filter((r) => r.action !== 'source_task' || r.result !== 'skipped')
 
   return (
@@ -28,7 +28,7 @@ export default async function AgentPage() {
       <div className="agent-head">
         <div>
           <h1>Agent</h1>
-          <p>Watches CI, verifies fixes, settles payments. Every action it takes is logged here.</p>
+          <p>Aeon watches CI, investigates what keeps failing, and settles what the tests confirm. Every action is logged here.</p>
         </div>
         <div className="presence">
           <span className={`presence-dot ${status.health}`} aria-hidden />
@@ -48,12 +48,27 @@ export default async function AgentPage() {
         </div>
       </div>
 
+      <section className="pipeline" aria-label="Where the work stands">
+        <p className="pipeline-scope">
+          Watching <strong className="tnum">{pipeline.reposWatched}</strong> {pipeline.reposWatched === 1 ? 'repository' : 'repositories'} ·{' '}
+          <strong className="tnum">{pipeline.runsObserved}</strong> runs read
+        </p>
+        <ol className="pipeline-stages">
+          {pipeline.stages.map((stage) => (
+            <li key={stage.key} className={stage.count > 0 ? 'active' : ''}>
+              <strong className="tnum">{stage.count}</strong>
+              <span>{stage.label}</span>
+            </li>
+          ))}
+        </ol>
+      </section>
+
       <div className="agent-body">
         <section className="panel" style={{ padding: '6px 0' }}>
           <ActivityTimeline runs={visible} />
         </section>
         <div className="agent-scene" aria-hidden>
-          <img src="/scenes/monolith-tall.jpg" alt="" />
+          <img src="/scenes/monolith-close.jpg" alt="" />
         </div>
       </div>
 
