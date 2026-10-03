@@ -49,20 +49,6 @@ export default async function HomePage() {
             </Link>
           </div>
         </div>
-        <div className="hero-stats">
-          <div>
-            <strong className="tnum">{home.reposWatched}</strong>
-            <span>Repos watched</span>
-          </div>
-          <div>
-            <strong className="tnum">{home.paidCount}</strong>
-            <span>Fixes paid</span>
-          </div>
-          <div>
-            <strong className="tnum">{home.refundedCount}</strong>
-            <span>Refunded</span>
-          </div>
-        </div>
       </section>
 
       <div className="home-grid">
