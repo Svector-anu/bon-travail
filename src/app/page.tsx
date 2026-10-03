@@ -1,4 +1,4 @@
-import { ArrowRight, CircleDollarSign, Link2, Play, Timer } from 'lucide-react'
+import { ArrowRight, CircleDollarSign, GitPullRequest, Play, Timer } from 'lucide-react'
 import Link from 'next/link'
 import { shortAddress } from '@/domain/address'
 import { AutoRefresh } from '@/components/auto-refresh'
@@ -9,16 +9,23 @@ import { homeSnapshot, recentReceipts } from '@/server/queries'
 
 export const dynamic = 'force-dynamic'
 
-const STEPS = [
-  ['Claim', 'Pick the live task. You get a ten minute lock so nobody else can take it.'],
-  ['Read', 'Open the Arc transaction and find who received USDC and exactly how much.'],
-  ['Submit', 'The agent re-reads the chain and compares your answer field by field. No judgment calls.'],
-  ['Get paid', 'A match pays the reward instantly. Every outcome gets a public receipt.'],
+const LOOP = [
+  ['Observe', 'Aeon watches the GitHub Actions workflow you connect. One red run is noise; the same job and step failing again is a finding.'],
+  ['Investigate', 'Aeon reproduces the failure in its own runner, bisects the commits since the last green run and writes down what it found.'],
+  ['Decide', 'You read the evidence and choose: keep it in the team, or externalize it with a reward, a deadline and the people allowed to take it.'],
+  ['Fix', 'An approved contributor opens a pull request against the scoped work. They cannot touch the workflow or the acceptance test.'],
+  ['Verify', 'GitHub Actions is the judge. The acceptance job has to pass on the exact commit, after you merge it.'],
+  ['Settle', 'Green pays the contributor from escrow on Arc. A missed deadline refunds you. Either way a receipt is sealed, and Aeon keeps watching for the failure to come back.'],
 ] as const
 
-export default function HomePage() {
-  const home = homeSnapshot()
-  const receipts = recentReceipts(4)
+const ROLES = [
+  ['Machines', 'Find, reproduce, prepare, verify', 'Aeon and GitHub Actions do the watching, the bisecting and the judging. They recommend; they never approve or pay.'],
+  ['People', 'Do the work', 'An engineer you approved fixes what still benefits from a person, inside the scope you set.'],
+  ['Your team', 'Owns every decision', 'Architecture, secrets, severity, scope, who can claim, the reward and the release stay with you.'],
+] as const
+
+export default async function HomePage() {
+  const [home, receipts] = await Promise.all([homeSnapshot(), recentReceipts(4)])
   const current = home.live.find((t) => t.state === 'OPEN') ?? home.live[0] ?? null
 
   return (
@@ -30,18 +37,18 @@ export default function HomePage() {
           <HeroVideo />
         </div>
         <div className="hero-copy">
-          <span className="label">Autonomous work · Real payments</span>
+          <span className="label">Agents pay humans</span>
           <h1>
-            Real work
+            Your agents find
             <br />
-            for autonomous
+            the work. People
             <br />
-            agents.
+            fix it. Proof pays.
           </h1>
-          <p>Complete machine-checkable tasks. Get paid in USDC.</p>
+          <p>Aeon watches your CI and prepares what keeps breaking. You decide who fixes it. GitHub Actions verifies, and USDC settles on Arc.</p>
           <div className="hero-ctas">
             <Link className="btn btn-primary" href={current ? `/task/${current.id}` : '/tasks'}>
-              View current task <ArrowRight size={16} />
+              See open work <ArrowRight size={16} />
             </Link>
             <Link className="btn btn-glass" href="#how">
               <Play size={14} /> How it works
@@ -50,16 +57,16 @@ export default function HomePage() {
         </div>
         <div className="hero-stats">
           <div>
-            <strong className="tnum">{home.paidCount + home.refundedCount}</strong>
-            <span>Tasks completed</span>
+            <strong className="tnum">{home.reposWatched}</strong>
+            <span>Repos watched</span>
           </div>
           <div>
             <strong className="tnum">{home.paidCount}</strong>
-            <span>Successful payments</span>
+            <span>Fixes paid</span>
           </div>
           <div>
             <strong className="tnum">{home.refundedCount}</strong>
-            <span>Refunded / expired</span>
+            <span>Refunded</span>
           </div>
         </div>
       </section>
@@ -67,13 +74,13 @@ export default function HomePage() {
       <div className="home-grid">
         <section className="panel current-task">
           <div className="panel-title">
-            <span className="label">Current task</span>
+            <span className="label">Open work</span>
             {current && <span className="label">{current.displayId}</span>}
           </div>
-          {current ? (
+          {current?.ci ? (
             <>
-              <h2>Read this Arc transaction</h2>
-              <p>Reply with the recipient address and the USDC amount.</p>
+              <h2>{current.title}</h2>
+              <p>{current.ci.acceptance}</p>
               <div className="facts">
                 <div className="fact">
                   <span className="well"><CircleDollarSign size={20} /></span>
@@ -92,20 +99,20 @@ export default function HomePage() {
                   </div>
                 </div>
                 <div className="fact">
-                  <span className="well"><Link2 size={20} /></span>
+                  <span className="well"><GitPullRequest size={20} /></span>
                   <div>
-                    <span>Chain</span>
-                    <strong>{current.chain}</strong>
+                    <span>Open to</span>
+                    <strong>{current.ci.contributors.map((c) => `@${c}`).join(', ')}</strong>
                   </div>
                 </div>
               </div>
               <Link className="btn btn-primary" href={`/task/${current.id}`}>
-                {current.state === 'OPEN' ? 'Claim this task' : 'View task'} <ArrowRight size={16} />
+                {current.state === 'OPEN' ? 'View the work package' : 'Follow its progress'} <ArrowRight size={16} />
               </Link>
             </>
           ) : (
             <p className="muted" style={{ marginTop: 14 }}>
-              No live task right now. The agent posts the next one on its next run.
+              No open work right now. Engineers externalize work from their console when a finding is worth handing out.
             </p>
           )}
         </section>
@@ -120,6 +127,7 @@ export default function HomePage() {
           {receipts.length === 0 && <p className="muted">The first payout or refund lands here.</p>}
           {receipts.map((r) => {
             const paid = r.outcome === 'PAID'
+            const who = r.workerHandle ? `@${r.workerHandle}` : r.worker ? shortAddress(r.worker) : null
             return (
               <Link key={r.taskId} href={`/receipt/${r.taskId}`} className="receipt-mini">
                 <strong>
@@ -127,8 +135,9 @@ export default function HomePage() {
                   {r.displayId}
                 </strong>
                 <small>
-                  {paid && r.worker ? `to ${shortAddress(r.worker)} · ` : 'back to agent · '}
+                  {paid && who ? `to ${who} · ` : 'back to treasury · '}
                   <Ago ts={r.settledAt} />
+                  {r.simulated ? ' · simulated' : ''}
                 </small>
                 <span className="amount tnum">{r.reward} USDC</span>
               </Link>
@@ -137,13 +146,23 @@ export default function HomePage() {
         </section>
       </div>
 
+      <section className="roles" aria-label="Who does what">
+        {ROLES.map(([who, what, copy]) => (
+          <div key={who}>
+            <span className="label">{who}</span>
+            <strong>{what}</strong>
+            <p>{copy}</p>
+          </div>
+        ))}
+      </section>
+
       <section className="how" id="how">
         <div>
           <span className="label">How it works</span>
-          <h2>An agent posts work. The chain decides. You get paid.</h2>
+          <h2>Machines prepare and verify. People do the work. The chain settles.</h2>
         </div>
         <ol>
-          {STEPS.map(([title, copy], i) => (
+          {LOOP.map(([title, copy], i) => (
             <li key={title}>
               <span>0{i + 1}</span>
               <div>

@@ -1,23 +1,46 @@
 import { createHash } from 'node:crypto'
+import type { FindingEvent, FindingRecord, RepoRecord, WorkflowRunRecord } from '@/domain/findings'
 import { formatUsdc } from '@/domain/money'
 import { isTerminal } from '@/domain/task-state'
-import type { AttemptRecord, PaymentRecord, TaskEvent, TaskRecord, VerificationResult } from '@/domain/types'
+import {
+  TASK_KIND_CI_FIX,
+  type AttemptRecord,
+  type PaymentRecord,
+  type TaskEvent,
+  type TaskRecord,
+  type VerificationResult,
+} from '@/domain/types'
 import type {
   AttemptView,
+  FindingSummaryView,
+  FindingView,
   PaymentView,
+  ReceiptFinding,
+  ReceiptInvestigation,
   ReceiptView,
+  RepoView,
   TaskView,
   TimelineEntry,
   VerificationView,
 } from '@/domain/views'
+import { CI_VERIFIER_NAME } from '../verification/ci-verifier'
 import { TX_FACT_VERIFIER_NAME } from '../verification/tx-fact-verifier'
 
 export interface ViewContext {
   explorerUrl: string
 }
 
-export function displayId(task: Pick<TaskRecord, 'seq'>): string {
-  return `TASK-${String(task.seq).padStart(3, '0')}`
+export interface ReceiptContext {
+  finding: ReceiptFinding
+  investigation: ReceiptInvestigation | null
+}
+
+export function displayId(task: Pick<TaskRecord, 'seq' | 'kind'>): string {
+  return `${task.kind === TASK_KIND_CI_FIX ? 'WORK' : 'TASK'}-${String(task.seq).padStart(3, '0')}`
+}
+
+export function findingDisplayIdOf(finding: Pick<FindingRecord, 'seq'>): string {
+  return `FIND-${String(finding.seq).padStart(3, '0')}`
 }
 
 export function explorerTx(explorerUrl: string, hash: string): string {
@@ -25,6 +48,7 @@ export function explorerTx(explorerUrl: string, hash: string): string {
 }
 
 export function toTaskView(task: TaskRecord, attemptCount: number, ctx: ViewContext): TaskView {
+  const spec = task.spec
   return {
     id: task.id,
     displayId: displayId(task),
@@ -34,8 +58,6 @@ export function toTaskView(task: TaskRecord, attemptCount: number, ctx: ViewCont
     reward: formatUsdc(task.rewardMicro),
     currency: task.currency,
     chain: task.chain,
-    txHash: task.txHash,
-    explorerTxUrl: explorerTx(ctx.explorerUrl, task.txHash),
     state: task.state,
     deadlineAt: task.deadlineAt,
     createdAt: task.createdAt,
@@ -43,15 +65,43 @@ export function toTaskView(task: TaskRecord, attemptCount: number, ctx: ViewCont
     submittedAt: task.submittedAt,
     settledAt: task.settledAt,
     claimant: task.claimant,
+    claimantHandle: task.claimantHandle,
     claimExpiresAt: task.claimExpiresAt,
     attemptCount,
-    expected: isTerminal(task.state)
-      ? { recipient: task.expected.recipient, amount: formatUsdc(task.expected.amountMicro) }
-      : null,
+    tx:
+      spec.kind === 'tx-fact-check'
+        ? {
+            txHash: spec.txHash,
+            explorerTxUrl: explorerTx(ctx.explorerUrl, spec.txHash),
+            expected: isTerminal(task.state)
+              ? { recipient: spec.expected.recipient, amount: formatUsdc(spec.expected.amountMicro) }
+              : null,
+          }
+        : null,
+    ci:
+      spec.kind === TASK_KIND_CI_FIX
+        ? {
+            findingId: spec.findingId,
+            findingDisplayId: `FIND-${spec.findingId.replace(/^find_/, '')}`,
+            repo: `${spec.repo.owner}/${spec.repo.name}`,
+            repoUrl: `https://github.com/${spec.repo.owner}/${spec.repo.name}`,
+            baseBranch: spec.baseBranch,
+            workflowName: spec.workflowName,
+            workflowPath: spec.workflowPath,
+            jobName: spec.jobName,
+            acceptance: spec.acceptance,
+            scope: spec.scope,
+            protectedPaths: spec.protectedPaths,
+            requireMerge: spec.requireMerge,
+            contributors: spec.contributors.map((c) => c.login),
+            approvedBy: spec.approvedBy,
+          }
+        : null,
   }
 }
 
 function toVerificationView(v: VerificationResult, reveal: boolean): VerificationView {
+  if (v.kind === TASK_KIND_CI_FIX) return v
   return {
     ...v,
     expected: reveal ? v.expected : null,
@@ -68,6 +118,7 @@ export function toAttemptView(attempt: AttemptRecord, reveal: boolean): AttemptV
   return {
     claimId: attempt.claimId,
     worker: attempt.worker,
+    handle: attempt.handle,
     claimedAt: attempt.claimedAt,
     submittedAt: attempt.submittedAt,
     submitted: attempt.submission,
@@ -97,9 +148,11 @@ const EVENT_LABELS: Record<TaskEvent['type'], string> = {
   published: 'Published',
   claimed: 'Claimed',
   claim_lapsed: 'Claim lapsed',
+  claim_released: 'Claim released',
   submitted: 'Submitted',
   verifying: 'Verifying',
   verification_error: 'Verification retry',
+  verification_pending: 'Waiting on checks',
   accepted: 'Verified',
   rejected: 'Rejected',
   reopened: 'Reopened',
@@ -121,10 +174,13 @@ function toTimeline(events: TaskEvent[]): TimelineEntry[] {
 }
 
 function outcomeReason(task: TaskRecord, attempts: AttemptRecord[]): string {
+  const ci = task.kind === TASK_KIND_CI_FIX
   const passed = attempts.find((a) => a.outcome === 'PASS')
   switch (task.state) {
     case 'PAID':
-      return 'Submission matched the chain exactly. Reward released to the worker.'
+      return ci
+        ? 'GitHub Actions passed the acceptance job on the approved fix. Reward released to the contributor.'
+        : 'Submission matched the chain exactly. Reward released to the worker.'
     case 'REFUNDED':
       return attempts.some((a) => a.outcome === 'FAIL')
         ? 'Expired before an accepted submission. Every submission failed verification.'
@@ -132,16 +188,21 @@ function outcomeReason(task: TaskRecord, attempts: AttemptRecord[]): string {
     case 'ACCEPTED':
       return passed ? 'Verified. Payout in flight.' : 'Verified.'
     case 'REJECTED':
-      return 'Latest submission failed verification. The agent will reopen the task.'
+      return ci
+        ? 'The acceptance check failed. The work package reopens until the deadline.'
+        : 'Latest submission failed verification. The agent will reopen the task.'
     case 'EXPIRED':
-      return 'Deadline passed. The agent will refund the reward.'
+      return 'Deadline passed. The reward will be refunded.'
     case 'SUBMITTED':
     case 'VERIFYING':
-      return 'Submission received. Waiting for verification.'
+      return ci ? 'Pull request submitted. Waiting for GitHub Actions to decide.' : 'Submission received. Waiting for verification.'
     case 'CLAIMED':
-      return 'A worker holds the claim lock.'
+      return ci ? 'An approved contributor is working on it.' : 'A worker holds the claim lock.'
+    case 'DRAFT':
+    case 'FUNDED':
+      return 'Approved. Reward is being escrowed.'
     default:
-      return 'Open for a worker.'
+      return ci ? 'Open to the approved contributors.' : 'Open for a worker.'
   }
 }
 
@@ -150,30 +211,93 @@ export interface ReceiptInput {
   attempts: AttemptRecord[]
   events: TaskEvent[]
   payments: PaymentRecord[]
+  context: ReceiptContext | null
 }
 
 /** Builds the receipt document. Expected values appear only when settled. */
 export function buildReceipt(input: ReceiptInput, ctx: ViewContext): Omit<ReceiptView, 'digest' | 'final'> {
-  const { task, attempts, events, payments } = input
+  const { task, attempts, events, payments, context } = input
   const reveal = isTerminal(task.state)
   const byKind = new Map(payments.map((p) => [p.kind, p]))
   const winner = attempts.find((a) => a.outcome === 'PASS')
   return {
-    version: 1,
+    version: 2,
     receiptId: task.id,
     task: toTaskView(task, attempts.length, ctx),
     outcome: task.state,
     outcomeReason: outcomeReason(task, attempts),
     worker: winner?.worker ?? null,
+    workerHandle: winner?.handle ?? null,
     attempts: attempts.filter((a) => a.submittedAt !== null).map((a) => toAttemptView(a, reveal)),
     payout: toPaymentView(byKind.get('release'), ctx),
     funding: toPaymentView(byKind.get('fund'), ctx),
     refund: toPaymentView(byKind.get('refund'), ctx),
     timeline: toTimeline(events),
-    verifier: TX_FACT_VERIFIER_NAME,
+    verifier: task.kind === TASK_KIND_CI_FIX ? CI_VERIFIER_NAME : TX_FACT_VERIFIER_NAME,
+    finding: context?.finding ?? null,
+    investigation: context?.investigation ?? null,
   }
 }
 
 export function digestOf(bodyJson: string): string {
   return `sha256:${createHash('sha256').update(bodyJson).digest('hex')}`
+}
+
+export function toRepoView(repo: RepoRecord): RepoView {
+  return {
+    id: repo.id,
+    slug: `${repo.owner}/${repo.name}`,
+    url: `https://github.com/${repo.owner}/${repo.name}`,
+    defaultBranch: repo.defaultBranch,
+    workflowName: repo.workflowName,
+    workflowPath: repo.workflowPath,
+    connectedAt: repo.connectedAt,
+    lastPolledAt: repo.lastPolledAt,
+    active: repo.active,
+  }
+}
+
+export function toFindingSummary(finding: FindingRecord, repo: Pick<RepoRecord, 'owner' | 'name'>): FindingSummaryView {
+  return {
+    id: finding.id,
+    displayId: findingDisplayIdOf(finding),
+    repo: `${repo.owner}/${repo.name}`,
+    jobName: finding.jobName,
+    stepName: finding.stepName,
+    status: finding.status,
+    failureCount: finding.failureCount,
+    firstFailedAt: finding.firstFailedAt,
+    lastFailedAt: finding.lastFailedAt,
+    lastFailedRunUrl: finding.lastFailedRunUrl,
+    recurrenceCount: finding.recurrenceCount,
+    investigated: finding.investigation !== null,
+    taskId: finding.taskId,
+  }
+}
+
+export function toFindingView(
+  finding: FindingRecord,
+  repo: RepoRecord,
+  runs: WorkflowRunRecord[],
+  events: FindingEvent[],
+): FindingView {
+  return {
+    ...toFindingSummary(finding, repo),
+    repoUrl: `https://github.com/${repo.owner}/${repo.name}`,
+    workflowName: finding.workflowName,
+    workflowPath: finding.workflowPath,
+    defaultBranch: repo.defaultBranch,
+    stepCommand: finding.stepCommand,
+    errorExcerpt: finding.errorExcerpt,
+    firstFailedSha: finding.firstFailedSha,
+    regression: finding.regression,
+    investigation: finding.investigation,
+    decidedBy: finding.decidedBy,
+    decidedAt: finding.decidedAt,
+    resolvedAt: finding.resolvedAt,
+    resolvedSha: finding.resolvedSha,
+    lastRecurrenceAt: finding.lastRecurrenceAt,
+    runs: runs.map((r) => ({ runId: r.runId, runNumber: r.runNumber, sha: r.headSha, conclusion: r.conclusion, url: r.htmlUrl, at: r.runCreatedAt })),
+    events: events.map((e) => ({ at: e.at, type: e.type, actor: e.actor, detail: e.detail })),
+  }
 }

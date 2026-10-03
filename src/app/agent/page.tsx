@@ -16,10 +16,10 @@ const PRESENCE = {
   never: 'Not started',
 } as const
 
-const SOURCE = { aeon: 'Aeon', 'local-loop': 'local loop', manual: 'manual run' } as Record<string, string>
+const SOURCE = { aeon: 'Aeon', 'local-loop': 'local loop', manual: 'manual run', cron: 'Vercel cron' } as Record<string, string>
 
-export default function AgentPage() {
-  const { status, runs } = agentActivity(24)
+export default async function AgentPage() {
+  const { status, runs } = await agentActivity(30)
   const visible = runs.filter((r) => r.action !== 'source_task' || r.result !== 'skipped')
 
   return (
@@ -28,7 +28,7 @@ export default function AgentPage() {
       <div className="agent-head">
         <div>
           <h1>Agent</h1>
-          <p>Autonomous execution. Transparent activity.</p>
+          <p>Watches CI, verifies fixes, settles payments. Every action it takes is logged here.</p>
         </div>
         <div className="presence">
           <span className={`presence-dot ${status.health}`} aria-hidden />
@@ -58,7 +58,7 @@ export default function AgentPage() {
       </div>
 
       <p className="label" style={{ marginTop: 22 }}>
-        {status.simulatedPayments ? 'Simulated payouts' : 'Arc Testnet payouts'} · reads {status.chainReader} · expected every{' '}
+        {status.simulatedPayments ? 'Simulated payouts' : 'Arc Testnet escrow payouts'} · scheduled by Aeon · expected every{' '}
         {Math.round(status.expectedIntervalMs / 60000)} min
       </p>
     </Reveal>

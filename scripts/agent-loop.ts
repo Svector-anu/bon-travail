@@ -8,7 +8,7 @@ const { getApp } = await import('../src/server/container')
  * Runs against the same database as the web app.
  */
 const everyMs = Number(process.env.AGENT_LOOP_SECONDS ?? 30) * 1000
-const app = getApp()
+const app = await getApp()
 let ticking = false
 let stopping = false
 let timer: ReturnType<typeof setTimeout> | null = null

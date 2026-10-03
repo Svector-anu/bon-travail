@@ -743,6 +743,33 @@ img {
   line-height: 1.5;
 }
 
+.roles {
+  margin-top: 64px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+
+.roles > div {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  padding-top: 18px;
+  border-top: 1px solid var(--line-strong);
+}
+
+.roles strong {
+  font-size: 19px;
+  font-weight: 400;
+}
+
+.roles p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
 /* ---- task rows ------------------------------------------------------------- */
 
 .rows {
@@ -1545,6 +1572,7 @@ img {
 }
 
 @media (max-width: 960px) {
+  .roles,
   .home-grid,
   .how,
   .receipt-grid,

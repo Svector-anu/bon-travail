@@ -80,7 +80,7 @@ describe('happy path over HTTP', () => {
     // #then the public receipt is frozen and complete
     const receipt = (await (await routes.receipt(new Request('http://test.local'), ctx('task_001'))).json()) as ReceiptView
     expect(receipt).toMatchObject({ final: true, outcome: 'PAID', worker: expect.stringMatching(/^0x9a9a/i) })
-    expect(receipt.task.expected?.recipient).toBe(fixture.recipient)
+    expect(receipt.task.tx?.expected?.recipient).toBe(fixture.recipient)
     expect(receipt.payout?.txHash).toMatch(/^0x[0-9a-f]{64}$/)
     expect(receipt.timeline.map((t) => t.label)).toEqual([
       'Created',

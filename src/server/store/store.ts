@@ -1,6 +1,3 @@
-import { mkdirSync } from 'node:fs'
-import { dirname } from 'node:path'
-import { DatabaseSync, type SQLInputValue } from 'node:sqlite'
 import { assertTransition, type TaskState } from '@/domain/task-state'
 import type {
   Address,
@@ -16,13 +13,12 @@ import type {
   TaskEvent,
   TaskEventType,
   TaskRecord,
-  TransferFact,
+  TaskSpec,
   VerificationResult,
 } from '@/domain/types'
 import { fromJson, num, optNum, optStr, str, toJson } from './codec'
-import { COLUMN_MIGRATIONS, POST_MIGRATION_SQL, SCHEMA } from './schema'
-
-type Row = Record<string, unknown>
+import { openDatabase, TransactionScope, type Database, type Row, type SqlExecutor } from './db'
+import { SCHEMA } from './schema'
 
 /** The task was not in the state the caller expected; someone else moved it first. */
 export class StaleStateError extends Error {
@@ -47,6 +43,7 @@ type TaskPatch = Partial<
   Pick<
     TaskRecord,
     | 'claimant'
+    | 'claimantHandle'
     | 'claimId'
     | 'claimExpiresAt'
     | 'fundedAt'
@@ -59,6 +56,7 @@ type TaskPatch = Partial<
 
 const PATCH_COLUMNS: Record<keyof TaskPatch, string> = {
   claimant: 'claimant',
+  claimantHandle: 'claimant_handle',
   claimId: 'claim_id',
   claimExpiresAt: 'claim_expires_at',
   fundedAt: 'funded_at',
@@ -89,11 +87,12 @@ function rowToTask(row: Row): TaskRecord {
     rewardMicro: BigInt(str(row, 'reward_micro')),
     currency: 'USDC',
     chain: str(row, 'chain'),
-    txHash: str(row, 'tx_hash') as Hex,
-    expected: fromJson<TransferFact>(str(row, 'expected_json')),
+    subject: str(row, 'subject'),
+    spec: fromJson<TaskSpec>(str(row, 'spec_json')),
     deadlineAt: num(row, 'deadline_at'),
     state: str(row, 'state') as TaskState,
     claimant: optStr(row, 'claimant') as Address | null,
+    claimantHandle: optStr(row, 'claimant_handle'),
     claimId: optStr(row, 'claim_id'),
     claimExpiresAt: optNum(row, 'claim_expires_at'),
     createdAt: num(row, 'created_at'),
@@ -114,6 +113,7 @@ function rowToAttempt(row: Row): AttemptRecord {
     taskId: str(row, 'task_id'),
     claimId: str(row, 'claim_id'),
     worker: str(row, 'worker') as Address,
+    handle: optStr(row, 'handle'),
     claimedAt: num(row, 'claimed_at'),
     claimExpiresAt: num(row, 'claim_expires_at'),
     submittedAt: optNum(row, 'submitted_at'),
@@ -179,6 +179,16 @@ function rowToTick(row: Row): AgentTickRecord {
   }
 }
 
+function rowToReceipt(row: Row): StoredReceipt {
+  return {
+    taskId: str(row, 'task_id'),
+    outcome: str(row, 'outcome'),
+    createdAt: num(row, 'created_at'),
+    bodyJson: str(row, 'body_json'),
+    digest: str(row, 'digest'),
+  }
+}
+
 export interface StoredReceipt {
   taskId: string
   outcome: string
@@ -187,75 +197,86 @@ export interface StoredReceipt {
   digest: string
 }
 
-export class Store {
-  private readonly db: DatabaseSync
-  private inTransaction = false
+export interface NewAttempt {
+  attempt: AttemptRecord
+  claimTokenHash: string
+  identity: string | null
+  singleSubmission: boolean
+}
 
-  constructor(path: string) {
-    if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true })
-    this.db = new DatabaseSync(path)
-    this.db.exec('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;')
-    this.db.exec(SCHEMA)
-    for (const migration of COLUMN_MIGRATIONS) {
-      const columns = this.all(`PRAGMA table_info(${migration.table})`).map((row) => str(row, 'name'))
-      if (!columns.includes(migration.column)) this.db.exec(migration.sql)
-    }
-    this.db.exec(POST_MIGRATION_SQL)
+/** Shared by Store and WatchStore: one database, one transaction scope. */
+export abstract class Repository {
+  constructor(
+    protected readonly db: Database,
+    protected readonly scope: TransactionScope,
+  ) {}
+
+  protected get exec(): SqlExecutor {
+    return this.scope.executor
   }
 
-  close(): void {
-    this.db.close()
+  protected async get(sql: string, ...params: unknown[]): Promise<Row | undefined> {
+    return (await this.exec.query(sql, params)).rows[0]
   }
 
-  /**
-   * Runs fn inside BEGIN IMMEDIATE so concurrent writers (the web server and
-   * a local agent loop share the file) serialise instead of interleaving.
-   */
-  transaction<T>(fn: () => T): T {
-    if (this.inTransaction) return fn()
-    this.db.exec('BEGIN IMMEDIATE')
-    this.inTransaction = true
-    try {
-      const result = fn()
-      this.db.exec('COMMIT')
-      return result
-    } catch (error) {
-      this.db.exec('ROLLBACK')
-      throw error
-    } finally {
-      this.inTransaction = false
-    }
+  protected async all(sql: string, ...params: unknown[]): Promise<Row[]> {
+    return (await this.exec.query(sql, params)).rows
   }
 
-  private get(sql: string, ...params: SQLInputValue[]): Row | undefined {
-    return this.db.prepare(sql).get(...params)
+  protected async run(sql: string, ...params: unknown[]): Promise<number> {
+    return (await this.exec.query(sql, params)).rowCount
   }
 
-  private all(sql: string, ...params: SQLInputValue[]): Row[] {
-    return this.db.prepare(sql).all(...params)
+  /** Joins the caller's transaction if there is one. */
+  transaction<T>(fn: () => Promise<T>): Promise<T> {
+    return this.scope.run(fn)
+  }
+}
+
+const initialised = new WeakSet<Database>()
+
+export async function prepareDatabase(db: Database): Promise<void> {
+  if (initialised.has(db)) return
+  await db.exec(SCHEMA)
+  initialised.add(db)
+}
+
+export class Store extends Repository {
+  static async open(target: string): Promise<Store> {
+    const db = await openDatabase(target)
+    await prepareDatabase(db)
+    return new Store(db, new TransactionScope(db))
   }
 
-  private run(sql: string, ...params: SQLInputValue[]): number {
-    return Number(this.db.prepare(sql).run(...params).changes)
+  get database(): Database {
+    return this.db
+  }
+
+  get transactions(): TransactionScope {
+    return this.scope
+  }
+
+  close(): Promise<void> {
+    return this.db.close()
   }
 
   // ---- tasks ---------------------------------------------------------------
 
-  nextTaskSeq(): number {
-    const row = this.get('SELECT COALESCE(MAX(seq), 0) + 1 AS next FROM tasks')
+  async nextTaskSeq(): Promise<number> {
+    const row = await this.get('SELECT COALESCE(MAX(seq), 0) + 1 AS next FROM tasks')
     return row ? num(row, 'next') : 1
   }
 
-  hasTaskForTx(txHash: Hex): boolean {
-    return this.get('SELECT 1 FROM tasks WHERE lower(tx_hash) = lower(?)', txHash) !== undefined
+  async hasTaskForSubject(subject: string): Promise<boolean> {
+    return (await this.get('SELECT 1 FROM tasks WHERE subject = $1', subject.toLowerCase())) !== undefined
   }
 
-  insertTask(task: TaskRecord, actor: string): void {
-    this.transaction(() => {
-      this.run(
-        `INSERT INTO tasks (id, seq, kind, title, description, reward_micro, currency, chain, tx_hash,
-           expected_json, deadline_at, state, created_at, version)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+  async insertTask(task: TaskRecord, actor: string, detail: Record<string, unknown> = {}): Promise<void> {
+    await this.transaction(async () => {
+      await this.run(
+        `INSERT INTO tasks (id, seq, kind, title, description, reward_micro, currency, chain, subject,
+           spec_json, deadline_at, state, created_at, version)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 0)`,
         task.id,
         task.seq,
         task.kind,
@@ -264,77 +285,90 @@ export class Store {
         task.rewardMicro.toString(),
         task.currency,
         task.chain,
-        task.txHash,
-        toJson(task.expected),
+        task.subject.toLowerCase(),
+        toJson(task.spec),
         task.deadlineAt,
         task.state,
         task.createdAt,
       )
-      this.appendEvent(task.id, task.createdAt, 'created', null, task.state, actor, {
-        txHash: task.txHash,
+      await this.appendEvent(task.id, task.createdAt, 'created', null, task.state, actor, {
+        subject: task.subject,
         reward: task.rewardMicro,
+        ...detail,
       })
     })
   }
 
-  getTask(id: string): TaskRecord | null {
-    const row = this.get('SELECT * FROM tasks WHERE id = ?', id)
+  async getTask(id: string): Promise<TaskRecord | null> {
+    const row = await this.get('SELECT * FROM tasks WHERE id = $1', id)
     return row ? rowToTask(row) : null
   }
 
-  requireTask(id: string): TaskRecord {
-    const task = this.getTask(id)
+  async requireTask(id: string): Promise<TaskRecord> {
+    const task = await this.getTask(id)
     if (!task) throw new NotFoundError(`task ${id}`)
     return task
   }
 
-  listTasks(options: { states?: readonly TaskState[]; limit?: number } = {}): TaskRecord[] {
-    const limit = options.limit ?? 100
+  /** Locks the task row for the rest of the current transaction. */
+  async lockTask(id: string): Promise<TaskRecord> {
+    const row = await this.get('SELECT * FROM tasks WHERE id = $1 FOR UPDATE', id)
+    if (!row) throw new NotFoundError(`task ${id}`)
+    return rowToTask(row)
+  }
+
+  async listTasks(
+    options: { states?: readonly TaskState[]; kinds?: readonly TaskRecord['kind'][]; limit?: number } = {},
+  ): Promise<TaskRecord[]> {
+    const where: string[] = []
+    const params: unknown[] = []
     if (options.states && options.states.length > 0) {
-      const marks = options.states.map(() => '?').join(', ')
-      return this.all(
-        `SELECT * FROM tasks WHERE state IN (${marks}) ORDER BY seq DESC LIMIT ?`,
-        ...options.states,
-        limit,
-      ).map(rowToTask)
+      params.push([...options.states])
+      where.push(`state = ANY($${params.length})`)
     }
-    return this.all('SELECT * FROM tasks ORDER BY seq DESC LIMIT ?', limit).map(rowToTask)
+    if (options.kinds && options.kinds.length > 0) {
+      params.push([...options.kinds])
+      where.push(`kind = ANY($${params.length})`)
+    }
+    params.push(options.limit ?? 100)
+    const sql = `SELECT * FROM tasks ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY seq DESC LIMIT $${params.length}`
+    return (await this.all(sql, ...params)).map(rowToTask)
   }
 
   /**
-   * The only way a task changes state. Checks the current state and the
-   * legal-transition table, bumps the version and appends the event, all in
-   * one transaction. Throws StaleStateError if another writer got there first.
+   * The only way a task changes state. Locks the row, checks the current
+   * state and the legal-transition table, bumps the version and appends the
+   * event, all in one transaction. Throws StaleStateError if another writer
+   * got there first.
    */
-  transition(input: TransitionInput): TaskRecord {
-    return this.transaction(() => {
-      const task = this.requireTask(input.taskId)
+  async transition(input: TransitionInput): Promise<TaskRecord> {
+    return this.transaction(async () => {
+      const task = await this.lockTask(input.taskId)
       const allowed: readonly TaskState[] = typeof input.from === 'string' ? [input.from] : input.from
       if (!allowed.includes(task.state)) throw new StaleStateError(task.id, allowed, task.state)
       assertTransition(task.id, task.state, input.to)
 
-      const sets = ['state = ?', 'version = version + 1']
-      const values: SQLInputValue[] = [input.to]
+      const sets = ['state = $1', 'version = version + 1']
+      const values: unknown[] = [input.to]
       for (const [key, value] of Object.entries(input.patch ?? {}) as [keyof TaskPatch, TaskPatch[keyof TaskPatch]][]) {
-        sets.push(`${PATCH_COLUMNS[key]} = ?`)
         values.push(value ?? null)
+        sets.push(`${PATCH_COLUMNS[key]} = $${values.length}`)
       }
-      const changed = this.run(
-        `UPDATE tasks SET ${sets.join(', ')} WHERE id = ? AND version = ?`,
+      values.push(task.id, task.version)
+      const changed = await this.run(
+        `UPDATE tasks SET ${sets.join(', ')} WHERE id = $${values.length - 1} AND version = $${values.length}`,
         ...values,
-        task.id,
-        task.version,
       )
       if (changed !== 1) throw new StaleStateError(task.id, allowed, task.state)
 
-      this.appendEvent(task.id, input.at, input.event, task.state, input.to, input.actor, input.detail ?? {})
+      await this.appendEvent(task.id, input.at, input.event, task.state, input.to, input.actor, input.detail ?? {})
       return this.requireTask(task.id)
     })
   }
 
   // ---- events --------------------------------------------------------------
 
-  appendEvent(
+  async appendEvent(
     taskId: string,
     at: number,
     type: TaskEventType,
@@ -342,9 +376,9 @@ export class Store {
     toState: TaskState | null,
     actor: string,
     detail: Record<string, unknown>,
-  ): void {
-    this.run(
-      'INSERT INTO task_events (task_id, at, type, from_state, to_state, actor, detail_json) VALUES (?, ?, ?, ?, ?, ?, ?)',
+  ): Promise<void> {
+    await this.run(
+      'INSERT INTO task_events (task_id, at, type, from_state, to_state, actor, detail_json) VALUES ($1, $2, $3, $4, $5, $6, $7)',
       taskId,
       at,
       type,
@@ -355,57 +389,71 @@ export class Store {
     )
   }
 
-  listEvents(taskId: string): TaskEvent[] {
-    return this.all('SELECT * FROM task_events WHERE task_id = ? ORDER BY id ASC', taskId).map(rowToEvent)
+  async listEvents(taskId: string): Promise<TaskEvent[]> {
+    return (await this.all('SELECT * FROM task_events WHERE task_id = $1 ORDER BY id ASC', taskId)).map(rowToEvent)
   }
 
   // ---- attempts ------------------------------------------------------------
 
-  insertAttempt(attempt: AttemptRecord, claimTokenHash: string, identity: string | null): void {
-    this.run(
-      `INSERT INTO attempts (id, task_id, claim_id, claim_token_hash, worker, identity, claimed_at, claim_expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  async insertAttempt({ attempt, claimTokenHash, identity, singleSubmission }: NewAttempt): Promise<void> {
+    await this.run(
+      `INSERT INTO attempts (id, task_id, claim_id, claim_token_hash, worker, handle, identity, single_submission,
+         claimed_at, claim_expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
       attempt.id,
       attempt.taskId,
       attempt.claimId,
       claimTokenHash,
       attempt.worker,
+      attempt.handle,
       identity,
+      singleSubmission,
       attempt.claimedAt,
       attempt.claimExpiresAt,
     )
   }
 
-  getAttemptByClaim(claimId: string): { attempt: AttemptRecord; claimTokenHash: string } | null {
-    const row = this.get('SELECT * FROM attempts WHERE claim_id = ?', claimId)
+  async getAttemptByClaim(claimId: string): Promise<{ attempt: AttemptRecord; claimTokenHash: string } | null> {
+    const row = await this.get('SELECT * FROM attempts WHERE claim_id = $1', claimId)
     return row ? { attempt: rowToAttempt(row), claimTokenHash: str(row, 'claim_token_hash') } : null
   }
 
-  listAttempts(taskId: string): AttemptRecord[] {
-    return this.all('SELECT * FROM attempts WHERE task_id = ? ORDER BY claimed_at ASC', taskId).map(rowToAttempt)
+  async listAttempts(taskId: string): Promise<AttemptRecord[]> {
+    return (await this.all('SELECT * FROM attempts WHERE task_id = $1 ORDER BY claimed_at ASC, id ASC', taskId)).map(rowToAttempt)
   }
 
-  workerHasSubmitted(taskId: string, worker: Address): boolean {
+  async countAttempts(taskIds: readonly string[]): Promise<Map<string, number>> {
+    if (taskIds.length === 0) return new Map()
+    const rows = await this.all('SELECT task_id, COUNT(*) AS n FROM attempts WHERE task_id = ANY($1) GROUP BY task_id', [...taskIds])
+    return new Map(rows.map((row) => [str(row, 'task_id'), num(row, 'n')]))
+  }
+
+  async workerHasSubmitted(taskId: string, worker: Address): Promise<boolean> {
     return (
-      this.get('SELECT 1 FROM attempts WHERE task_id = ? AND worker = ? AND submitted_at IS NOT NULL', taskId, worker) !==
+      (await this.get('SELECT 1 FROM attempts WHERE task_id = $1 AND worker = $2 AND submitted_at IS NOT NULL', taskId, worker)) !==
       undefined
     )
   }
 
-  listAttemptsByWorker(worker: Address, limit = 50): AttemptRecord[] {
-    return this.all('SELECT * FROM attempts WHERE worker = ? ORDER BY claimed_at DESC LIMIT ?', worker, limit).map(rowToAttempt)
-  }
-
-  identityHasSubmitted(taskId: string, identity: string): boolean {
-    return (
-      this.get('SELECT 1 FROM attempts WHERE task_id = ? AND identity = ? AND submitted_at IS NOT NULL', taskId, identity) !==
-      undefined
+  async listAttemptsByWorker(worker: Address, limit = 50): Promise<AttemptRecord[]> {
+    return (await this.all('SELECT * FROM attempts WHERE worker = $1 ORDER BY claimed_at DESC LIMIT $2', worker, limit)).map(
+      rowToAttempt,
     )
   }
 
-  recordSubmission(claimId: string, submission: Submission, at: number): void {
-    const changed = this.run(
-      'UPDATE attempts SET submission_json = ?, submitted_at = ? WHERE claim_id = ? AND submitted_at IS NULL',
+  async identityHasSubmitted(taskId: string, identity: string): Promise<boolean> {
+    return (
+      (await this.get(
+        'SELECT 1 FROM attempts WHERE task_id = $1 AND identity = $2 AND submitted_at IS NOT NULL',
+        taskId,
+        identity,
+      )) !== undefined
+    )
+  }
+
+  async recordSubmission(claimId: string, submission: Submission, at: number): Promise<void> {
+    const changed = await this.run(
+      'UPDATE attempts SET submission_json = $1, submitted_at = $2 WHERE claim_id = $3 AND submitted_at IS NULL',
       toJson(submission),
       at,
       claimId,
@@ -414,9 +462,9 @@ export class Store {
   }
 
   /** Verification verdicts are written once and never overwritten. */
-  recordVerdict(claimId: string, verification: VerificationResult, outcome: AttemptOutcome): void {
-    const changed = this.run(
-      'UPDATE attempts SET verification_json = ?, outcome = ? WHERE claim_id = ? AND outcome IS NULL',
+  async recordVerdict(claimId: string, verification: VerificationResult, outcome: AttemptOutcome): Promise<void> {
+    const changed = await this.run(
+      'UPDATE attempts SET verification_json = $1, outcome = $2 WHERE claim_id = $3 AND outcome IS NULL',
       toJson(verification),
       outcome,
       claimId,
@@ -424,56 +472,60 @@ export class Store {
     if (changed !== 1) throw new Error(`claim ${claimId} already has a verdict`)
   }
 
-  markAttemptLapsed(claimId: string): void {
-    this.run("UPDATE attempts SET outcome = 'LAPSED' WHERE claim_id = ? AND outcome IS NULL AND submitted_at IS NULL", claimId)
+  async markAttemptLapsed(claimId: string): Promise<void> {
+    await this.run(
+      "UPDATE attempts SET outcome = 'LAPSED' WHERE claim_id = $1 AND outcome IS NULL AND submitted_at IS NULL",
+      claimId,
+    )
   }
 
   // ---- payments ------------------------------------------------------------
 
-  getPayment(taskId: string, kind: PaymentKind): PaymentRecord | null {
-    const row = this.get('SELECT * FROM payments WHERE task_id = ? AND kind = ?', taskId, kind)
+  async getPayment(taskId: string, kind: PaymentKind): Promise<PaymentRecord | null> {
+    const row = await this.get('SELECT * FROM payments WHERE task_id = $1 AND kind = $2', taskId, kind)
     return row ? rowToPayment(row) : null
   }
 
-  listPayments(taskId: string): PaymentRecord[] {
-    return this.all('SELECT * FROM payments WHERE task_id = ? ORDER BY created_at ASC', taskId).map(rowToPayment)
+  async listPayments(taskId: string): Promise<PaymentRecord[]> {
+    return (await this.all('SELECT * FROM payments WHERE task_id = $1 ORDER BY created_at ASC, kind ASC', taskId)).map(
+      rowToPayment,
+    )
   }
 
   /** Inserts the payment intent; returns the existing row if one already exists. */
-  ensurePayment(payment: PaymentRecord): PaymentRecord {
-    return this.transaction(() => {
-      const existing = this.getPayment(payment.taskId, payment.kind)
-      if (existing) return existing
-      this.run(
-        `INSERT INTO payments (id, task_id, kind, idempotency_key, provider, amount_micro, recipient, status,
-           tx_hash, raw_tx, error, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        payment.id,
-        payment.taskId,
-        payment.kind,
-        payment.idempotencyKey,
-        payment.provider,
-        payment.amountMicro.toString(),
-        payment.recipient,
-        payment.status,
-        payment.txHash,
-        payment.rawTx,
-        payment.error,
-        payment.createdAt,
-        payment.updatedAt,
-      )
-      return payment
-    })
+  async ensurePayment(payment: PaymentRecord): Promise<PaymentRecord> {
+    await this.run(
+      `INSERT INTO payments (id, task_id, kind, idempotency_key, provider, amount_micro, recipient, status,
+         tx_hash, raw_tx, error, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+       ON CONFLICT (task_id, kind) DO NOTHING`,
+      payment.id,
+      payment.taskId,
+      payment.kind,
+      payment.idempotencyKey,
+      payment.provider,
+      payment.amountMicro.toString(),
+      payment.recipient,
+      payment.status,
+      payment.txHash,
+      payment.rawTx,
+      payment.error,
+      payment.createdAt,
+      payment.updatedAt,
+    )
+    const stored = await this.getPayment(payment.taskId, payment.kind)
+    if (!stored) throw new NotFoundError(`payment ${payment.kind} for ${payment.taskId}`)
+    return stored
   }
 
-  updatePayment(
+  async updatePayment(
     id: string,
     patch: { status: PaymentStatus; txHash?: Hex | null; rawTx?: Hex | null; error?: string | null },
     at: number,
-  ): PaymentRecord {
-    this.run(
-      `UPDATE payments SET status = ?, tx_hash = COALESCE(?, tx_hash), raw_tx = COALESCE(?, raw_tx), error = ?, updated_at = ?
-       WHERE id = ? AND status != 'confirmed'`,
+  ): Promise<PaymentRecord> {
+    await this.run(
+      `UPDATE payments SET status = $1, tx_hash = COALESCE($2, tx_hash), raw_tx = COALESCE($3, raw_tx), error = $4, updated_at = $5
+       WHERE id = $6 AND status != 'confirmed'`,
       patch.status,
       patch.txHash ?? null,
       patch.rawTx ?? null,
@@ -481,30 +533,32 @@ export class Store {
       at,
       id,
     )
-    const row = this.get('SELECT * FROM payments WHERE id = ?', id)
+    const row = await this.get('SELECT * FROM payments WHERE id = $1', id)
     if (!row) throw new NotFoundError(`payment ${id}`)
     return rowToPayment(row)
   }
 
-  confirmedPayoutsTo(recipient: Address): PaymentRecord[] {
-    return this.all(
-      "SELECT * FROM payments WHERE kind = 'release' AND status = 'confirmed' AND recipient = ? ORDER BY updated_at DESC",
-      recipient,
+  async confirmedPayoutsTo(recipient: Address): Promise<PaymentRecord[]> {
+    return (
+      await this.all(
+        "SELECT * FROM payments WHERE kind = 'release' AND status = 'confirmed' AND recipient = $1 ORDER BY updated_at DESC",
+        recipient,
+      )
     ).map(rowToPayment)
   }
 
   /** Sum of payouts committed (submitted or confirmed) since a timestamp. */
-  releasedSince(since: number): bigint {
-    const rows = this.all(
-      "SELECT amount_micro FROM payments WHERE kind = 'release' AND status IN ('submitted', 'confirmed', 'pending') AND created_at >= ?",
+  async releasedSince(since: number): Promise<bigint> {
+    const rows = await this.all(
+      "SELECT amount_micro FROM payments WHERE kind = 'release' AND status IN ('submitted', 'confirmed', 'pending') AND created_at >= $1",
       since,
     )
     return rows.reduce((sum, row) => sum + BigInt(str(row, 'amount_micro')), 0n)
   }
 
   /** Rewards reserved for tasks that are funded and not yet paid or refunded. */
-  outstandingEscrow(): bigint {
-    const rows = this.all(
+  async outstandingEscrow(): Promise<bigint> {
+    const rows = await this.all(
       `SELECT p.amount_micro FROM payments p
        WHERE p.kind = 'fund' AND p.status = 'confirmed'
          AND NOT EXISTS (SELECT 1 FROM payments q WHERE q.task_id = p.task_id AND q.kind IN ('release', 'refund') AND q.status = 'confirmed')`,
@@ -513,8 +567,8 @@ export class Store {
   }
 
   /** Totals across settled work, straight from the ledger. */
-  settlementTotals(): { paidMicro: bigint; paidCount: number; refundedCount: number } {
-    const rows = this.all("SELECT kind, amount_micro FROM payments WHERE kind IN ('release', 'refund') AND status = 'confirmed'")
+  async settlementTotals(): Promise<{ paidMicro: bigint; paidCount: number; refundedCount: number }> {
+    const rows = await this.all("SELECT kind, amount_micro FROM payments WHERE kind IN ('release', 'refund') AND status = 'confirmed'")
     let paidMicro = 0n
     let paidCount = 0
     let refundedCount = 0
@@ -531,9 +585,9 @@ export class Store {
 
   // ---- receipts ------------------------------------------------------------
 
-  insertReceipt(receipt: StoredReceipt): void {
-    this.run(
-      'INSERT INTO receipts (task_id, outcome, created_at, body_json, digest) VALUES (?, ?, ?, ?, ?)',
+  async insertReceipt(receipt: StoredReceipt): Promise<void> {
+    await this.run(
+      'INSERT INTO receipts (task_id, outcome, created_at, body_json, digest) VALUES ($1, $2, $3, $4, $5)',
       receipt.taskId,
       receipt.outcome,
       receipt.createdAt,
@@ -542,33 +596,20 @@ export class Store {
     )
   }
 
-  getReceipt(taskId: string): StoredReceipt | null {
-    const row = this.get('SELECT * FROM receipts WHERE task_id = ?', taskId)
-    if (!row) return null
-    return {
-      taskId: str(row, 'task_id'),
-      outcome: str(row, 'outcome'),
-      createdAt: num(row, 'created_at'),
-      bodyJson: str(row, 'body_json'),
-      digest: str(row, 'digest'),
-    }
+  async getReceipt(taskId: string): Promise<StoredReceipt | null> {
+    const row = await this.get('SELECT * FROM receipts WHERE task_id = $1', taskId)
+    return row ? rowToReceipt(row) : null
   }
 
-  listReceipts(limit: number): StoredReceipt[] {
-    return this.all('SELECT * FROM receipts ORDER BY created_at DESC LIMIT ?', limit).map((row) => ({
-      taskId: str(row, 'task_id'),
-      outcome: str(row, 'outcome'),
-      createdAt: num(row, 'created_at'),
-      bodyJson: str(row, 'body_json'),
-      digest: str(row, 'digest'),
-    }))
+  async listReceipts(limit: number): Promise<StoredReceipt[]> {
+    return (await this.all('SELECT * FROM receipts ORDER BY created_at DESC LIMIT $1', limit)).map(rowToReceipt)
   }
 
   // ---- agent ---------------------------------------------------------------
 
-  insertTick(tick: AgentTickRecord): void {
-    this.run(
-      'INSERT INTO agent_ticks (id, source, started_at, finished_at, status, summary) VALUES (?, ?, ?, ?, ?, ?)',
+  async insertTick(tick: AgentTickRecord): Promise<void> {
+    await this.run(
+      'INSERT INTO agent_ticks (id, source, started_at, finished_at, status, summary) VALUES ($1, $2, $3, $4, $5, $6)',
       tick.id,
       tick.source,
       tick.startedAt,
@@ -578,22 +619,24 @@ export class Store {
     )
   }
 
-  finishTick(id: string, status: AgentTickRecord['status'], summary: string, at: number): void {
-    this.run('UPDATE agent_ticks SET status = ?, summary = ?, finished_at = ? WHERE id = ?', status, summary, at, id)
+  async finishTick(id: string, status: AgentTickRecord['status'], summary: string, at: number): Promise<void> {
+    await this.run('UPDATE agent_ticks SET status = $1, summary = $2, finished_at = $3 WHERE id = $4', status, summary, at, id)
   }
 
-  listTicks(limit: number): AgentTickRecord[] {
-    return this.all('SELECT * FROM agent_ticks ORDER BY started_at DESC LIMIT ?', limit).map(rowToTick)
+  async listTicks(limit: number): Promise<AgentTickRecord[]> {
+    return (await this.all('SELECT * FROM agent_ticks ORDER BY started_at DESC LIMIT $1', limit)).map(rowToTick)
   }
 
-  insertRun(run: AgentRunRecord): void {
-    this.run(
-      'INSERT INTO agent_runs (id, tick_id, source, action, task_id, at, result, detail, error) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+  async insertRun(run: AgentRunRecord & { findingId?: string | null }): Promise<void> {
+    await this.run(
+      `INSERT INTO agent_runs (id, tick_id, source, action, task_id, finding_id, at, result, detail, error)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
       run.id,
       run.tickId,
       run.source,
       run.action,
       run.taskId,
+      run.findingId ?? null,
       run.at,
       run.result,
       run.detail,
@@ -601,38 +644,44 @@ export class Store {
     )
   }
 
-  listRuns(limit: number, taskId?: string): AgentRunRecord[] {
-    if (taskId) {
-      return this.all('SELECT * FROM agent_runs WHERE task_id = ? ORDER BY at DESC, rowid DESC LIMIT ?', taskId, limit).map(
-        rowToRun,
-      )
+  async listRuns(limit: number, filter: { taskId?: string; findingId?: string } = {}): Promise<AgentRunRecord[]> {
+    if (filter.taskId) {
+      return (
+        await this.all('SELECT * FROM agent_runs WHERE task_id = $1 ORDER BY at DESC, ord DESC LIMIT $2', filter.taskId, limit)
+      ).map(rowToRun)
     }
-    return this.all('SELECT * FROM agent_runs ORDER BY at DESC, rowid DESC LIMIT ?', limit).map(rowToRun)
+    if (filter.findingId) {
+      return (
+        await this.all('SELECT * FROM agent_runs WHERE finding_id = $1 ORDER BY at DESC, ord DESC LIMIT $2', filter.findingId, limit)
+      ).map(rowToRun)
+    }
+    return (await this.all('SELECT * FROM agent_runs ORDER BY at DESC, ord DESC LIMIT $1', limit)).map(rowToRun)
   }
 
   // ---- leases --------------------------------------------------------------
 
   /** A crash-safe mutex: the lease expires on its own if the holder dies. */
-  acquireLease(name: string, holder: string, now: number, ttlMs: number): boolean {
-    return this.transaction(() => {
-      const row = this.get('SELECT holder, expires_at FROM leases WHERE name = ?', name)
-      if (row && num(row, 'expires_at') > now && str(row, 'holder') !== holder) return false
-      this.run(
-        'INSERT INTO leases (name, holder, expires_at) VALUES (?, ?, ?) ON CONFLICT(name) DO UPDATE SET holder = excluded.holder, expires_at = excluded.expires_at',
-        name,
-        holder,
-        now + ttlMs,
-      )
-      return true
-    })
+  async acquireLease(name: string, holder: string, now: number, ttlMs: number): Promise<boolean> {
+    const row = await this.get(
+      `INSERT INTO leases (name, holder, expires_at) VALUES ($1, $2, $3)
+       ON CONFLICT (name) DO UPDATE SET holder = EXCLUDED.holder, expires_at = EXCLUDED.expires_at
+         WHERE leases.expires_at <= $4 OR leases.holder = EXCLUDED.holder
+       RETURNING holder`,
+      name,
+      holder,
+      now + ttlMs,
+      now,
+    )
+    return row !== undefined
   }
 
-  releaseLease(name: string, holder: string): void {
-    this.run('DELETE FROM leases WHERE name = ? AND holder = ?', name, holder)
+  async releaseLease(name: string, holder: string): Promise<void> {
+    await this.run('DELETE FROM leases WHERE name = $1 AND holder = $2', name, holder)
   }
 
-  currentLease(name: string, now: number): { holder: string; expiresAt: number } | null {
-    const row = this.get('SELECT holder, expires_at FROM leases WHERE name = ? AND expires_at > ?', name, now)
+  async currentLease(name: string, now: number): Promise<{ holder: string; expiresAt: number } | null> {
+    const row = await this.get('SELECT holder, expires_at FROM leases WHERE name = $1 AND expires_at > $2', name, now)
     return row ? { holder: str(row, 'holder'), expiresAt: num(row, 'expires_at') } : null
   }
 }
+

@@ -8,8 +8,8 @@ export const dynamic = 'force-dynamic'
 export const metadata: Metadata = { title: 'Submit answer' }
 
 export default async function SubmitPage({ params }: { params: Promise<{ id: string }> }) {
-  const detail = getTaskDetail((await params).id)
-  if (!detail) notFound()
+  const detail = await getTaskDetail((await params).id)
+  if (!detail || !detail.task.tx) notFound()
 
   return (
     <Reveal>

@@ -1,13 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import { parseUsdc, formatUsdc } from '@/domain/money'
+import type { TaskRecord } from '@/domain/types'
 import { ARC_USDC_ADDRESS, TRANSFER_TOPIC, extractTransfer } from '@/server/chain/arc'
 import { TxFactVerifier } from '@/server/verification/tx-fact-verifier'
 import { VerificationUnavailableError } from '@/server/verification/verifier'
 import { FIXTURE, SwitchableChain, correctAnswer, makeApp, openTask } from './helpers'
 
+const asSubmission = (answer: { recipient: string; amount: string }) => ({ kind: 'tx-fact-check' as const, ...answer })
+
+/** The task's on-chain snapshot; every task in this file is a rail test. */
+function snapshotOf(task: TaskRecord) {
+  if (task.spec.kind !== 'tx-fact-check') throw new Error('expected a rail-test task')
+  return task.spec
+}
+
 async function setup() {
   const chain = new SwitchableChain()
-  const app = makeApp({ chain })
+  const app = await makeApp({ chain })
   const task = await openTask(app)
   return { app, chain, task, verifier: new TxFactVerifier(chain, app.clock) }
 }
@@ -17,7 +26,7 @@ describe('TxFactVerifier', () => {
     // #given
     const { task, verifier } = await setup()
     // #when
-    const result = await verifier.verify(task, correctAnswer())
+    const result = await verifier.verify(task, asSubmission(correctAnswer()))
     // #then
     expect(result.valid).toBe(true)
     expect(result.code).toBe('MATCH')
@@ -29,7 +38,7 @@ describe('TxFactVerifier', () => {
     // #given
     const { task, verifier } = await setup()
     // #when
-    const result = await verifier.verify(task, { recipient: FIXTURE.recipient.toLowerCase(), amount: correctAnswer().amount })
+    const result = await verifier.verify(task, asSubmission({ recipient: FIXTURE.recipient.toLowerCase(), amount: correctAnswer().amount }))
     // #then
     expect(result.valid).toBe(true)
   })
@@ -49,10 +58,10 @@ describe('TxFactVerifier', () => {
     // #given
     const { task, verifier } = await setup()
     // #when
-    const result = await verifier.verify(task, {
+    const result = await verifier.verify(task, asSubmission({
       recipient: FIXTURE.recipient,
       amount: formatUsdc(FIXTURE.amountMicro + 1n),
-    })
+    }))
     // #then
     expect(result.valid).toBe(false)
     expect(result.code).toBe('MISMATCH')
@@ -65,7 +74,7 @@ describe('TxFactVerifier', () => {
     // #given
     const { task, verifier } = await setup()
     // #when
-    const result = await verifier.verify(task, { recipient: FIXTURE.from, amount: correctAnswer().amount })
+    const result = await verifier.verify(task, asSubmission({ recipient: FIXTURE.from, amount: correctAnswer().amount }))
     // #then
     expect(result.valid).toBe(false)
     expect(result.reason).toBe('Recipient does not match the on-chain transfer.')
@@ -75,7 +84,7 @@ describe('TxFactVerifier', () => {
     // #given
     const { task, verifier } = await setup()
     // #when
-    const result = await verifier.verify(task, { recipient: FIXTURE.recipient, amount: '1.6' })
+    const result = await verifier.verify(task, asSubmission({ recipient: FIXTURE.recipient, amount: '1.6' }))
     // #then
     expect(result.valid).toBe(false)
   })
@@ -84,7 +93,7 @@ describe('TxFactVerifier', () => {
     // #given
     const { task, verifier } = await setup()
     // #when
-    const result = await verifier.verify(task, { recipient: '0x123', amount: '1,59 USDC' })
+    const result = await verifier.verify(task, asSubmission({ recipient: '0x123', amount: '1,59 USDC' }))
     // #then
     expect(result.code).toBe('MALFORMED_SUBMISSION')
     expect(result.valid).toBe(false)
@@ -95,7 +104,7 @@ describe('TxFactVerifier', () => {
     const { task, verifier } = await setup()
     const bad = FIXTURE.recipient.slice(0, 2) + FIXTURE.recipient.slice(2).split('').map((c) => (c === c.toUpperCase() ? c.toLowerCase() : c.toUpperCase())).join('')
     // #when
-    const result = await verifier.verify(task, { recipient: bad, amount: correctAnswer().amount })
+    const result = await verifier.verify(task, asSubmission({ recipient: bad, amount: correctAnswer().amount }))
     // #then
     expect(result.code).toBe('MALFORMED_SUBMISSION')
   })
@@ -105,15 +114,16 @@ describe('TxFactVerifier', () => {
     const { task, verifier, chain } = await setup()
     chain.down = true
     // #when/#then
-    await expect(verifier.verify(task, correctAnswer())).rejects.toBeInstanceOf(VerificationUnavailableError)
+    await expect(verifier.verify(task, asSubmission(correctAnswer()))).rejects.toBeInstanceOf(VerificationUnavailableError)
   })
 
   it('refuses to reach a verdict when the chain disagrees with the task snapshot', async () => {
     // #given a drifted snapshot
     const { task, verifier } = await setup()
-    const drifted = { ...task, expected: { ...task.expected, amountMicro: task.expected.amountMicro + 1n } }
+    const spec = snapshotOf(task)
+    const drifted = { ...task, spec: { ...spec, expected: { ...spec.expected, amountMicro: spec.expected.amountMicro + 1n } } }
     // #when/#then
-    await expect(verifier.verify(drifted, correctAnswer())).rejects.toBeInstanceOf(VerificationUnavailableError)
+    await expect(verifier.verify(drifted, asSubmission(correctAnswer()))).rejects.toBeInstanceOf(VerificationUnavailableError)
   })
 })
 

@@ -36,13 +36,13 @@ describe('escrow rail', () => {
     // #given funding that confirms one tick late
     const rail = new FakeEscrowRail()
     rail.pendingConfirmations = 1
-    const app = makeApp({ rail })
+    const app = await makeApp({ rail })
     // #when the agent ticks twice
     const first = await app.agent.tick('aeon')
     const second = await app.agent.tick('aeon')
     // #then the first tick waits and the second publishes, signing funding exactly once
     expect(first.actions.find((a) => a.action === 'fund')?.result).toBe('skipped')
-    expect(app.store.requireTask('task_001').state).toBe('OPEN')
+    expect((await app.store.requireTask('task_001')).state).toBe('OPEN')
     expect(second.actions.map((a) => a.action)).toContain('publish')
     expect(rail.signed.filter((k) => k === 'fund')).toHaveLength(1)
   })
@@ -50,7 +50,7 @@ describe('escrow rail', () => {
   it('moves fund, release and refund each as one on-chain transaction', async () => {
     // #given one paid task and one expired task
     const rail = new FakeEscrowRail()
-    const app = makeApp({ rail, env: { TARGET_OPEN_TASKS: '2' } })
+    const app = await makeApp({ rail, env: { TARGET_OPEN_TASKS: '2' } })
     await app.agent.tick('aeon')
     await claimAndSubmit(app, 'task_001', WORKER_A, correctAnswer())
     await app.agent.onSubmission('task_001')
@@ -58,9 +58,9 @@ describe('escrow rail', () => {
     // #when the agent sweeps
     await app.agent.tick('aeon')
     // #then every payment row carries a transaction hash
-    expect(app.store.requireTask('task_001').state).toBe('PAID')
-    expect(app.store.requireTask('task_002').state).toBe('REFUNDED')
-    for (const p of [...app.store.listPayments('task_001'), ...app.store.listPayments('task_002')]) {
+    expect((await app.store.requireTask('task_001')).state).toBe('PAID')
+    expect((await app.store.requireTask('task_002')).state).toBe('REFUNDED')
+    for (const p of [...await app.store.listPayments('task_001'), ...await app.store.listPayments('task_002')]) {
       expect(p.txHash).toMatch(/^0x[0-9a-f]{64}$/)
     }
     expect(rail.signed.filter((k) => k === 'release')).toHaveLength(1)
@@ -70,7 +70,7 @@ describe('escrow rail', () => {
   it('retries a refund until the chain clock passes the deadline', async () => {
     // #given an expired task while the chain lags behind
     const rail = new FakeEscrowRail()
-    const app = makeApp({ rail })
+    const app = await makeApp({ rail })
     await app.agent.tick('aeon')
     app.clock.advance(6 * HOUR)
     rail.chainBehind = true
@@ -80,7 +80,7 @@ describe('escrow rail', () => {
     await app.agent.tick('aeon')
     // #then the first attempt is a retryable error and the second settles
     expect(lagging.actions.find((a) => a.taskId === 'task_001' && a.result === 'error')).toBeDefined()
-    expect(app.store.requireTask('task_001').state).toBe('REFUNDED')
+    expect((await app.store.requireTask('task_001')).state).toBe('REFUNDED')
     expect(rail.signed.filter((k) => k === 'refund')).toHaveLength(1)
   })
 })

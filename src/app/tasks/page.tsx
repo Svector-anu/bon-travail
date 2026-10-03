@@ -6,13 +6,13 @@ import { TaskRow } from '@/components/task-row'
 import { listTaskViews } from '@/server/queries'
 
 export const dynamic = 'force-dynamic'
-export const metadata: Metadata = { title: 'Tasks' }
+export const metadata: Metadata = { title: 'Work' }
 
 const SETTLED = new Set(['PAID', 'REFUNDED', 'EXPIRED'])
 
-export default async function TasksPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
-  const view = (await searchParams).view === 'completed' ? 'completed' : 'live'
-  const tasks = listTaskViews(100).filter((t) => (view === 'live' ? !SETTLED.has(t.state) : SETTLED.has(t.state)))
+export default async function WorkPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+  const view = (await searchParams).view === 'settled' ? 'settled' : 'open'
+  const tasks = (await listTaskViews({ limit: 100 })).filter((t) => (view === 'open' ? !SETTLED.has(t.state) : SETTLED.has(t.state)))
   const firstOpen = tasks.find((t) => t.state === 'OPEN')?.id
 
   return (
@@ -20,22 +20,24 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
       <AutoRefresh />
       <div className="page-head">
         <div>
-          <h1>Tasks</h1>
-          <p>Machine-checkable work. Real USDC rewards.</p>
+          <h1>Work</h1>
+          <p>Scoped fixes an engineering team chose to hand out. Each one is escrowed and judged by GitHub Actions.</p>
         </div>
-        <nav className="segmented" aria-label="Filter tasks">
-          <Link href="/tasks" aria-current={view === 'live'}>
-            Live
+        <nav className="segmented" aria-label="Filter work">
+          <Link href="/tasks" aria-current={view === 'open'}>
+            Open
           </Link>
-          <Link href="/tasks?view=completed" aria-current={view === 'completed'}>
-            Completed
+          <Link href="/tasks?view=settled" aria-current={view === 'settled'}>
+            Settled
           </Link>
         </nav>
       </div>
 
       {tasks.length === 0 ? (
         <div className="empty">
-          {view === 'live' ? 'No live tasks. The agent posts the next one on its next run.' : 'Nothing settled yet.'}
+          {view === 'open'
+            ? 'Nothing open. Work appears here when an engineer externalizes a finding from their console.'
+            : 'Nothing settled yet.'}
         </div>
       ) : (
         <div className="rows">

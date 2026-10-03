@@ -1,3 +1,4 @@
+import type { FindingStatus } from '@/domain/findings'
 import type { TaskState } from '@/domain/task-state'
 
 export function formatDuration(ms: number): string {
@@ -35,8 +36,24 @@ export const TASK_STATUS: Record<TaskState, { label: string; tone: StatusTone }>
   REFUNDED: { label: 'Refunded', tone: 'refund' },
 }
 
-export function displayIdFromTaskId(taskId: string): string {
-  return taskId.replace(/^task_/, 'TASK-')
+export const FINDING_STATUS: Record<FindingStatus, { label: string; tone: StatusTone }> = {
+  watching: { label: 'Watching', tone: '' },
+  candidate: { label: 'Needs a decision', tone: 'claimed' },
+  investigated: { label: 'Investigated', tone: 'live' },
+  internal: { label: 'Kept internal', tone: 'busy' },
+  externalized: { label: 'Externalized', tone: 'busy' },
+  resolved: { label: 'Resolved', tone: 'paid' },
+  recurred: { label: 'Came back', tone: 'refund' },
+  dismissed: { label: 'Dismissed', tone: '' },
+}
+
+/** Work packages and rail tests share one sequence; the prefix says which. */
+export function displayIdFromTaskId(taskId: string, kind?: string): string {
+  return taskId.replace(/^task_/, kind === 'tx-fact-check' ? 'TASK-' : 'WORK-')
+}
+
+export function findingDisplayId(findingId: string): string {
+  return findingId.replace(/^find_/, 'FIND-')
 }
 
 /** One plain-language line per agent action, in the agent's voice. */
@@ -51,7 +68,8 @@ export function activityHeadline(action: string, taskId: string | null, detail: 
     case 'publish':
       return `Published ${id}`
     case 'verify':
-      return detail.startsWith('RPC verification passed') ? `Verification passed on ${id}` : `Answer rejected on ${id}`
+      if (result === 'skipped') return detail.startsWith('Waiting') ? `Waiting on checks for ${id}` : `Verification deferred on ${id}`
+      return detail.includes('verification passed') ? `Verification passed on ${id}` : `Submission rejected on ${id}`
     case 'pay':
       return result === 'ok' ? detail.replace(/ to 0x\S+/, '') + ` on ${id}` : `Payout pending on ${id}`
     case 'reopen':
@@ -64,6 +82,12 @@ export function activityHeadline(action: string, taskId: string | null, detail: 
       return `Claim lapsed on ${id}`
     case 'source_task':
       return 'Looked for a new transaction'
+    case 'detect':
+    case 'repeat':
+    case 'resolve':
+    case 'recur':
+    case 'observe':
+      return detail
     default:
       return detail
   }

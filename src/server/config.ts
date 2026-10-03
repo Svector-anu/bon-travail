@@ -2,7 +2,8 @@ import { usdcFromConfig } from '@/domain/money'
 import { PaymentConfigError } from './payments/payment-provider'
 
 export interface AppConfig {
-  databasePath: string
+  /** A postgres:// URL (Neon in production) or a PGlite data directory (":memory:" in tests). */
+  database: string
   chainReader: 'rpc' | 'fixture'
   arcRpcUrl: string
   arcExplorerUrl: string
@@ -22,6 +23,11 @@ export interface AppConfig {
   privyAppId: string | undefined
   privyAppSecret: string | undefined
   privyVerificationKey: string | undefined
+  githubToken: string | undefined
+  ownerAccessToken: string | undefined
+  cronSecret: string | undefined
+  observeIntervalMs: number
+  ciVerifyGraceMs: number
 }
 
 type Env = Record<string, string | undefined>
@@ -31,6 +37,20 @@ function positiveInt(env: Env, name: string, fallback: number): number {
   if (raw === undefined || raw === '') return fallback
   const value = Number(raw)
   if (!Number.isInteger(value) || value <= 0) throw new Error(`${name} must be a positive integer, got "${raw}"`)
+  return value
+}
+
+function nonNegativeInt(env: Env, name: string, fallback: number): number {
+  const raw = env[name]
+  if (raw === undefined || raw === '') return fallback
+  const value = Number(raw)
+  if (!Number.isInteger(value) || value < 0) throw new Error(`${name} must be a whole number, got "${raw}"`)
+  return value
+}
+
+function secret(env: Env, name: string): string | undefined {
+  const value = env[name] || undefined
+  if (value !== undefined && value.length < 32) throw new Error(`${name} must be at least 32 characters`)
   return value
 }
 
@@ -49,7 +69,7 @@ function oneOf<T extends string>(env: Env, name: string, allowed: readonly T[], 
  */
 export function loadConfig(env: Env = process.env): AppConfig {
   const config: AppConfig = {
-    databasePath: env.DATABASE_PATH || './data/proofwork.db',
+    database: env.DATABASE_URL || env.POSTGRES_URL || env.DATABASE_PATH || './data/pglite',
     chainReader: oneOf(env, 'CHAIN_READER', ['rpc', 'fixture'] as const, 'rpc'),
     arcRpcUrl: env.ARC_RPC_URL || 'https://rpc.testnet.arc.network',
     arcExplorerUrl: env.ARC_EXPLORER_URL || 'https://testnet.arcscan.app',
@@ -63,12 +83,17 @@ export function loadConfig(env: Env = process.env): AppConfig {
     taskRewardMicro: usdcFromConfig(env.TASK_REWARD_USDC ?? '1', 'TASK_REWARD_USDC'),
     taskDeadlineMs: positiveInt(env, 'TASK_DEADLINE_SECONDS', 6 * 60 * 60) * 1000,
     claimTtlMs: positiveInt(env, 'CLAIM_TTL_SECONDS', 10 * 60) * 1000,
-    targetOpenTasks: positiveInt(env, 'TARGET_OPEN_TASKS', 1),
+    targetOpenTasks: nonNegativeInt(env, 'TARGET_OPEN_TASKS', 0),
     agentExpectedIntervalMs: positiveInt(env, 'AGENT_EXPECTED_INTERVAL_SECONDS', 300) * 1000,
     publicBaseUrl: (env.PUBLIC_BASE_URL || 'http://localhost:3000').replace(/\/$/, ''),
     privyAppId: env.NEXT_PUBLIC_PRIVY_APP_ID || undefined,
     privyAppSecret: env.PRIVY_APP_SECRET || undefined,
     privyVerificationKey: env.PRIVY_VERIFICATION_KEY || undefined,
+    githubToken: env.GITHUB_TOKEN || undefined,
+    ownerAccessToken: secret(env, 'OWNER_ACCESS_TOKEN'),
+    cronSecret: secret(env, 'CRON_SECRET'),
+    observeIntervalMs: nonNegativeInt(env, 'OBSERVE_INTERVAL_SECONDS', 60) * 1000,
+    ciVerifyGraceMs: nonNegativeInt(env, 'CI_VERIFY_GRACE_SECONDS', 6 * 60 * 60) * 1000,
   }
 
   if (config.taskRewardMicro > config.maxRewardMicro) {

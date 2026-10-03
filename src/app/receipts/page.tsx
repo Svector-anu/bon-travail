@@ -7,8 +7,8 @@ import { listTaskViews } from '@/server/queries'
 export const dynamic = 'force-dynamic'
 export const metadata: Metadata = { title: 'Receipts' }
 
-export default function ReceiptsPage() {
-  const settled = listTaskViews(100).filter((t) => t.state === 'PAID' || t.state === 'REFUNDED')
+export default async function ReceiptsPage() {
+  const settled = (await listTaskViews({ limit: 100 })).filter((t) => t.state === 'PAID' || t.state === 'REFUNDED')
 
   return (
     <Reveal>
@@ -16,11 +16,11 @@ export default function ReceiptsPage() {
       <div className="page-head">
         <div>
           <h1>Receipts</h1>
-          <p>Every paid or refunded task, frozen the moment it settled.</p>
+          <p>Every payout and refund, sealed the moment it settled: the failure, the evidence, the fix and the transaction.</p>
         </div>
       </div>
       {settled.length === 0 ? (
-        <div className="empty">No settled tasks yet. The first payout or refund lands here.</div>
+        <div className="empty">Nothing settled yet. The first payout or refund lands here.</div>
       ) : (
         <div className="rows">
           {settled.map((task, i) => (

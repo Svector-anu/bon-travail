@@ -1,22 +1,44 @@
 import { checkAddress } from '@/domain/address'
+import { NEEDS_DECISION, type FindingStatus } from '@/domain/findings'
 import { formatUsdc } from '@/domain/money'
 import { isTerminal } from '@/domain/task-state'
-import type { AgentRunView, AgentStatusView, AttemptView, ReceiptView, TaskView } from '@/domain/views'
-import { getApp } from './container'
-import { toAttemptView, toTaskView } from './services/views'
+import { TASK_KIND_CI_FIX, type TaskKind, type TaskRecord } from '@/domain/types'
+import type {
+  AgentRunView,
+  AgentStatusView,
+  AttemptView,
+  FindingSummaryView,
+  FindingView,
+  ReceiptView,
+  RecurrenceWatch,
+  RepoView,
+  TaskView,
+} from '@/domain/views'
+import { getApp, type App } from './container'
+import { displayId, findingDisplayIdOf, toAttemptView, toFindingSummary, toFindingView, toRepoView, toTaskView } from './services/views'
+
+/** Where a work package stands, read from its event log. */
+export interface WorkProgress {
+  claimedPrUrl: string | null
+  waitingFor: string | null
+  lastError: string | null
+}
 
 export interface TaskDetail {
   task: TaskView
   attempts: AttemptView[]
+  work: WorkProgress | null
 }
 
 export interface ReceiptSummary {
   taskId: string
   displayId: string
+  kind: TaskKind
   title: string
   outcome: string
   reward: string
   worker: string | null
+  workerHandle: string | null
   settledAt: number
   postedAt: number
   deadlineAt: number
@@ -28,54 +50,72 @@ export interface ActivitySnapshot {
   runs: AgentRunView[]
 }
 
-function viewContext() {
-  return { explorerUrl: getApp().chain.explorerUrl }
+function viewContext(app: App) {
+  return { explorerUrl: app.chain.explorerUrl }
 }
 
-export function listTaskViews(limit = 50): TaskView[] {
-  const { store } = getApp()
-  return store.listTasks({ limit }).map((t) => toTaskView(t, store.listAttempts(t.id).length, viewContext()))
+async function toViews(app: App, tasks: TaskRecord[]): Promise<TaskView[]> {
+  const counts = await app.store.countAttempts(tasks.map((t) => t.id))
+  return tasks.map((t) => toTaskView(t, counts.get(t.id) ?? 0, viewContext(app)))
 }
 
-export function getTaskDetail(taskId: string): TaskDetail | null {
-  const { store } = getApp()
-  const task = store.getTask(taskId)
+export async function listTaskViews(options: { limit?: number; kinds?: TaskKind[] } = {}): Promise<TaskView[]> {
+  const app = await getApp()
+  return toViews(app, await app.store.listTasks({ limit: options.limit ?? 50, kinds: options.kinds }))
+}
+
+export async function getTaskDetail(taskId: string): Promise<TaskDetail | null> {
+  const app = await getApp()
+  const task = await app.store.getTask(taskId)
   if (!task) return null
-  const attempts = store.listAttempts(task.id)
+  const attempts = await app.store.listAttempts(task.id)
+  let work: WorkProgress | null = null
+  if (task.kind === TASK_KIND_CI_FIX) {
+    const events = await app.store.listEvents(task.id)
+    const claimed = events.findLast((e) => e.type === 'claimed')
+    const last = events.at(-1)
+    work = {
+      claimedPrUrl: typeof claimed?.detail.prUrl === 'string' ? claimed.detail.prUrl : null,
+      waitingFor: last?.type === 'verification_pending' && typeof last.detail.waitingFor === 'string' ? last.detail.waitingFor : null,
+      lastError: last?.type === 'verification_error' && typeof last.detail.error === 'string' ? last.detail.error : null,
+    }
+  }
   return {
-    task: toTaskView(task, attempts.length, viewContext()),
+    task: toTaskView(task, attempts.length, viewContext(app)),
     attempts: attempts.filter((a) => a.submittedAt !== null).map((a) => toAttemptView(a, isTerminal(task.state))),
+    work,
   }
 }
 
-export function getReceiptView(taskId: string): ReceiptView | null {
-  const { store, tasks } = getApp()
-  return store.getTask(taskId) ? tasks.getReceipt(taskId) : null
+export async function getReceiptView(taskId: string): Promise<ReceiptView | null> {
+  const app = await getApp()
+  return (await app.store.getTask(taskId)) ? app.tasks.getReceipt(taskId) : null
 }
 
-export function recentReceipts(limit = 6): ReceiptSummary[] {
-  return getApp()
-    .store.listReceipts(limit)
-    .map((r) => {
-      const body = JSON.parse(r.bodyJson) as Omit<ReceiptView, 'digest' | 'final'>
-      return {
-        taskId: r.taskId,
-        displayId: body.task.displayId,
-        title: body.task.title,
-        outcome: r.outcome,
-        reward: body.task.reward,
-        worker: body.worker,
-        settledAt: r.createdAt,
-        postedAt: body.task.createdAt,
-        deadlineAt: body.task.deadlineAt,
-        simulated: body.payout?.simulated ?? body.funding?.simulated ?? false,
-      }
-    })
+export async function recentReceipts(limit = 6): Promise<ReceiptSummary[]> {
+  const app = await getApp()
+  return (await app.store.listReceipts(limit)).map((r) => {
+    const body = JSON.parse(r.bodyJson) as Omit<ReceiptView, 'digest' | 'final'>
+    return {
+      taskId: r.taskId,
+      displayId: body.task.displayId,
+      kind: body.task.kind,
+      title: body.task.title,
+      outcome: r.outcome,
+      reward: body.task.reward,
+      worker: body.worker,
+      workerHandle: body.workerHandle ?? null,
+      settledAt: r.createdAt,
+      postedAt: body.task.createdAt,
+      deadlineAt: body.task.deadlineAt,
+      simulated: body.payout?.simulated ?? body.funding?.simulated ?? false,
+    }
+  })
 }
 
-export function agentActivity(limit = 40, taskId?: string): ActivitySnapshot {
-  const { agent, store } = getApp()
-  return { status: agent.status(), runs: store.listRuns(limit, taskId) }
+export async function agentActivity(limit = 40, filter: { taskId?: string; findingId?: string } = {}): Promise<ActivitySnapshot> {
+  const { agent, store } = await getApp()
+  return { status: await agent.status(), runs: await store.listRuns(limit, filter) }
 }
 
 const LIVE_STATES = ['OPEN', 'CLAIMED', 'SUBMITTED', 'VERIFYING', 'ACCEPTED', 'REJECTED'] as const
@@ -86,20 +126,149 @@ export interface HomeSnapshot {
   paidCount: number
   refundedCount: number
   simulatedPayments: boolean
+  reposWatched: number
+  findingsOpen: number
+  recurrences: number
 }
 
-export function homeSnapshot(): HomeSnapshot {
-  const { store, payments } = getApp()
-  const totals = store.settlementTotals()
+export async function homeSnapshot(): Promise<HomeSnapshot> {
+  const app = await getApp()
+  const totals = await app.store.settlementTotals()
+  const counts = await app.watch.countFindings()
+  const repos = await app.watch.listRepos(true)
+  const findings = await app.watch.listFindings({ limit: 500 })
   return {
-    live: store
-      .listTasks({ states: LIVE_STATES, limit: 10 })
-      .map((t) => toTaskView(t, store.listAttempts(t.id).length, viewContext())),
+    live: await toViews(app, await app.store.listTasks({ states: LIVE_STATES, limit: 10, kinds: [TASK_KIND_CI_FIX] })),
     paidTotal: formatUsdc(totals.paidMicro),
     paidCount: totals.paidCount,
     refundedCount: totals.refundedCount,
-    simulatedPayments: payments.simulated,
+    simulatedPayments: app.payments.simulated,
+    reposWatched: repos.length,
+    findingsOpen: NEEDS_DECISION.reduce((sum, status) => sum + (counts[status] ?? 0), 0),
+    recurrences: findings.reduce((sum, f) => sum + f.recurrenceCount, 0),
   }
+}
+
+export interface ConsoleSnapshot {
+  repos: RepoView[]
+  needsDecision: FindingSummaryView[]
+  watching: FindingSummaryView[]
+  inFlight: { finding: FindingSummaryView; task: TaskView | null }[]
+  settled: FindingSummaryView[]
+  githubEnabled: boolean
+  simulatedPayments: boolean
+  paymentProvider: string
+}
+
+const IN_FLIGHT: readonly FindingStatus[] = ['internal', 'externalized']
+const SETTLED: readonly FindingStatus[] = ['resolved', 'dismissed']
+
+export async function consoleSnapshot(): Promise<ConsoleSnapshot> {
+  const app = await getApp()
+  const repos = await app.watch.listRepos()
+  const bySlug = new Map(repos.map((r) => [r.id, r]))
+  const findings = await app.watch.listFindings({ limit: 200 })
+  const summary = (status: readonly FindingStatus[]) =>
+    findings.filter((f) => status.includes(f.status)).map((f) => toFindingSummary(f, bySlug.get(f.repoId) ?? { owner: '?', name: f.repoId }))
+  const inFlight = await Promise.all(
+    findings
+      .filter((f) => IN_FLIGHT.includes(f.status))
+      .map(async (f) => {
+        const task = f.taskId ? await app.store.getTask(f.taskId) : null
+        return {
+          finding: toFindingSummary(f, bySlug.get(f.repoId) ?? { owner: '?', name: f.repoId }),
+          task: task ? (await toViews(app, [task]))[0]! : null,
+        }
+      }),
+  )
+  return {
+    repos: repos.map(toRepoView),
+    needsDecision: summary(NEEDS_DECISION),
+    watching: summary(['watching']),
+    inFlight,
+    settled: summary(SETTLED),
+    githubEnabled: app.github !== null,
+    simulatedPayments: app.payments.simulated,
+    paymentProvider: app.payments.name,
+  }
+}
+
+export interface FindingDetail {
+  finding: FindingView
+  task: TaskView | null
+  pastTasks: TaskView[]
+  maxReward: string
+  simulatedPayments: boolean
+}
+
+export async function getFindingDetail(findingId: string): Promise<FindingDetail | null> {
+  const app = await getApp()
+  const finding = await app.watch.getFinding(findingId)
+  if (!finding) return null
+  const repo = await app.watch.requireRepo(finding.repoId)
+  const [runs, events] = await Promise.all([app.watch.runsForFinding(finding.id, 20), app.watch.listFindingEvents(finding.id)])
+  const taskIds = [...new Set(events.map((e) => e.detail.taskId).filter((id): id is string => typeof id === 'string'))]
+  const tasks = (await Promise.all(taskIds.map((id) => app.store.getTask(id)))).filter((t): t is TaskRecord => t !== null)
+  const views = await toViews(app, tasks)
+  return {
+    finding: toFindingView(finding, repo, runs, events),
+    task: views.find((t) => t.id === finding.taskId) ?? null,
+    pastTasks: views.filter((t) => t.id !== finding.taskId),
+    maxReward: formatUsdc(app.config.maxRewardMicro),
+    simulatedPayments: app.payments.simulated,
+  }
+}
+
+/** Live recurrence status for a work package, shown next to (never inside) its frozen receipt. */
+export async function recurrenceWatch(taskId: string): Promise<RecurrenceWatch | null> {
+  const app = await getApp()
+  const task = await app.store.getTask(taskId)
+  if (!task || task.spec.kind !== TASK_KIND_CI_FIX) return null
+  const finding = await app.watch.getFinding(task.spec.findingId)
+  if (!finding) return null
+  const repo = await app.watch.getRepo(finding.repoId)
+  const since = finding.resolvedAt ?? task.settledAt ?? task.createdAt
+  return {
+    findingId: finding.id,
+    findingDisplayId: findingDisplayIdOf(finding),
+    status: finding.status,
+    greenRunsSinceFix: await app.watch.greenRunsSince(finding.repoId, since - 1),
+    recurrenceCount: finding.recurrenceCount,
+    lastRecurrenceAt: finding.lastRecurrenceAt,
+    resolvedSha: finding.resolvedSha,
+    lastPolledAt: repo?.lastPolledAt ?? null,
+  }
+}
+
+/** What Aeon reads before it investigates: only findings awaiting evidence, with everything needed to reproduce. */
+export async function findingsForInvestigation(statuses: FindingStatus[]) {
+  const app = await getApp()
+  const findings = await app.watch.listFindings({ statuses, limit: 20 })
+  return Promise.all(
+    findings.map(async (f) => {
+      const repo = await app.watch.requireRepo(f.repoId)
+      return {
+        id: f.id,
+        displayId: findingDisplayIdOf(f),
+        status: f.status,
+        repo: `${repo.owner}/${repo.name}`,
+        cloneUrl: `https://github.com/${repo.owner}/${repo.name}.git`,
+        defaultBranch: repo.defaultBranch,
+        workflowPath: f.workflowPath,
+        jobName: f.jobName,
+        stepName: f.stepName,
+        stepCommand: f.stepCommand,
+        errorExcerpt: f.errorExcerpt,
+        failureCount: f.failureCount,
+        firstFailedSha: f.firstFailedSha,
+        lastFailedRunUrl: f.lastFailedRunUrl,
+        lastGreenSha: f.regression?.lastGreenSha ?? null,
+        regressionCommits: f.regression?.commits ?? [],
+        alreadyInvestigated: f.investigation !== null,
+        recurrenceCount: f.recurrenceCount,
+      }
+    }),
+  )
 }
 
 export interface WorkerSummary {
@@ -113,28 +282,35 @@ export interface WorkerSummary {
 }
 
 /** Everything one wallet has done, read straight from attempts and the payout ledger. */
-export function workerSummary(addressInput: string): WorkerSummary | null {
+export async function workerSummary(addressInput: string): Promise<WorkerSummary | null> {
   const check = checkAddress(addressInput)
   if (!check.ok) return null
-  const { store } = getApp()
-  const attempts = store.listAttemptsByWorker(check.address)
-  const payouts = store.confirmedPayoutsTo(check.address)
+  const { store } = await getApp()
+  const attempts = await store.listAttemptsByWorker(check.address)
+  const payouts = await store.confirmedPayoutsTo(check.address)
   const earnedMicro = payouts.reduce((sum, p) => sum + p.amountMicro, 0n)
-  const active = attempts
-    .map((a) => ({ attempt: a, task: store.getTask(a.taskId) }))
-    .find(({ attempt, task }) => task?.state === 'CLAIMED' && task.claimId === attempt.claimId)
-  const displayId = (taskId: string) => taskId.replace(/^task_/, 'TASK-')
+  const tasks = new Map<string, TaskRecord>()
+  for (const id of new Set(attempts.map((a) => a.taskId))) {
+    const task = await store.getTask(id)
+    if (task) tasks.set(id, task)
+  }
+  const label = (taskId: string) => {
+    const task = tasks.get(taskId)
+    return task ? displayId(task) : taskId
+  }
+  const active = attempts.find((a) => {
+    const task = tasks.get(a.taskId)
+    return task?.state === 'CLAIMED' && task.claimId === a.claimId
+  })
   return {
     address: check.address,
     earned: earnedMicro > 0n ? formatUsdc(earnedMicro) : null,
     paidCount: payouts.length,
     answered: attempts.filter((a) => a.submittedAt !== null).length,
     rejected: attempts.filter((a) => a.outcome === 'FAIL').length,
-    activeClaim: active
-      ? { taskId: active.attempt.taskId, displayId: displayId(active.attempt.taskId), expiresAt: active.attempt.claimExpiresAt }
-      : null,
+    activeClaim: active ? { taskId: active.taskId, displayId: label(active.taskId), expiresAt: active.claimExpiresAt } : null,
     history: attempts
       .filter((a) => a.outcome !== null)
-      .map((a) => ({ taskId: a.taskId, displayId: displayId(a.taskId), outcome: a.outcome!, at: a.submittedAt ?? a.claimedAt })),
+      .map((a) => ({ taskId: a.taskId, displayId: label(a.taskId), outcome: a.outcome!, at: a.submittedAt ?? a.claimedAt })),
   }
 }

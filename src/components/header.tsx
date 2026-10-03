@@ -1,24 +1,19 @@
 'use client'
 
+import { LayoutPanelTop, LogIn } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useState } from 'react'
-import { CopyButton } from './copy-button'
-import { useIdentity } from './identity'
-import { identiconStyle } from './wallet'
 
 const NAV = [
-  { href: '/tasks', label: 'Tasks', match: ['/tasks', '/task/'] },
+  { href: '/tasks', label: 'Work', match: ['/tasks', '/task/'] },
   { href: '/receipts', label: 'Receipts', match: ['/receipts', '/receipt/'] },
   { href: '/agent', label: 'Agent', match: ['/agent'] },
-  { href: '/you', label: 'You', match: ['/you'] },
 ]
 
-export function Header() {
+/** Contributors need no account: GitHub proves who opened the PR. Only the engineer signs in. */
+export function Header({ owner }: { owner: boolean }) {
   const pathname = usePathname()
-  const identity = useIdentity()
-  const [menuOpen, setMenuOpen] = useState(false)
-  const signedIn = identity.signedIn && identity.address
+  const inConsole = pathname.startsWith('/console')
 
   return (
     <header className="topbar">
@@ -40,36 +35,10 @@ export function Header() {
       </nav>
 
       <div className="top-actions">
-        {signedIn ? (
-          <button type="button" className="pill-btn" onClick={() => setMenuOpen((v) => !v)} aria-expanded={menuOpen}>
-            <span className="identicon" style={identiconStyle(identity.address!)} aria-hidden />
-            {identity.label}
-          </button>
-        ) : (
-          <button type="button" className="pill-btn" disabled={!identity.ready} onClick={identity.signIn}>
-            {identity.mode === 'privy' ? 'Sign in' : 'Connect'}
-          </button>
-        )}
-        {menuOpen && signedIn && (
-          <div className="menu">
-            <p>
-              {identity.embeddedWallet ? 'Your Bon Travail wallet' : 'Payout wallet'}
-              <span className="mono" style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6, color: 'var(--text)' }}>
-                {identity.address}
-                <CopyButton value={identity.address!} label="Copy address" />
-              </span>
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                identity.signOut()
-                setMenuOpen(false)
-              }}
-            >
-              {identity.mode === 'privy' ? 'Sign out' : 'Disconnect'}
-            </button>
-          </div>
-        )}
+        <Link href="/console" className="pill-btn" aria-current={inConsole ? 'page' : undefined}>
+          {owner ? <LayoutPanelTop size={15} aria-hidden /> : <LogIn size={15} aria-hidden />}
+          {owner ? 'Console' : 'Engineers'}
+        </Link>
       </div>
     </header>
   )

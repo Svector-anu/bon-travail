@@ -12,6 +12,8 @@ const SOURCE: Record<string, string> = {
   manual: 'manual run',
   'worker-event': 'on submission',
   'demo-seed': 'demo seed',
+  cron: 'Vercel cron',
+  owner: 'engineer',
 }
 
 /** The agent's own log. New entries slide in at the top as the loop runs. */

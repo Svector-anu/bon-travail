@@ -6,6 +6,7 @@ import { ARC_TESTNET_FIXTURES, FixtureChainReader } from '@/server/chain/fixture
 import { ManualClock } from '@/server/clock'
 import { loadConfig } from '@/server/config'
 import { createApp, type App } from '@/server/container'
+import type { GitHubClient } from '@/server/github/client'
 import type { IdentityVerifier } from '@/server/identity'
 import { MockPaymentRail } from '@/server/payments/mock-rail'
 import { PaymentRailError, type PaymentRail, type RailCall } from '@/server/payments/payment-provider'
@@ -27,6 +28,7 @@ export const TEST_ENV = {
   CHAIN_READER: 'fixture',
   PAYMENT_PROVIDER: 'mock',
   AGENT_API_TOKEN: 'test-token-test-token-test-token-0000',
+  OWNER_ACCESS_TOKEN: 'owner-token-owner-token-owner-token-0000',
   MAX_REWARD_USDC: '1',
   DAILY_PAYOUT_CAP_USDC: '10',
   MAX_OUTSTANDING_ESCROW_USDC: '5',
@@ -87,16 +89,51 @@ export interface TestApp extends App {
   clock: ManualClock
 }
 
-export function makeApp(
-  options: { env?: Record<string, string>; chain?: ChainReader; rail?: PaymentRail; identity?: IdentityVerifier } = {},
-): TestApp {
+const TABLES = [
+  'finding_events',
+  'findings',
+  'workflow_runs',
+  'repos',
+  'receipts',
+  'payments',
+  'task_events',
+  'attempts',
+  'tasks',
+  'agent_runs',
+  'agent_ticks',
+  'leases',
+]
+
+let shared: Promise<Store> | undefined
+
+/**
+ * One in-memory Postgres per test file (vitest runs each file in its own
+ * process), emptied before every test. TRUNCATE bypasses the append-only
+ * row triggers, which is exactly what a reset needs.
+ */
+export async function freshStore(): Promise<Store> {
+  shared ??= Store.open(':memory:')
+  const store = await shared
+  await store.database.exec(`TRUNCATE ${TABLES.join(', ')} RESTART IDENTITY CASCADE`)
+  return store
+}
+
+export async function makeApp(
+  options: {
+    env?: Record<string, string>
+    chain?: ChainReader
+    rail?: PaymentRail
+    identity?: IdentityVerifier
+    github?: GitHubClient | null
+  } = {},
+): Promise<TestApp> {
   const clock = new ManualClock(T0)
   const config = loadConfig({ ...TEST_ENV, ...options.env })
-  const app = createApp(config, {
-    store: new Store(':memory:'),
+  const app = createApp(config, await freshStore(), {
     chain: options.chain ?? new FixtureChainReader('https://testnet.arcscan.app'),
     rail: options.rail ?? new MockPaymentRail(),
     identity: options.identity,
+    github: options.github ?? null,
     clock,
   })
   return { ...app, clock }
@@ -110,7 +147,7 @@ export async function openTask(app: App, txHash: Hex = FIXTURE.hash) {
 }
 
 export async function claimAndSubmit(app: App, taskId: string, worker: Address, answer: { recipient: string; amount: string }) {
-  const claim = app.tasks.claimTask(taskId, worker)
-  app.tasks.submitTask(taskId, { claimId: claim.claimId, claimToken: claim.claimToken, ...answer })
+  const claim = await app.tasks.claimTask(taskId, worker)
+  await app.tasks.submitTask(taskId, { claimId: claim.claimId, claimToken: claim.claimToken, ...answer })
   return claim
 }

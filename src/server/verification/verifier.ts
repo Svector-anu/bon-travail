@@ -1,13 +1,22 @@
 import type { Submission, TaskKind, TaskRecord, VerificationResult } from '@/domain/types'
 
 /**
- * The verifier could not reach a verdict (chain unreachable, chain disagrees
- * with the task snapshot). The worker is not penalised; the agent retries.
+ * The verifier could not reach a verdict (chain unreachable, GitHub down,
+ * chain disagrees with the task snapshot). The worker is not penalised; the
+ * agent retries.
  */
 export class VerificationUnavailableError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
     super(message, options)
     this.name = 'VerificationUnavailableError'
+  }
+}
+
+/** The independent judge has not finished yet (CI still running, merge pending). Retry later. */
+export class VerificationPendingError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'VerificationPendingError'
   }
 }
 

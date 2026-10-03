@@ -2,7 +2,15 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { checkAddress, shortAddress } from '@/domain/address'
 import { formatUsdc, parseUsdc } from '@/domain/money'
 import type { TaskState } from '@/domain/task-state'
-import { TASK_KIND_TX_FACT_CHECK, type Hex, type Submission, type TaskRecord } from '@/domain/types'
+import {
+  TASK_KIND_CI_FIX,
+  TASK_KIND_TX_FACT_CHECK,
+  type Address,
+  type CiFixSubmission,
+  type Contributor,
+  type Hex,
+  type TaskRecord,
+} from '@/domain/types'
 import type { ReceiptView } from '@/domain/views'
 import type { ChainReader } from '../chain/chain-reader'
 import type { Clock } from '../clock'
@@ -10,15 +18,15 @@ import { DomainError } from '../errors'
 import type { PaymentProvider } from '../payments/payment-provider'
 import { toJson } from '../store/codec'
 import type { Store } from '../store/store'
-import type { VerifierRegistry } from '../verification/verifier'
-import { buildReceipt, digestOf, type ViewContext } from './views'
+import { VerificationPendingError, type VerifierRegistry } from '../verification/verifier'
+import { buildReceipt, digestOf, type ReceiptContext, type ViewContext } from './views'
 
 export interface TaskSettings {
   rewardMicro: bigint
   deadlineMs: number
   claimTtlMs: number
   chainLabel: string
-  /** When true every claim must come from a verified person who owns the payout wallet. */
+  /** When true every rail-test claim must come from a verified person who owns the payout wallet. */
   identityRequired: boolean
 }
 
@@ -41,7 +49,13 @@ export interface SubmitInput {
   amount: string
 }
 
-/** A VERIFYING task older than this is assumed to belong to a crashed run. */
+/** Supplies kind-specific facts (the finding, the investigation) frozen into a receipt. */
+export type ReceiptContextProvider = (task: TaskRecord) => Promise<ReceiptContext | null>
+
+/** Runs after a task reaches PAID or REFUNDED, inside nothing: failures are logged, not fatal. */
+export type SettlementHook = (task: TaskRecord) => Promise<void>
+
+/** A VERIFYING task untouched for this long is assumed to belong to a crashed run. */
 const STALE_VERIFYING_MS = 2 * 60 * 1000
 
 function hashToken(token: string): string {
@@ -60,11 +74,16 @@ function requireState(task: TaskRecord, allowed: readonly TaskState[], action: s
   }
 }
 
+const CLEAR_CLAIM = { claimant: null, claimantHandle: null, claimId: null, claimExpiresAt: null }
+
 /**
  * Owns the task lifecycle. Every state change goes through Store.transition,
  * which enforces the legal-transition table and optimistic concurrency.
  */
 export class TaskService {
+  private readonly hooks: SettlementHook[] = []
+  private receiptContext: ReceiptContextProvider = async () => null
+
   constructor(
     private readonly store: Store,
     private readonly chain: ChainReader,
@@ -75,11 +94,23 @@ export class TaskService {
     private readonly viewContext: ViewContext,
   ) {}
 
+  onSettled(hook: SettlementHook): void {
+    this.hooks.push(hook)
+  }
+
+  useReceiptContext(provider: ReceiptContextProvider): void {
+    this.receiptContext = provider
+  }
+
+  requireTask(taskId: string): Promise<TaskRecord> {
+    return this.store.requireTask(taskId)
+  }
+
   // ---- creation ------------------------------------------------------------
 
-  /** Reads the transaction from the chain and stores a DRAFT task for it. */
+  /** Rail test: reads the transaction from the chain and stores a DRAFT task for it. */
   async createTask(txHash: Hex, actor: string, overrides: { deadlineMs?: number } = {}): Promise<TaskRecord> {
-    if (this.store.hasTaskForTx(txHash)) {
+    if (await this.store.hasTaskForSubject(txHash)) {
       throw new DomainError('CONFLICT', `A task for ${txHash} already exists`)
     }
     const read = await this.chain.readTransfer(txHash)
@@ -91,21 +122,49 @@ export class TaskService {
     }
 
     const now = this.clock.now()
-    const seq = this.store.nextTaskSeq()
-    const task: TaskRecord = {
-      id: `task_${String(seq).padStart(3, '0')}`,
-      seq,
+    const seq = await this.store.nextTaskSeq()
+    const task = this.draft(seq, now, {
       kind: TASK_KIND_TX_FACT_CHECK,
       title: `Read Arc transaction ${shortAddress(txHash)}`,
       description: `Open this ${this.settings.chainLabel} transaction and report who received USDC and exactly how much.`,
       rewardMicro: this.settings.rewardMicro,
+      subject: txHash,
+      spec: { kind: TASK_KIND_TX_FACT_CHECK, txHash, expected: read.fact },
+      deadlineAt: now + (overrides.deadlineMs ?? this.settings.deadlineMs),
+    })
+    await this.store.insertTask(task, actor)
+    return task
+  }
+
+  /** Stores a work package the engineer approved. Funding happens next, under the spending policy. */
+  async createWorkTask(
+    input: Pick<TaskRecord, 'title' | 'description' | 'rewardMicro' | 'subject' | 'spec' | 'deadlineAt'>,
+    actor: string,
+  ): Promise<TaskRecord> {
+    if (input.spec.kind !== TASK_KIND_CI_FIX) throw new Error('createWorkTask only creates ci-fix tasks')
+    const now = this.clock.now()
+    if (input.deadlineAt <= now) throw new DomainError('BAD_REQUEST', 'Deadline must be in the future')
+    if (await this.store.hasTaskForSubject(input.subject)) {
+      throw new DomainError('CONFLICT', 'This finding already has an open work package')
+    }
+    const task = this.draft(await this.store.nextTaskSeq(), now, { kind: TASK_KIND_CI_FIX, ...input })
+    await this.store.insertTask(task, actor, { findingId: input.spec.findingId })
+    return task
+  }
+
+  private draft(
+    seq: number,
+    now: number,
+    fields: Pick<TaskRecord, 'kind' | 'title' | 'description' | 'rewardMicro' | 'subject' | 'spec' | 'deadlineAt'>,
+  ): TaskRecord {
+    return {
+      id: `task_${String(seq).padStart(3, '0')}`,
+      seq,
       currency: 'USDC',
       chain: this.settings.chainLabel,
-      txHash,
-      expected: read.fact,
-      deadlineAt: now + (overrides.deadlineMs ?? this.settings.deadlineMs),
       state: 'DRAFT',
       claimant: null,
+      claimantHandle: null,
       claimId: null,
       claimExpiresAt: null,
       createdAt: now,
@@ -115,13 +174,12 @@ export class TaskService {
       submittedAt: null,
       settledAt: null,
       version: 0,
+      ...fields,
     }
-    this.store.insertTask(task, actor)
-    return task
   }
 
   async fundTask(taskId: string, actor: string): Promise<TaskRecord> {
-    const task = this.store.requireTask(taskId)
+    const task = await this.store.requireTask(taskId)
     if (task.state !== 'DRAFT') return task
     const { payment, settled } = await this.payments.fundTask(task)
     if (!settled) return task
@@ -133,13 +191,13 @@ export class TaskService {
       at: now,
       actor,
       event: 'funded',
-      detail: { amount: formatUsdc(payment.amountMicro), provider: payment.provider },
+      detail: { amount: formatUsdc(payment.amountMicro), provider: payment.provider, txHash: payment.txHash },
       patch: { fundedAt: now },
     })
   }
 
-  publishTask(taskId: string, actor: string): TaskRecord {
-    const task = this.store.requireTask(taskId)
+  async publishTask(taskId: string, actor: string): Promise<TaskRecord> {
+    const task = await this.store.requireTask(taskId)
     if (task.state !== 'FUNDED') return task
     const now = this.clock.now()
     return this.store.transition({
@@ -153,9 +211,9 @@ export class TaskService {
     })
   }
 
-  // ---- worker flow ---------------------------------------------------------
+  // ---- rail-test worker flow -------------------------------------------------
 
-  claimTask(taskId: string, workerInput: string, identity: ClaimIdentity | null = null): ClaimResult {
+  async claimTask(taskId: string, workerInput: string, identity: ClaimIdentity | null = null): Promise<ClaimResult> {
     const worker = checkAddress(workerInput)
     if (!worker.ok) throw new DomainError('BAD_REQUEST', `Wallet ${worker.reason}`)
     if (this.settings.identityRequired) {
@@ -166,59 +224,45 @@ export class TaskService {
     }
 
     const now = this.clock.now()
-    const existing = this.store.requireTask(taskId)
+    const existing = await this.store.requireTask(taskId)
+    if (existing.kind !== TASK_KIND_TX_FACT_CHECK) {
+      throw new DomainError('BAD_REQUEST', 'Work packages are claimed by linking a pull request')
+    }
     if (existing.state === 'CLAIMED' && existing.claimExpiresAt !== null && existing.claimExpiresAt <= now) {
-      this.releaseLapsedClaim(taskId, 'system')
+      await this.releaseLapsedClaim(taskId, 'system')
     }
 
-    return this.store.transaction(() => {
-      const task = this.store.requireTask(taskId)
+    return this.store.transaction(async () => {
+      const task = await this.store.lockTask(taskId)
       if (task.state === 'CLAIMED') {
         throw new DomainError('CONFLICT', `${taskId} is already claimed until ${new Date(task.claimExpiresAt ?? now).toISOString()}`)
       }
       requireState(task, ['OPEN'], 'claim')
       if (now >= task.deadlineAt) throw new DomainError('GONE', `${taskId} has passed its deadline`)
-      if (this.store.workerHasSubmitted(taskId, worker.address)) {
+      if (await this.store.workerHasSubmitted(taskId, worker.address)) {
         throw new DomainError('FORBIDDEN', `${shortAddress(worker.address)} already submitted an answer for ${taskId}`)
       }
-      if (identity && this.store.identityHasSubmitted(taskId, identity.userId)) {
+      if (identity && (await this.store.identityHasSubmitted(taskId, identity.userId))) {
         throw new DomainError('FORBIDDEN', `You already submitted an answer for ${taskId}`)
       }
 
-      const claimId = `clm_${randomBytes(9).toString('hex')}`
       const claimToken = randomBytes(24).toString('hex')
       const claimExpiresAt = Math.min(now + this.settings.claimTtlMs, task.deadlineAt)
-      this.store.insertAttempt(
-        {
-          id: `att_${randomBytes(9).toString('hex')}`,
-          taskId,
-          claimId,
-          worker: worker.address,
-          claimedAt: now,
-          claimExpiresAt,
-          submittedAt: null,
-          submission: null,
-          verification: null,
-          outcome: null,
-        },
-        hashToken(claimToken),
-        identity?.userId ?? null,
-      )
-      const updated = this.store.transition({
-        taskId,
-        from: 'OPEN',
-        to: 'CLAIMED',
-        at: now,
+      const updated = await this.openClaim(task, {
+        worker: worker.address,
+        handle: null,
+        identity: identity?.userId ?? null,
+        claimTokenHash: hashToken(claimToken),
+        claimExpiresAt,
+        singleSubmission: true,
         actor: `worker:${worker.address}`,
-        event: 'claimed',
-        detail: { claimId, claimExpiresAt },
-        patch: { claimant: worker.address, claimId, claimExpiresAt, claimedAt: now },
+        detail: {},
       })
-      return { task: updated, claimId, claimToken, claimExpiresAt }
+      return { task: updated, claimId: updated.claimId!, claimToken, claimExpiresAt }
     })
   }
 
-  submitTask(taskId: string, input: SubmitInput): TaskRecord {
+  async submitTask(taskId: string, input: SubmitInput): Promise<TaskRecord> {
     if (!checkAddress(input.recipient).ok || parseUsdc(input.amount) === null) {
       throw new DomainError(
         'BAD_REQUEST',
@@ -226,23 +270,26 @@ export class TaskService {
       )
     }
     const now = this.clock.now()
-    return this.store.transaction(() => {
-      const claim = this.store.getAttemptByClaim(input.claimId)
+    return this.store.transaction(async () => {
+      const claim = await this.store.getAttemptByClaim(input.claimId)
       if (!claim || claim.attempt.taskId !== taskId || !tokensMatch(input.claimToken, claim.claimTokenHash)) {
         throw new DomainError('FORBIDDEN', 'Claim not recognised for this task')
       }
       if (claim.attempt.submittedAt !== null) {
         throw new DomainError('CONFLICT', 'This claim already submitted an answer')
       }
-      const task = this.store.requireTask(taskId)
+      const task = await this.store.lockTask(taskId)
       if (task.claimId !== input.claimId) throw new DomainError('GONE', 'This claim is no longer active')
       requireState(task, ['CLAIMED'], 'submit to')
       if (task.claimExpiresAt !== null && now > task.claimExpiresAt) {
         throw new DomainError('GONE', 'Claim lock expired before submission. Claim the task again.')
       }
 
-      const submission: Submission = { recipient: input.recipient.trim(), amount: input.amount.trim() }
-      this.store.recordSubmission(input.claimId, submission, now)
+      await this.store.recordSubmission(
+        input.claimId,
+        { kind: TASK_KIND_TX_FACT_CHECK, recipient: input.recipient.trim(), amount: input.amount.trim() },
+        now,
+      )
       return this.store.transition({
         taskId,
         from: 'CLAIMED',
@@ -256,52 +303,185 @@ export class TaskService {
     })
   }
 
-  // ---- verification and settlement -----------------------------------------
+  // ---- work-package flow ---------------------------------------------------
 
   /**
-   * Runs the deterministic verifier. Returns the task in ACCEPTED or REJECTED.
-   * If the chain cannot be read the task returns to SUBMITTED and the error is
-   * rethrown so the caller can retry later; the worker is not penalised.
+   * Claims a work package for an approved contributor. The caller has already
+   * proven, from GitHub, that the linked PR was opened by this contributor.
+   * The claim lasts until the deadline; the payout wallet is the one the
+   * engineer approved, never one the claimant supplies.
    */
-  async verifySubmission(taskId: string, actor: string): Promise<TaskRecord> {
-    let task = this.store.requireTask(taskId)
+  async claimWork(taskId: string, contributor: Contributor, pr: CiFixSubmission): Promise<TaskRecord> {
     const now = this.clock.now()
-    if (task.state === 'VERIFYING' && now - (task.submittedAt ?? 0) > STALE_VERIFYING_MS) {
-      task = this.store.transition({
+    return this.store.transaction(async () => {
+      const task = await this.store.lockTask(taskId)
+      if (task.spec.kind !== TASK_KIND_CI_FIX) throw new DomainError('BAD_REQUEST', `${taskId} is not a work package`)
+      if (task.state === 'CLAIMED' && task.claimantHandle?.toLowerCase() === contributor.login.toLowerCase()) return task
+      if (task.state === 'CLAIMED') throw new DomainError('CONFLICT', `${taskId} is already claimed by @${task.claimantHandle}`)
+      requireState(task, ['OPEN'], 'claim')
+      if (now >= task.deadlineAt) throw new DomainError('GONE', `${taskId} has passed its deadline`)
+      const approved = task.spec.contributors.find((c) => c.login.toLowerCase() === contributor.login.toLowerCase())
+      if (!approved || approved.wallet !== contributor.wallet) {
+        throw new DomainError('FORBIDDEN', `@${contributor.login} is not on the approved list for ${taskId}`)
+      }
+      return this.openClaim(task, {
+        worker: approved.wallet,
+        handle: approved.login,
+        identity: `github:${approved.login.toLowerCase()}`,
+        claimTokenHash: hashToken(randomBytes(24).toString('hex')),
+        claimExpiresAt: task.deadlineAt,
+        singleSubmission: false,
+        actor: `contributor:${approved.login}`,
+        detail: { prUrl: pr.prUrl },
+      })
+    })
+  }
+
+  /** Records the PR as the submission. Anyone may ask; the verdict only ever pays the approved claimant. */
+  async submitWork(taskId: string, pr: CiFixSubmission, actor: string): Promise<TaskRecord> {
+    const now = this.clock.now()
+    return this.store.transaction(async () => {
+      const task = await this.store.lockTask(taskId)
+      if (task.spec.kind !== TASK_KIND_CI_FIX) throw new DomainError('BAD_REQUEST', `${taskId} is not a work package`)
+      requireState(task, ['CLAIMED'], 'submit to')
+      if (now >= task.deadlineAt) throw new DomainError('GONE', `${taskId} has passed its deadline`)
+      const claim = task.claimId ? await this.store.getAttemptByClaim(task.claimId) : null
+      if (!claim) throw new Error(`${taskId} is CLAIMED without an attempt`)
+      await this.store.recordSubmission(claim.attempt.claimId, pr, now)
+      return this.store.transition({
         taskId,
-        from: 'VERIFYING',
+        from: 'CLAIMED',
         to: 'SUBMITTED',
         at: now,
         actor,
-        event: 'verification_error',
-        detail: { error: 'previous verification run was interrupted' },
+        event: 'submitted',
+        detail: { claimId: claim.attempt.claimId, prUrl: pr.prUrl },
+        patch: { submittedAt: now },
       })
+    })
+  }
+
+  /** The engineer takes a claim back (contributor went quiet). The task reopens for the allowlist. */
+  async releaseClaim(taskId: string, actor: string): Promise<TaskRecord> {
+    return this.store.transaction(async () => {
+      const task = await this.store.lockTask(taskId)
+      requireState(task, ['CLAIMED'], 'release the claim on')
+      if (task.claimId) await this.store.markAttemptLapsed(task.claimId)
+      return this.store.transition({
+        taskId,
+        from: 'CLAIMED',
+        to: 'OPEN',
+        at: this.clock.now(),
+        actor,
+        event: 'claim_released',
+        detail: { contributor: task.claimantHandle ?? task.claimant },
+        patch: CLEAR_CLAIM,
+      })
+    })
+  }
+
+  private async openClaim(
+    task: TaskRecord,
+    claim: {
+      worker: Address
+      handle: string | null
+      identity: string | null
+      claimTokenHash: string
+      claimExpiresAt: number
+      singleSubmission: boolean
+      actor: string
+      detail: Record<string, unknown>
+    },
+  ): Promise<TaskRecord> {
+    const now = this.clock.now()
+    const claimId = `clm_${randomBytes(9).toString('hex')}`
+    await this.store.insertAttempt({
+      attempt: {
+        id: `att_${randomBytes(9).toString('hex')}`,
+        taskId: task.id,
+        claimId,
+        worker: claim.worker,
+        handle: claim.handle,
+        claimedAt: now,
+        claimExpiresAt: claim.claimExpiresAt,
+        submittedAt: null,
+        submission: null,
+        verification: null,
+        outcome: null,
+      },
+      claimTokenHash: claim.claimTokenHash,
+      identity: claim.identity,
+      singleSubmission: claim.singleSubmission,
+    })
+    return this.store.transition({
+      taskId: task.id,
+      from: 'OPEN',
+      to: 'CLAIMED',
+      at: now,
+      actor: claim.actor,
+      event: 'claimed',
+      detail: { claimId, claimExpiresAt: claim.claimExpiresAt, ...claim.detail },
+      patch: {
+        claimant: claim.worker,
+        claimantHandle: claim.handle,
+        claimId,
+        claimExpiresAt: claim.claimExpiresAt,
+        claimedAt: now,
+      },
+    })
+  }
+
+  // ---- verification and settlement -----------------------------------------
+
+  /**
+   * Runs the task's verifier. Returns the task in ACCEPTED or REJECTED.
+   * If the verifier cannot decide yet (chain down, CI still running) the task
+   * returns to SUBMITTED and the error is rethrown so the caller retries
+   * later; the worker is never penalised for the verifier's wait.
+   */
+  async verifySubmission(taskId: string, actor: string): Promise<TaskRecord> {
+    let task = await this.store.requireTask(taskId)
+    const now = this.clock.now()
+    if (task.state === 'VERIFYING') {
+      const started = (await this.store.listEvents(taskId)).findLast((e) => e.type === 'verifying')?.at ?? 0
+      if (now - started > STALE_VERIFYING_MS) {
+        task = await this.store.transition({
+          taskId,
+          from: 'VERIFYING',
+          to: 'SUBMITTED',
+          at: now,
+          actor,
+          event: 'verification_error',
+          detail: { error: 'previous verification run was interrupted' },
+        })
+      }
     }
     requireState(task, ['SUBMITTED'], 'verify')
-    const claim = task.claimId ? this.store.getAttemptByClaim(task.claimId) : null
+    const claim = task.claimId ? await this.store.getAttemptByClaim(task.claimId) : null
     if (!claim?.attempt.submission) throw new Error(`${taskId} is SUBMITTED without a stored submission`)
 
-    task = this.store.transition({ taskId, from: 'SUBMITTED', to: 'VERIFYING', at: now, actor, event: 'verifying' })
+    task = await this.store.transition({ taskId, from: 'SUBMITTED', to: 'VERIFYING', at: now, actor, event: 'verifying' })
 
     let result
     try {
       result = await this.verifiers.for(task.kind).verify(task, claim.attempt.submission)
     } catch (error) {
-      this.store.transition({
+      const pending = error instanceof VerificationPendingError
+      await this.store.transition({
         taskId,
         from: 'VERIFYING',
         to: 'SUBMITTED',
         at: this.clock.now(),
         actor,
-        event: 'verification_error',
-        detail: { error: error instanceof Error ? error.message : String(error) },
+        event: pending ? 'verification_pending' : 'verification_error',
+        detail: pending ? { waitingFor: error.message } : { error: error instanceof Error ? error.message : String(error) },
       })
       throw error
     }
 
     const at = this.clock.now()
-    return this.store.transaction(() => {
-      this.store.recordVerdict(claim.attempt.claimId, result, result.valid ? 'PASS' : 'FAIL')
+    return this.store.transaction(async () => {
+      await this.store.recordVerdict(claim.attempt.claimId, result, result.valid ? 'PASS' : 'FAIL')
       return this.store.transition({
         taskId,
         from: 'VERIFYING',
@@ -316,7 +496,7 @@ export class TaskService {
 
   /** Pays the claimant of an ACCEPTED task. Idempotent; safe to call repeatedly. */
   async releasePayment(taskId: string, actor: string): Promise<TaskRecord> {
-    const task = this.store.requireTask(taskId)
+    const task = await this.store.requireTask(taskId)
     if (task.state === 'PAID') return task
     requireState(task, ['ACCEPTED'], 'pay')
     if (!task.claimant) throw new Error(`${taskId} is ACCEPTED without a claimant`)
@@ -325,7 +505,7 @@ export class TaskService {
     try {
       result = await this.payments.releasePayment(task, task.claimant)
     } catch (error) {
-      this.store.appendEvent(taskId, this.clock.now(), 'payment_failed', task.state, task.state, actor, {
+      await this.store.appendEvent(taskId, this.clock.now(), 'payment_failed', task.state, task.state, actor, {
         error: error instanceof Error ? error.message : String(error),
       })
       throw error
@@ -333,8 +513,8 @@ export class TaskService {
     if (!result.settled) return this.store.requireTask(taskId)
 
     const at = this.clock.now()
-    return this.store.transaction(() => {
-      const paid = this.store.transition({
+    const paid = await this.store.transaction(async () => {
+      const next = await this.store.transition({
         taskId,
         from: 'ACCEPTED',
         to: 'PAID',
@@ -349,32 +529,32 @@ export class TaskService {
         },
         patch: { settledAt: at },
       })
-      this.writeReceipt(paid)
-      return paid
+      await this.writeReceipt(next)
+      return next
     })
+    await this.runHooks(paid)
+    return paid
   }
 
   /** Returns a rejected task to the pool, or expires it if the deadline passed. */
-  reopenTask(taskId: string, actor: string): TaskRecord {
-    const task = this.store.requireTask(taskId)
+  async reopenTask(taskId: string, actor: string): Promise<TaskRecord> {
+    const task = await this.store.requireTask(taskId)
     requireState(task, ['REJECTED'], 'reopen')
     const now = this.clock.now()
-    const clearClaim = { claimant: null, claimId: null, claimExpiresAt: null }
     if (now >= task.deadlineAt) {
-      return this.store.transition({ taskId, from: 'REJECTED', to: 'EXPIRED', at: now, actor, event: 'expired', patch: clearClaim })
+      return this.store.transition({ taskId, from: 'REJECTED', to: 'EXPIRED', at: now, actor, event: 'expired', patch: CLEAR_CLAIM })
     }
-    return this.store.transition({ taskId, from: 'REJECTED', to: 'OPEN', at: now, actor, event: 'reopened', patch: clearClaim })
+    return this.store.transition({ taskId, from: 'REJECTED', to: 'OPEN', at: now, actor, event: 'reopened', patch: CLEAR_CLAIM })
   }
 
-  releaseLapsedClaim(taskId: string, actor: string): TaskRecord {
-    const task = this.store.requireTask(taskId)
+  async releaseLapsedClaim(taskId: string, actor: string): Promise<TaskRecord> {
+    const task = await this.store.requireTask(taskId)
     const now = this.clock.now()
     if (task.state !== 'CLAIMED' || task.claimExpiresAt === null || task.claimExpiresAt > now) return task
-    return this.store.transaction(() => {
-      if (task.claimId) this.store.markAttemptLapsed(task.claimId)
-      const clearClaim = { claimant: null, claimId: null, claimExpiresAt: null }
+    return this.store.transaction(async () => {
+      if (task.claimId) await this.store.markAttemptLapsed(task.claimId)
       if (now >= task.deadlineAt) {
-        return this.store.transition({ taskId, from: 'CLAIMED', to: 'EXPIRED', at: now, actor, event: 'expired', patch: clearClaim })
+        return this.store.transition({ taskId, from: 'CLAIMED', to: 'EXPIRED', at: now, actor, event: 'expired', patch: CLEAR_CLAIM })
       }
       return this.store.transition({
         taskId,
@@ -384,13 +564,13 @@ export class TaskService {
         actor,
         event: 'claim_lapsed',
         detail: { worker: task.claimant },
-        patch: clearClaim,
+        patch: CLEAR_CLAIM,
       })
     })
   }
 
-  expireTask(taskId: string, actor: string): TaskRecord {
-    const task = this.store.requireTask(taskId)
+  async expireTask(taskId: string, actor: string): Promise<TaskRecord> {
+    const task = await this.store.requireTask(taskId)
     requireState(task, ['OPEN'], 'expire')
     const now = this.clock.now()
     if (now < task.deadlineAt) throw new DomainError('CONFLICT', `${taskId} has not reached its deadline`)
@@ -398,14 +578,14 @@ export class TaskService {
   }
 
   async refundTask(taskId: string, actor: string): Promise<TaskRecord> {
-    const task = this.store.requireTask(taskId)
+    const task = await this.store.requireTask(taskId)
     if (task.state === 'REFUNDED') return task
     requireState(task, ['EXPIRED'], 'refund')
     const { payment, settled } = await this.payments.refundTask(task)
     if (!settled) return task
     const at = this.clock.now()
-    return this.store.transaction(() => {
-      const refunded = this.store.transition({
+    const refunded = await this.store.transaction(async () => {
+      const next = await this.store.transition({
         taskId,
         from: 'EXPIRED',
         to: 'REFUNDED',
@@ -420,25 +600,44 @@ export class TaskService {
         },
         patch: { settledAt: at },
       })
-      this.writeReceipt(refunded)
-      return refunded
+      await this.writeReceipt(next)
+      return next
     })
+    await this.runHooks(refunded)
+    return refunded
+  }
+
+  private async runHooks(task: TaskRecord): Promise<void> {
+    for (const hook of this.hooks) {
+      try {
+        await hook(task)
+      } catch (error) {
+        console.error(`settlement hook failed for ${task.id}`, error)
+      }
+    }
   }
 
   // ---- receipts ------------------------------------------------------------
 
-  private writeReceipt(task: TaskRecord): void {
-    const body = buildReceipt(this.receiptInput(task), this.viewContext)
+  private async writeReceipt(task: TaskRecord): Promise<void> {
+    const body = buildReceipt(await this.receiptInput(task), this.viewContext)
     const bodyJson = toJson(body)
-    this.store.insertReceipt({ taskId: task.id, outcome: task.state, createdAt: this.clock.now(), bodyJson, digest: digestOf(bodyJson) })
+    await this.store.insertReceipt({
+      taskId: task.id,
+      outcome: task.state,
+      createdAt: this.clock.now(),
+      bodyJson,
+      digest: digestOf(bodyJson),
+    })
   }
 
-  private receiptInput(task: TaskRecord) {
+  private async receiptInput(task: TaskRecord) {
     return {
       task,
-      attempts: this.store.listAttempts(task.id),
-      events: this.store.listEvents(task.id),
-      payments: this.store.listPayments(task.id),
+      attempts: await this.store.listAttempts(task.id),
+      events: await this.store.listEvents(task.id),
+      payments: await this.store.listPayments(task.id),
+      context: await this.receiptContext(task),
     }
   }
 
@@ -446,13 +645,13 @@ export class TaskService {
    * Settled tasks return the frozen receipt exactly as written. Unsettled tasks
    * return a live view with final=false and expected values withheld.
    */
-  getReceipt(taskId: string): ReceiptView {
-    const stored = this.store.getReceipt(taskId)
+  async getReceipt(taskId: string): Promise<ReceiptView> {
+    const stored = await this.store.getReceipt(taskId)
     if (stored) {
       const body = JSON.parse(stored.bodyJson) as Omit<ReceiptView, 'digest' | 'final'>
       return { ...body, final: true, digest: stored.digest }
     }
-    const task = this.store.requireTask(taskId)
-    return { ...buildReceipt(this.receiptInput(task), this.viewContext), final: false, digest: null }
+    const task = await this.store.requireTask(taskId)
+    return { ...buildReceipt(await this.receiptInput(task), this.viewContext), final: false, digest: null }
   }
 }

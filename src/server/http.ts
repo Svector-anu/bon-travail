@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'node:crypto'
 import { getApp } from './container'
 import { DomainError } from './errors'
+import { requireOwner } from './owner'
 
 export function json(body: unknown, status = 200): Response {
   return Response.json(body, { status, headers: { 'cache-control': 'no-store' } })
@@ -15,6 +16,8 @@ const STATUS_BY_ERROR: Record<string, { code: string; status: number }> = {
   PaymentRailError: { code: 'UNAVAILABLE', status: 503 },
   ChainUnavailableError: { code: 'UNAVAILABLE', status: 503 },
   VerificationUnavailableError: { code: 'UNAVAILABLE', status: 503 },
+  GitHubUnavailableError: { code: 'UNAVAILABLE', status: 503 },
+  GitHubNotFoundError: { code: 'NOT_FOUND', status: 404 },
 }
 
 /** Maps by error name so a hot-reloaded module's classes still map correctly. */
@@ -41,8 +44,8 @@ export async function handle(fn: () => Promise<Response> | Response): Promise<Re
  * Agent-only endpoints move money, so they fail closed: with no
  * AGENT_API_TOKEN configured nobody can call them.
  */
-export function requireAgent(request: Request): void {
-  const configured = getApp().config.agentApiToken
+export async function requireAgent(request: Request): Promise<void> {
+  const configured = (await getApp()).config.agentApiToken
   if (!configured) throw new DomainError('UNAVAILABLE', 'AGENT_API_TOKEN is not configured; agent endpoints are disabled')
   const header = request.headers.get('authorization') ?? ''
   const presented = header.startsWith('Bearer ') ? header.slice('Bearer '.length) : ''
@@ -70,6 +73,12 @@ export function field(body: Record<string, unknown>, name: string, maxLength = 2
     throw new DomainError('BAD_REQUEST', `"${name}" must be a non-empty string`)
   }
   return value
+}
+
+/** Owner-only: returns the actor name recorded on every decision. */
+export async function requireOwnerRequest(request: Request): Promise<string> {
+  const app = await getApp()
+  return requireOwner(request, app.config.ownerAccessToken, app.clock.now())
 }
 
 export function optionalField(body: Record<string, unknown>, name: string, maxLength = 200): string | undefined {

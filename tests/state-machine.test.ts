@@ -49,32 +49,32 @@ describe('task state machine', () => {
 
   it('store refuses an illegal transition and leaves the task untouched', async () => {
     // #given an open task
-    const app = makeApp()
+    const app = await makeApp()
     const task = await openTask(app)
     // #when/#then
-    expect(() =>
+    await expect(
       app.store.transition({ taskId: task.id, from: 'OPEN', to: 'PAID', at: app.clock.now(), actor: 'test', event: 'paid' }),
-    ).toThrow(IllegalTransitionError)
+    ).rejects.toThrow(IllegalTransitionError)
     // #then
-    expect(app.store.requireTask(task.id).state).toBe('OPEN')
+    expect((await app.store.requireTask(task.id)).state).toBe('OPEN')
   })
 
   it('store refuses a transition from a state the task is not in', async () => {
     // #given an open task
-    const app = makeApp()
+    const app = await makeApp()
     const task = await openTask(app)
     // #when/#then
-    expect(() =>
+    await expect(
       app.store.transition({ taskId: task.id, from: 'CLAIMED', to: 'SUBMITTED', at: app.clock.now(), actor: 'test', event: 'submitted' }),
-    ).toThrow(StaleStateError)
+    ).rejects.toThrow(StaleStateError)
   })
 
   it('records every transition as an append-only event', async () => {
     // #when a task is opened
-    const app = makeApp()
+    const app = await makeApp()
     const task = await openTask(app)
     // #then
-    const events = app.store.listEvents(task.id)
+    const events = await app.store.listEvents(task.id)
     expect(events.map((e) => e.type)).toEqual(['created', 'funded', 'published'])
     expect(events[2]).toMatchObject({ fromState: 'FUNDED', toState: 'OPEN' })
   })

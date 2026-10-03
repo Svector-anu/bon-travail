@@ -125,7 +125,7 @@ export function SubmitMission({ task, attempts }: { task: TaskView; attempts: At
               <button type="submit" className="btn btn-primary btn-wide">
                 Submit answer <ArrowRight size={16} />
               </button>
-              <a className="text-link" href={task.explorerTxUrl} target="_blank" rel="noreferrer" style={{ justifySelf: 'center' }}>
+              <a className="text-link" href={task.tx?.explorerTxUrl} target="_blank" rel="noreferrer" style={{ justifySelf: 'center' }}>
                 Open the transaction on Arcscan <ArrowRight size={13} />
               </a>
             </form>
@@ -158,7 +158,7 @@ export function SubmitMission({ task, attempts }: { task: TaskView; attempts: At
               </>
             )}
             <div className="field-checks">
-              {mine.verification.fields.map((f) => (
+              {(mine.verification.kind === 'tx-fact-check' ? mine.verification.fields : []).map((f) => (
                 <div key={f.field} className="field-check">
                   {f.match ? <Check size={16} className="ok" /> : <X size={16} className="no" />}
                   <span className="muted">{f.field === 'recipient' ? 'Recipient' : 'Amount'}</span>

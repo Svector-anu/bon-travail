@@ -3,8 +3,11 @@ import type { TaskState } from './task-state'
 export type Hex = `0x${string}`
 export type Address = `0x${string}`
 
+/** Rail test: read an Arc transaction. Proves the payment loop end to end. */
 export const TASK_KIND_TX_FACT_CHECK = 'tx-fact-check'
-export type TaskKind = typeof TASK_KIND_TX_FACT_CHECK
+/** Product: fix a recurring CI failure that an engineer chose to externalize. */
+export const TASK_KIND_CI_FIX = 'ci-fix'
+export type TaskKind = typeof TASK_KIND_TX_FACT_CHECK | typeof TASK_KIND_CI_FIX
 
 /** What the chain says a single-transfer USDC transaction did. */
 export interface TransferFact {
@@ -15,6 +18,48 @@ export interface TransferFact {
   source: 'erc20-transfer-log' | 'native-value'
 }
 
+export interface TxFactSpec {
+  kind: typeof TASK_KIND_TX_FACT_CHECK
+  txHash: Hex
+  /** Snapshot taken from the chain when the task was created. */
+  expected: TransferFact
+}
+
+/** A person the engineer approved, and the only wallet they can be paid at. */
+export interface Contributor {
+  login: string
+  wallet: Address
+}
+
+export interface RepoRef {
+  owner: string
+  name: string
+}
+
+/**
+ * Frozen when the engineer approves. The claimant can never change the
+ * acceptance condition, the protected paths or the payout wallet.
+ */
+export interface CiFixSpec {
+  kind: typeof TASK_KIND_CI_FIX
+  findingId: string
+  repo: RepoRef
+  baseBranch: string
+  workflowPath: string
+  workflowName: string
+  jobName: string
+  acceptance: string
+  scope: string
+  /** Paths a submission may not touch, so the test cannot be weakened. */
+  protectedPaths: string[]
+  /** When true the fix must be merged and pass on the base branch itself. */
+  requireMerge: boolean
+  contributors: Contributor[]
+  approvedBy: string
+}
+
+export type TaskSpec = TxFactSpec | CiFixSpec
+
 export interface TaskRecord {
   id: string
   seq: number
@@ -24,12 +69,15 @@ export interface TaskRecord {
   rewardMicro: bigint
   currency: 'USDC'
   chain: string
-  txHash: Hex
-  /** Snapshot taken from the chain when the task was created. */
-  expected: TransferFact
+  /** Unique per task: the tx hash for rail tests, the finding for CI work. */
+  subject: string
+  spec: TaskSpec
   deadlineAt: number
   state: TaskState
+  /** Payout wallet of the current claim. */
   claimant: Address | null
+  /** GitHub login of the current claim, for CI work. */
+  claimantHandle: string | null
   claimId: string | null
   claimExpiresAt: number | null
   createdAt: number
@@ -41,10 +89,19 @@ export interface TaskRecord {
   version: number
 }
 
-export interface Submission {
+export interface TxFactSubmission {
+  kind: typeof TASK_KIND_TX_FACT_CHECK
   recipient: string
   amount: string
 }
+
+export interface CiFixSubmission {
+  kind: typeof TASK_KIND_CI_FIX
+  prNumber: number
+  prUrl: string
+}
+
+export type Submission = TxFactSubmission | CiFixSubmission
 
 export interface FieldComparison {
   field: 'recipient' | 'amount'
@@ -54,18 +111,50 @@ export interface FieldComparison {
   note?: string
 }
 
-export interface VerificationResult {
+interface VerificationBase {
   valid: boolean
   /** One sentence a human can read on the receipt. */
   reason: string
+  verifier: string
+  checkedAt: number
+}
+
+export interface TxFactVerification extends VerificationBase {
+  kind: typeof TASK_KIND_TX_FACT_CHECK
   code: 'MATCH' | 'MISMATCH' | 'MALFORMED_SUBMISSION'
   expected: { recipient: string; amount: string }
   submitted: { recipient: string; amount: string }
   fields: FieldComparison[]
-  verifier: string
-  checkedAt: number
   chainBlock: string | null
 }
+
+/** What GitHub itself reported. Every field links back to something checkable. */
+export interface CiEvidence {
+  prUrl: string
+  prNumber: number
+  author: string
+  headSha: string
+  merged: boolean
+  mergeSha: string | null
+  /** The commit whose acceptance run decided the verdict. */
+  verifiedSha: string | null
+  runId: number | null
+  runUrl: string | null
+  runConclusion: string | null
+  jobName: string | null
+  jobUrl: string | null
+  jobConclusion: string | null
+  filesChecked: number
+  protectedTouched: string[]
+}
+
+export interface CiFixVerification extends VerificationBase {
+  kind: typeof TASK_KIND_CI_FIX
+  code: 'CHECKS_PASSED' | 'CHECKS_FAILED' | 'PROTECTED_PATH' | 'WRONG_AUTHOR' | 'WRONG_TARGET' | 'CLOSED_UNMERGED'
+  evidence: CiEvidence
+}
+
+export type VerificationResult = TxFactVerification | CiFixVerification
 
 export type AttemptOutcome = 'PASS' | 'FAIL' | 'LAPSED'
 
@@ -74,6 +163,8 @@ export interface AttemptRecord {
   taskId: string
   claimId: string
   worker: Address
+  /** GitHub login for CI work; null for rail tests. */
+  handle: string | null
   claimedAt: number
   claimExpiresAt: number
   submittedAt: number | null
@@ -88,9 +179,11 @@ export type TaskEventType =
   | 'published'
   | 'claimed'
   | 'claim_lapsed'
+  | 'claim_released'
   | 'submitted'
   | 'verifying'
   | 'verification_error'
+  | 'verification_pending'
   | 'accepted'
   | 'rejected'
   | 'reopened'
@@ -129,7 +222,7 @@ export interface PaymentRecord {
   updatedAt: number
 }
 
-export type AgentRunSource = 'aeon' | 'local-loop' | 'manual' | 'worker-event' | 'demo-seed'
+export type AgentRunSource = 'aeon' | 'local-loop' | 'manual' | 'worker-event' | 'demo-seed' | 'cron' | 'owner'
 
 export interface AgentRunRecord {
   id: string

@@ -8,13 +8,13 @@ export function Footer() {
           <img src="/mascots/seedling.png" alt="" />
           <span>Bon Travail</span>
         </Link>
-        <p>Autonomous work, real payments. Tasks posted by an agent, answers checked against the chain.</p>
+        <p>Agents find and prepare the work. People do it. GitHub Actions verifies, and USDC settles on Arc.</p>
       </div>
       <div>
         <h4>Product</h4>
         <ul>
           <li>
-            <Link href="/tasks">Tasks</Link>
+            <Link href="/tasks">Work</Link>
           </li>
           <li>
             <Link href="/receipts">Receipts</Link>
@@ -24,6 +24,9 @@ export function Footer() {
           </li>
           <li>
             <Link href="/#how">How it works</Link>
+          </li>
+          <li>
+            <Link href="/console">Engineer console</Link>
           </li>
         </ul>
       </div>
@@ -49,7 +52,7 @@ export function Footer() {
       </div>
       <div className="foot-note">
         <span>Rewards are paid in Arc Testnet USDC.</span>
-        <span>Powered by agents, verified by code.</span>
+        <span>Engineers approve. GitHub judges. The chain settles.</span>
       </div>
     </footer>
   )

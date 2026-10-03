@@ -12,10 +12,18 @@ export function optStr(row: Row, key: string): string | null {
   return str(row, key)
 }
 
+/** Postgres returns BIGINT as a string (node-postgres) or a number (PGlite). */
 export function num(row: Row, key: string): number {
   const value = row[key]
   if (typeof value === 'bigint') return Number(value)
+  if (typeof value === 'string' && /^-?\d+$/.test(value)) return Number(value)
   if (typeof value !== 'number') throw new TypeError(`column ${key}: expected integer, got ${typeof value}`)
+  return value
+}
+
+export function bool(row: Row, key: string): boolean {
+  const value = row[key]
+  if (typeof value !== 'boolean') throw new TypeError(`column ${key}: expected boolean, got ${typeof value}`)
   return value
 }
 

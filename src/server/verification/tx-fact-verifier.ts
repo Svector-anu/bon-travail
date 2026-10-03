@@ -6,7 +6,7 @@ import {
   type Submission,
   type TaskRecord,
   type TransferFact,
-  type VerificationResult,
+  type TxFactVerification,
 } from '@/domain/types'
 import { ChainUnavailableError, type ChainReader } from '../chain/chain-reader'
 import type { Clock } from '../clock'
@@ -32,10 +32,14 @@ export class TxFactVerifier implements TaskVerifier {
     private readonly clock: Clock,
   ) {}
 
-  async verify(task: TaskRecord, submission: Submission): Promise<VerificationResult> {
+  async verify(task: TaskRecord, submission: Submission): Promise<TxFactVerification> {
+    if (task.spec.kind !== TASK_KIND_TX_FACT_CHECK || submission.kind !== TASK_KIND_TX_FACT_CHECK) {
+      throw new Error(`${this.name} cannot verify a ${task.kind} task`)
+    }
+    const spec = task.spec
     let read
     try {
-      read = await this.chain.readTransfer(task.txHash)
+      read = await this.chain.readTransfer(spec.txHash)
     } catch (error) {
       if (error instanceof ChainUnavailableError) {
         throw new VerificationUnavailableError('chain unavailable', { cause: error })
@@ -43,9 +47,9 @@ export class TxFactVerifier implements TaskVerifier {
       throw error
     }
     if (read.kind !== 'ok') {
-      throw new VerificationUnavailableError(`chain returned ${read.kind} for ${task.txHash}`)
+      throw new VerificationUnavailableError(`chain returned ${read.kind} for ${spec.txHash}`)
     }
-    if (!sameFact(read.fact, task.expected)) {
+    if (!sameFact(read.fact, spec.expected)) {
       throw new VerificationUnavailableError('chain data no longer matches the task snapshot')
     }
 
@@ -53,6 +57,7 @@ export class TxFactVerifier implements TaskVerifier {
     const expected = { recipient: fact.recipient, amount: formatUsdc(fact.amountMicro) }
     const submitted = { recipient: submission.recipient.trim(), amount: submission.amount.trim() }
     const base = {
+      kind: TASK_KIND_TX_FACT_CHECK as typeof TASK_KIND_TX_FACT_CHECK,
       expected,
       submitted,
       verifier: this.name,

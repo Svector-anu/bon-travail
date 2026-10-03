@@ -46,11 +46,11 @@ export class LedgerPaymentProvider implements PaymentProvider {
   }
 
   async getPaymentStatus(taskId: string, kind: PaymentKind): Promise<PaymentRecord | null> {
-    return this.store.getPayment(taskId, kind)
+    return await this.store.getPayment(taskId, kind)
   }
 
   async fundTask(task: TaskRecord): Promise<PaymentResult> {
-    const existing = this.store.getPayment(task.id, 'fund')
+    const existing = await this.store.getPayment(task.id, 'fund')
     if (existing?.status === 'confirmed') return { payment: existing, settled: true }
 
     if (task.rewardMicro <= 0n || task.rewardMicro > this.policy.maxRewardMicro) {
@@ -58,7 +58,7 @@ export class LedgerPaymentProvider implements PaymentProvider {
         `reward ${formatUsdc(task.rewardMicro)} USDC is outside the per-task cap of ${formatUsdc(this.policy.maxRewardMicro)}`,
       )
     }
-    const outstanding = this.store.outstandingEscrow()
+    const outstanding = await this.store.outstandingEscrow()
     if (outstanding + task.rewardMicro > this.policy.maxOutstandingEscrowMicro) {
       throw new PaymentPolicyError(
         `funding ${task.id} would exceed the outstanding escrow cap of ${formatUsdc(this.policy.maxOutstandingEscrowMicro)} USDC`,
@@ -67,9 +67,9 @@ export class LedgerPaymentProvider implements PaymentProvider {
     if (!existing) await this.rail.assertCanReserve({ newMicro: task.rewardMicro, outstandingMicro: outstanding })
 
     const now = this.clock.now()
-    const payment = this.store.ensurePayment(this.newPayment(task, 'fund', null, now))
+    const payment = await this.store.ensurePayment(this.newPayment(task, 'fund', null, now))
     if (!this.rail.onchainEscrow) {
-      return { payment: this.store.updatePayment(payment.id, { status: 'confirmed' }, now), settled: true }
+      return { payment: await this.store.updatePayment(payment.id, { status: 'confirmed' }, now), settled: true }
     }
     return this.withLease(`fund:${task.id}`, () => this.settle(payment, this.callFor(task, payment)))
   }
@@ -81,7 +81,7 @@ export class LedgerPaymentProvider implements PaymentProvider {
     if (!task.claimant || task.claimant !== recipient) {
       throw new PaymentPolicyError(`payout recipient ${recipient} is not the claimant of ${task.id}`)
     }
-    if (this.store.getPayment(task.id, 'refund')) {
+    if (await this.store.getPayment(task.id, 'refund')) {
       throw new PaymentPolicyError(`${task.id} was refunded and can never be paid`)
     }
 
@@ -89,22 +89,22 @@ export class LedgerPaymentProvider implements PaymentProvider {
   }
 
   private async releaseUnderLease(task: TaskRecord, recipient: Address): Promise<PaymentResult> {
-    let payment = this.store.getPayment(task.id, 'release')
+    let payment = await this.store.getPayment(task.id, 'release')
 
     if (!payment) {
       if (task.rewardMicro > this.policy.maxRewardMicro) {
         throw new PaymentPolicyError(`reward exceeds per-task cap of ${formatUsdc(this.policy.maxRewardMicro)} USDC`)
       }
-      if (this.store.getPayment(task.id, 'fund')?.status !== 'confirmed') {
+      if ((await this.store.getPayment(task.id, 'fund'))?.status !== 'confirmed') {
         throw new PaymentPolicyError(`${task.id} was never funded`)
       }
-      const spentToday = this.store.releasedSince(this.clock.now() - DAY_MS)
+      const spentToday = await this.store.releasedSince(this.clock.now() - DAY_MS)
       if (spentToday + task.rewardMicro > this.policy.dailyPayoutCapMicro) {
         throw new PaymentPolicyError(
           `daily payout cap of ${formatUsdc(this.policy.dailyPayoutCapMicro)} USDC reached (${formatUsdc(spentToday)} paid in the last 24h)`,
         )
       }
-      payment = this.store.ensurePayment(this.newPayment(task, 'release', recipient, this.clock.now()))
+      payment = await this.store.ensurePayment(this.newPayment(task, 'release', recipient, this.clock.now()))
     }
 
     if (payment.status === 'confirmed') return { payment, settled: true }
@@ -119,27 +119,27 @@ export class LedgerPaymentProvider implements PaymentProvider {
     if (task.state !== 'EXPIRED') {
       throw new PaymentPolicyError(`${task.id} is ${task.state}; only EXPIRED tasks can be refunded`)
     }
-    if (this.store.getPayment(task.id, 'release')) {
+    if (await this.store.getPayment(task.id, 'release')) {
       throw new PaymentPolicyError(`${task.id} already has a payout and can never be refunded`)
     }
     const now = this.clock.now()
-    const payment = this.store.ensurePayment(this.newPayment(task, 'refund', null, now))
+    const payment = await this.store.ensurePayment(this.newPayment(task, 'refund', null, now))
     if (payment.status === 'confirmed') return { payment, settled: true }
     if (!this.rail.onchainEscrow) {
-      return { payment: this.store.updatePayment(payment.id, { status: 'confirmed' }, now), settled: true }
+      return { payment: await this.store.updatePayment(payment.id, { status: 'confirmed' }, now), settled: true }
     }
     return this.withLease(`refund:${task.id}`, () => this.settle(payment, this.callFor(task, payment)))
   }
 
   /** Serialises every transaction the payer signs, so nonces never collide. */
   private async withLease<T>(holder: string, fn: () => Promise<T>): Promise<T> {
-    if (!this.store.acquireLease(PAYOUT_LEASE, holder, this.clock.now(), PAYOUT_LEASE_TTL_MS)) {
+    if (!(await this.store.acquireLease(PAYOUT_LEASE, holder, this.clock.now(), PAYOUT_LEASE_TTL_MS))) {
       throw new PaymentRailError('another payment is in flight; retry shortly')
     }
     try {
       return await fn()
     } finally {
-      this.store.releaseLease(PAYOUT_LEASE, holder)
+      await this.store.releaseLease(PAYOUT_LEASE, holder)
     }
   }
 
@@ -165,7 +165,7 @@ export class LedgerPaymentProvider implements PaymentProvider {
     if (!payment.rawTx || !payment.txHash) {
       await this.rail.beforeSign?.(call)
       const signed = await this.rail.sign(call)
-      payment = this.store.updatePayment(
+      payment = await this.store.updatePayment(
         payment.id,
         { status: 'pending', txHash: signed.txHash, rawTx: signed.rawTx },
         this.clock.now(),
@@ -176,17 +176,17 @@ export class LedgerPaymentProvider implements PaymentProvider {
     try {
       await this.rail.broadcast(signed)
     } catch (error) {
-      this.store.updatePayment(payment.id, { status: 'pending', error: errorMessage(error) }, this.clock.now())
+      await this.store.updatePayment(payment.id, { status: 'pending', error: errorMessage(error) }, this.clock.now())
       throw error
     }
-    payment = this.store.updatePayment(payment.id, { status: 'submitted' }, this.clock.now())
+    payment = await this.store.updatePayment(payment.id, { status: 'submitted' }, this.clock.now())
 
     const confirmation = await this.rail.confirmation(signed.txHash)
     if (confirmation === 'confirmed') {
-      return { payment: this.store.updatePayment(payment.id, { status: 'confirmed' }, this.clock.now()), settled: true }
+      return { payment: await this.store.updatePayment(payment.id, { status: 'confirmed' }, this.clock.now()), settled: true }
     }
     if (confirmation === 'failed') {
-      this.store.updatePayment(payment.id, { status: 'failed', error: `${call.kind} transaction reverted` }, this.clock.now())
+      await this.store.updatePayment(payment.id, { status: 'failed', error: `${call.kind} transaction reverted` }, this.clock.now())
       throw new PaymentPolicyError(`${call.kind} transaction ${signed.txHash} reverted; needs operator review`)
     }
     return { payment, settled: false }
