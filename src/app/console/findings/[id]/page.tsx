@@ -13,6 +13,7 @@ import { Reveal } from '@/components/reveal'
 import { FINDING_STATUS, TASK_STATUS } from '@/lib/format'
 import { isOwnerSession } from '@/server/owner-session'
 import { getFindingDetail } from '@/server/queries'
+import { Roll } from '@/components/roll'
 
 export const dynamic = 'force-dynamic'
 export const metadata: Metadata = { title: 'Finding' }
@@ -111,7 +112,7 @@ export default async function FindingPage({ params }: { params: Promise<{ id: st
           </p>
           <div className="decision-actions">
             <Link className="btn btn-glass" href={`/task/${task.id}`}>
-              Open the work package
+              <Roll>Open the work package</Roll>
             </Link>
             {task.state === 'CLAIMED' && (
               <ActionButton url={`/api/owner/tasks/${task.id}/release-claim`} className="text-link" confirmText="Take the claim back?">

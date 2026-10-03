@@ -10,6 +10,7 @@ import type { AttemptView, TaskView } from '@/domain/views'
 import { BonTravail } from './bon-travail'
 import { useStoredClaim } from './claim-store'
 import { Countdown } from './clock'
+import { Roll } from './roll'
 
 const EASE = [0.32, 0.72, 0, 1] as const
 const stateMotion = {
@@ -123,7 +124,7 @@ export function SubmitMission({ task, attempts }: { task: TaskView; attempts: At
               </div>
               {error && <p className="form-error">{error}</p>}
               <button type="submit" className="btn btn-primary btn-wide">
-                Submit answer <ArrowRight size={16} />
+                <Roll>Submit answer <ArrowRight size={16} /></Roll>
               </button>
               <a className="text-link" href={task.tx?.explorerTxUrl} target="_blank" rel="noreferrer" style={{ justifySelf: 'center' }}>
                 Open the transaction on Arcscan <ArrowRight size={13} />
@@ -167,7 +168,7 @@ export function SubmitMission({ task, attempts }: { task: TaskView; attempts: At
               ))}
             </div>
             <Link className="btn btn-primary" href={view === 'verified' ? `/receipt/${task.id}` : '/tasks'}>
-              {view === 'verified' ? 'View receipt' : 'Back to tasks'} <ArrowRight size={16} />
+              <Roll>{view === 'verified' ? 'View receipt' : 'Back to tasks'} <ArrowRight size={16} /></Roll>
             </Link>
           </motion.div>
         )}
@@ -184,7 +185,7 @@ export function SubmitMission({ task, attempts }: { task: TaskView; attempts: At
             <h1>Claim this task first</h1>
             <p>You need an active claim lock to submit an answer.</p>
             <Link className="btn btn-primary" href={`/task/${task.id}`} style={{ marginTop: 24 }}>
-              Go to {task.displayId} <ArrowRight size={16} />
+              <Roll>Go to {task.displayId} <ArrowRight size={16} /></Roll>
             </Link>
           </motion.div>
         )}

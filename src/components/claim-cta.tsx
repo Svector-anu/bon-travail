@@ -7,6 +7,7 @@ import { useState, type FormEvent } from 'react'
 import type { AttemptView, TaskView } from '@/domain/views'
 import { saveClaim, useStoredClaim } from './claim-store'
 import { useIdentity } from './identity'
+import { Roll } from './roll'
 
 const sameAddress = (a: string | null | undefined, b: string | null | undefined) =>
   Boolean(a && b && a.toLowerCase() === b.toLowerCase())
@@ -28,28 +29,28 @@ export function ClaimCta({ task, attempts }: { task: TaskView; attempts: Attempt
   if (task.state === 'PAID' || task.state === 'REFUNDED' || task.state === 'EXPIRED') {
     return (
       <Link className="btn btn-primary btn-wide" href={`/receipt/${task.id}`}>
-        View receipt <ArrowRight size={16} />
+        <Roll>View receipt <ArrowRight size={16} /></Roll>
       </Link>
     )
   }
   if (holdsClaim || (claim && attempts.some((a) => a.claimId === claim.claimId))) {
     return (
       <Link className="btn btn-primary btn-wide" href={`/task/${task.id}/submit`}>
-        {holdsClaim ? 'Continue to your answer' : 'See your result'} <ArrowRight size={16} />
+        <Roll>{holdsClaim ? 'Continue to your answer' : 'See your result'} <ArrowRight size={16} /></Roll>
       </Link>
     )
   }
   if (task.state !== 'OPEN') {
     return (
       <button type="button" className="btn btn-primary btn-wide" disabled>
-        {task.state === 'CLAIMED' ? 'Claimed by another worker' : 'Being verified'}
+        <Roll>{task.state === 'CLAIMED' ? 'Claimed by another worker' : 'Being verified'}</Roll>
       </button>
     )
   }
   if (answered) {
     return (
       <button type="button" className="btn btn-primary btn-wide" disabled>
-        You already answered this task
+        <Roll>You already answered this task</Roll>
       </button>
     )
   }
@@ -94,8 +95,8 @@ export function ClaimCta({ task, attempts }: { task: TaskView; attempts: Attempt
         </div>
       )}
       <button type="submit" className="btn btn-primary btn-wide" disabled={busy || (privy && identity.signedIn && !identity.address)}>
-        {busy ? 'Claiming...' : privy && !identity.signedIn ? 'Sign in to claim' : 'Claim this task'}
-        {!busy && <ArrowRight size={16} />}
+        <Roll>{busy ? 'Claiming...' : privy && !identity.signedIn ? 'Sign in to claim' : 'Claim this task'}
+        {!busy && <ArrowRight size={16} />}</Roll>
       </button>
       {error && <p className="form-error" style={{ marginTop: 10 }}>{error}</p>}
       {identity.signedIn && payout && (

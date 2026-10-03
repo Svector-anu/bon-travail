@@ -25,6 +25,9 @@
   --radius: 22px;
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
   --font: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  /* Critically damped spring (stiffness 100, damping 20): fast start, long soft settle. */
+  --spring: linear(0, 0.045 4.2%, 0.144 8.3%, 0.264 12.5%, 0.385 16.7%, 0.496 20.8%, 0.594 25%, 0.677 29.2%, 0.745 33.3%, 0.801 37.5%, 0.845 41.7%, 0.881 45.8%, 0.908 50%, 0.93 54.2%, 0.947 58.3%, 0.96 62.5%, 0.969 66.7%, 0.977 70.8%, 0.983 75%, 0.987 79.2%, 0.99 83.3%, 0.993 87.5%, 0.995 91.7%, 0.996 95.8%, 1);
+  --spring-time: 800ms;
   --mono: ui-monospace, 'SF Mono', Menlo, monospace;
   color-scheme: dark;
 }
@@ -249,12 +252,77 @@ img {
   font-size: 14px;
   font-weight: 500;
   border: 1px solid transparent;
-  transition: transform 160ms var(--ease), background 200ms var(--ease);
+  transition: transform var(--spring-time) var(--spring), background 200ms var(--ease);
   white-space: nowrap;
 }
 
 .btn:active {
   transform: scale(0.985);
+}
+
+/* ---- rolling labels ---------------------------------------------------------- */
+
+.btn,
+.pill-btn {
+  overflow: hidden;
+}
+
+.roll {
+  position: relative;
+  display: inline-flex;
+}
+
+.roll-a,
+.roll-b {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition:
+    transform var(--spring-time) var(--spring),
+    filter var(--spring-time) var(--spring);
+}
+
+.roll-b {
+  position: absolute;
+  inset: 0;
+  transform: translateY(2.6em);
+  filter: blur(5px);
+}
+
+@media (hover: hover) {
+  .btn:not(:disabled):hover,
+  .btn:not(:disabled):focus-visible {
+    transform: scale(0.95);
+    transition:
+      transform var(--spring-time) var(--spring),
+      background 200ms var(--ease);
+  }
+
+  .btn:not(:disabled):hover .roll-a,
+  .btn:not(:disabled):focus-visible .roll-a,
+  .pill-btn:hover .roll-a,
+  .pill-btn:focus-visible .roll-a {
+    transform: translateY(-2.6em);
+    filter: blur(5px);
+  }
+
+  .btn:not(:disabled):hover .roll-b,
+  .btn:not(:disabled):focus-visible .roll-b,
+  .pill-btn:hover .roll-b,
+  .pill-btn:focus-visible .roll-b {
+    transform: translateY(0);
+    filter: blur(0);
+  }
+
+  .nav a,
+  .pill-btn {
+    transition: transform 360ms var(--spring), background 200ms var(--ease), color 200ms var(--ease);
+  }
+
+  .nav a:hover,
+  .pill-btn:hover {
+    transform: scale(0.98);
+  }
 }
 
 .btn:disabled {

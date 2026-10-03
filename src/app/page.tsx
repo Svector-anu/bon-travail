@@ -3,9 +3,11 @@ import Link from 'next/link'
 import { shortAddress } from '@/domain/address'
 import { AutoRefresh } from '@/components/auto-refresh'
 import { Ago, Countdown } from '@/components/clock'
+import { FadeIn } from '@/components/fade-in'
 import { HeroVideo } from '@/components/hero-video'
 import { Reveal } from '@/components/reveal'
 import { homeSnapshot, recentReceipts } from '@/server/queries'
+import { Roll } from '@/components/roll'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,10 +50,10 @@ export default async function HomePage() {
           <p>Our agent, Aeon, spots tests that keep failing and works out why. You decide who fixes it. When their fix passes your tests, they are paid in USDC automatically.</p>
           <div className="hero-ctas">
             <Link className="btn btn-primary" href={current ? `/task/${current.id}` : '/tasks'}>
-              See open work <ArrowRight size={16} />
+              <Roll>See open work <ArrowRight size={16} /></Roll>
             </Link>
             <Link className="btn btn-glass" href="#how">
-              <Play size={14} /> How it works
+              <Roll><Play size={14} /> How it works</Roll>
             </Link>
           </div>
         </div>
@@ -107,7 +109,7 @@ export default async function HomePage() {
                 </div>
               </div>
               <Link className="btn btn-primary" href={`/task/${current.id}`}>
-                {current.state === 'OPEN' ? 'View the work package' : 'Follow its progress'} <ArrowRight size={16} />
+                <Roll>{current.state === 'OPEN' ? 'View the work package' : 'Follow its progress'} <ArrowRight size={16} /></Roll>
               </Link>
             </>
           ) : (
@@ -146,6 +148,7 @@ export default async function HomePage() {
         </section>
       </div>
 
+      <FadeIn>
       <section className="roles" aria-label="Who does what">
         {ROLES.map(([who, what, copy]) => (
           <div key={who}>
@@ -155,7 +158,9 @@ export default async function HomePage() {
           </div>
         ))}
       </section>
+      </FadeIn>
 
+      <FadeIn>
       <section className="how" id="how">
         <div>
           <span className="label">How it works</span>
@@ -173,6 +178,7 @@ export default async function HomePage() {
           ))}
         </ol>
       </section>
+      </FadeIn>
     </Reveal>
   )
 }

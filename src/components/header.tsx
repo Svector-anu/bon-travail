@@ -3,6 +3,7 @@
 import { LayoutPanelTop, LogIn } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { Roll } from './roll'
 
 const NAV = [
   { href: '/tasks', label: 'Work', match: ['/tasks', '/task/'] },
@@ -36,8 +37,8 @@ export function Header({ owner }: { owner: boolean }) {
 
       <div className="top-actions">
         <Link href="/console" className="pill-btn" aria-current={inConsole ? 'page' : undefined}>
-          {owner ? <LayoutPanelTop size={15} aria-hidden /> : <LogIn size={15} aria-hidden />}
-          {owner ? 'Console' : 'Engineers'}
+          <Roll>{owner ? <LayoutPanelTop size={15} aria-hidden /> : <LogIn size={15} aria-hidden />}
+          {owner ? 'Console' : 'Engineers'}</Roll>
         </Link>
       </div>
     </header>

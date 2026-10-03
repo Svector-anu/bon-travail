@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { Reveal } from '@/components/reveal'
 import { getApp } from '@/server/container'
 import { isOwnerSession } from '@/server/owner-session'
+import { Roll } from '@/components/roll'
 
 export const dynamic = 'force-dynamic'
 export const metadata: Metadata = { title: 'GitHub connected' }
@@ -36,7 +37,7 @@ export default async function GitHubSetupPage({ searchParams }: { searchParams: 
             : 'Try installing the app again from the console.'}
         </p>
         <Link className="btn btn-primary btn-wide" href="/console">
-          Back to the console
+          <Roll>Back to the console</Roll>
         </Link>
       </div>
     </Reveal>

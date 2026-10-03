@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import { Footer } from '@/components/footer'
 import { Header } from '@/components/header'
 import { Providers } from '@/components/providers'
+import { SmoothScroll } from '@/components/smooth-scroll'
 import { isOwnerSession } from '@/server/owner-session'
 
 export const metadata: Metadata = {
@@ -18,6 +19,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   return (
     <html lang="en">
       <body>
+        <SmoothScroll />
         <Providers>
           <div className="shell">
             <Header owner={owner} />

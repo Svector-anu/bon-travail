@@ -3,6 +3,7 @@
 import { Plus, Send, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { ActionButton, postJson, useAction } from './owner-actions'
+import { Roll } from './roll'
 
 interface Props {
   findingId: string
@@ -78,7 +79,7 @@ export function DecisionPanel({ findingId, canDecide, canExternalize, maxReward,
         <div className="decision-actions">
           {canExternalize && (
             <button type="button" className="btn btn-primary" onClick={() => setOpen(true)}>
-              <Send size={15} /> Externalize to an approved person
+              <Roll><Send size={15} /> Externalize to an approved person</Roll>
             </button>
           )}
           {canDecide && (
@@ -156,10 +157,10 @@ export function DecisionPanel({ findingId, canDecide, canExternalize, maxReward,
 
           <div className="decision-actions">
             <button type="submit" className="btn btn-primary" disabled={busy || !reward.trim()}>
-              {busy ? 'Escrowing...' : `Approve and escrow${reward.trim() ? ` ${reward.trim()} USDC` : ''}`}
+              <Roll>{busy ? 'Escrowing...' : `Approve and escrow${reward.trim() ? ` ${reward.trim()} USDC` : ''}`}</Roll>
             </button>
             <button type="button" className="btn btn-glass" disabled={busy} onClick={() => setOpen(false)}>
-              Cancel
+              <Roll>Cancel</Roll>
             </button>
           </div>
           {simulatedPayments && <p className="muted">Payments are simulated in this environment; no USDC will move.</p>}

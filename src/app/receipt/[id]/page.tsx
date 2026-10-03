@@ -13,6 +13,7 @@ import { Reveal } from '@/components/reveal'
 import { FINDING_STATUS, TASK_STATUS } from '@/lib/format'
 import { getApp } from '@/server/container'
 import { getReceiptView, recurrenceWatch } from '@/server/queries'
+import { Roll } from '@/components/roll'
 
 export const dynamic = 'force-dynamic'
 
@@ -236,7 +237,7 @@ async function WorkReceipt({ receipt, watch, url }: { receipt: ReceiptView; watc
           )}
           {(payout ?? receipt.refund ?? receipt.funding)?.explorerTxUrl && (
             <a className="btn btn-glass" href={(payout ?? receipt.refund ?? receipt.funding)!.explorerTxUrl!} target="_blank" rel="noreferrer">
-              View on Arcscan <ArrowUpRight size={15} />
+              <Roll>View on Arcscan <ArrowUpRight size={15} /></Roll>
             </a>
           )}
         </section>
@@ -391,7 +392,7 @@ function RailReceipt({ receipt, url }: { receipt: ReceiptView; url: string }) {
             </span>
           )}
           <a className="btn btn-glass" href={settlementTx ?? tx.explorerTxUrl} target="_blank" rel="noreferrer">
-            {settlementTx ? 'View on block explorer' : 'View task transaction'} <ArrowUpRight size={15} />
+            <Roll>{settlementTx ? 'View on block explorer' : 'View task transaction'} <ArrowUpRight size={15} /></Roll>
           </a>
         </section>
       </div>

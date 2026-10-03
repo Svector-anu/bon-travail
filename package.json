@@ -28,6 +28,7 @@
     "@privy-io/node": "^0.35.0",
     "@privy-io/react-auth": "^3.46.0",
     "@stripe/stripe-js": "^10.0.0",
+    "lenis": "^1.3.26",
     "lucide-react": "^1.50.0",
     "motion": "^13.5.1",
     "next": "^16.3.8",

@@ -10,6 +10,7 @@ import { FINDING_STATUS, TASK_STATUS } from '@/lib/format'
 import { getApp } from '@/server/container'
 import { ownerActor } from '@/server/owner-session'
 import { consoleSnapshot } from '@/server/queries'
+import { Roll } from '@/components/roll'
 
 export const dynamic = 'force-dynamic'
 export const metadata: Metadata = { title: 'Console' }
@@ -136,7 +137,7 @@ export default async function ConsolePage({ searchParams }: { searchParams: Prom
         {snapshot.githubError && <p className="form-error">GitHub: {snapshot.githubError}</p>}
         {snapshot.installUrl ? (
           <a className="btn btn-glass connect-github" href={snapshot.installUrl}>
-            <GithubMark /> {snapshot.repos.length + snapshot.installable.length === 0 ? 'Connect GitHub' : 'Add or remove repositories on GitHub'}
+            <Roll><GithubMark /> {snapshot.repos.length + snapshot.installable.length === 0 ? 'Connect GitHub' : 'Add or remove repositories on GitHub'}</Roll>
           </a>
         ) : (
           <ConnectRepo />

@@ -3,6 +3,7 @@
 import { LogOut, RefreshCw } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useState, type FormEvent, type ReactNode } from 'react'
+import { Roll } from './roll'
 
 export async function postJson(url: string, body: unknown = {}, method = 'POST'): Promise<Record<string, unknown>> {
   const res = await fetch(url, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
@@ -52,7 +53,7 @@ export function OwnerLogin({ error, login, enabled }: { error: string | null; lo
       </p>
       {enabled ? (
         <a className="btn btn-primary btn-wide" href="/api/auth/github/start">
-          <GithubMark /> Sign in with GitHub
+          <Roll><GithubMark /> Sign in with GitHub</Roll>
         </a>
       ) : (
         <p className="notice-line">Sign in with GitHub is not set up in this deployment yet.</p>
@@ -155,7 +156,7 @@ export function WatchPicker({ repos }: { repos: { slug: string; private: boolean
             : start())
         }
       >
-        {busy ? 'Reading GitHub...' : 'Watch'}
+        <Roll>{busy ? 'Reading GitHub...' : 'Watch'}</Roll>
       </button>
       {error && <p className="form-error">{error}</p>}
     </div>
@@ -208,7 +209,7 @@ export function ConnectRepo() {
         />
       </div>
       <button type="submit" className="btn btn-primary" disabled={busy || !repo.includes('/')}>
-        {busy ? 'Reading GitHub...' : 'Connect'}
+        <Roll>{busy ? 'Reading GitHub...' : 'Connect'}</Roll>
       </button>
       {error && <p className="form-error">{error}</p>}
     </form>
@@ -245,10 +246,10 @@ export function ActionButton({
       <span className="confirm">
         <span>{confirmText}</span>
         <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void run(() => postJson(url))}>
-          Yes
+          <Roll>Yes</Roll>
         </button>
         <button type="button" className="btn btn-glass" disabled={busy} onClick={() => setConfirming(false)}>
-          Cancel
+          <Roll>Cancel</Roll>
         </button>
         {error && <small className="form-error">{error}</small>}
       </span>

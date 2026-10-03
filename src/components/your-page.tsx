@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import type { WorkerSummary } from '@/server/queries'
 import { Ago, Countdown } from './clock'
 import { useIdentity } from './identity'
+import { Roll } from './roll'
 
 const POLL_MS = 5000
 
@@ -43,7 +44,7 @@ export function YourPage() {
             : 'Connect a wallet, or claim a task with a payout address, and your earnings show up here.'}
         </p>
         <button type="button" className="btn btn-primary" onClick={identity.signIn} disabled={!identity.ready}>
-          {identity.mode === 'privy' ? 'Sign in' : 'Connect wallet'}
+          <Roll>{identity.mode === 'privy' ? 'Sign in' : 'Connect wallet'}</Roll>
         </button>
       </div>
     )

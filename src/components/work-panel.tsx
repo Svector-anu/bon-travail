@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, type FormEvent } from 'react'
 import type { AttemptView, TaskView } from '@/domain/views'
+import { Roll } from './roll'
 
 interface Props {
   task: TaskView
@@ -62,7 +63,7 @@ export function WorkPanel({ task, attempts, claimedPrUrl, waitingFor, lastError 
   if (task.state === 'PAID' || task.state === 'REFUNDED' || task.state === 'EXPIRED') {
     body = (
       <Link className="btn btn-primary btn-wide" href={`/receipt/${task.id}`}>
-        View receipt <ArrowRight size={16} />
+        <Roll>View receipt <ArrowRight size={16} /></Roll>
       </Link>
     )
   } else if (task.state === 'DRAFT' || task.state === 'FUNDED') {
@@ -86,8 +87,8 @@ export function WorkPanel({ task, attempts, claimedPrUrl, waitingFor, lastError 
           />
         </div>
         <button type="submit" className="btn btn-primary btn-wide" disabled={busy !== null || prUrl.trim().length === 0}>
-          {busy === 'claim' ? 'Checking the PR on GitHub...' : 'Claim with this PR'}
-          {busy !== 'claim' && <GitPullRequest size={16} />}
+          <Roll>{busy === 'claim' ? 'Checking the PR on GitHub...' : 'Claim with this PR'}
+          {busy !== 'claim' && <GitPullRequest size={16} />}</Roll>
         </button>
         <p className="work-hint">
           Open a draft PR against <span className="mono">{ci.baseBranch}</span> that mentions <strong>{task.displayId}</strong>. Only{' '}
@@ -117,8 +118,8 @@ export function WorkPanel({ task, attempts, claimedPrUrl, waitingFor, lastError 
             disabled={busy !== null}
             onClick={() => void run('submit', () => post(`/api/work/${task.id}/submit`, { prUrl: claimedPrUrl }))}
           >
-            {busy === 'submit' ? 'Sending it to the tests...' : 'Ready: request verification'}
-            {busy !== 'submit' && <ArrowRight size={16} />}
+            <Roll>{busy === 'submit' ? 'Sending it to the tests...' : 'Ready: request verification'}
+            {busy !== 'submit' && <ArrowRight size={16} />}</Roll>
           </button>
         )}
         <p className="work-hint">
@@ -150,7 +151,7 @@ export function WorkPanel({ task, attempts, claimedPrUrl, waitingFor, lastError 
             disabled={busy !== null}
             onClick={() => void run('check', () => post(`/api/work/${task.id}/check`))}
           >
-            <RefreshCw size={15} className={busy === 'check' ? 'spin' : undefined} /> {busy === 'check' ? 'Checking...' : 'Check again'}
+            <Roll><RefreshCw size={15} className={busy === 'check' ? 'spin' : undefined} /> {busy === 'check' ? 'Checking...' : 'Check again'}</Roll>
           </button>
         )}
       </div>
