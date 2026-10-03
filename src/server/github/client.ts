@@ -144,19 +144,25 @@ function toRun(run: Json): GhRun {
 
 const API = 'https://api.github.com'
 
+/** Anything that can hand out a token able to read one repository. */
+export interface RepoTokenSource {
+  forRepo(owner: string, name: string): Promise<string>
+}
+
 export class RestGitHubClient implements GitHubClient {
   constructor(
-    private readonly token: string,
+    private readonly tokens: RepoTokenSource,
     private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
-  private async request(path: string, init: { accept?: string; raw?: boolean } = {}): Promise<Response> {
+  private async request(owner: string, name: string, path: string, init: { accept?: string } = {}): Promise<Response> {
+    const token = await this.tokens.forRepo(owner, name)
     let response: Response
     try {
       response = await this.fetchImpl(`${API}${path}`, {
         headers: {
           accept: init.accept ?? 'application/vnd.github+json',
-          authorization: `Bearer ${this.token}`,
+          authorization: `Bearer ${token}`,
           'user-agent': 'proofwork',
           'x-github-api-version': '2022-11-28',
         },
@@ -174,12 +180,12 @@ export class RestGitHubClient implements GitHubClient {
     return response
   }
 
-  private async json(path: string): Promise<Json> {
-    return obj(await (await this.request(path)).json())
+  private async json(owner: string, name: string, path: string): Promise<Json> {
+    return obj(await (await this.request(owner, name, path)).json())
   }
 
   async getRepo(owner: string, name: string): Promise<GhRepo> {
-    const repo = await this.json(`/repos/${owner}/${name}`)
+    const repo = await this.json(owner, name, `/repos/${owner}/${name}`)
     return {
       owner: s(obj(repo.owner).login, owner),
       name: s(repo.name, name),
@@ -190,7 +196,7 @@ export class RestGitHubClient implements GitHubClient {
   }
 
   async listWorkflows(owner: string, name: string): Promise<GhWorkflow[]> {
-    const body = await this.json(`/repos/${owner}/${name}/actions/workflows?per_page=100`)
+    const body = await this.json(owner, name, `/repos/${owner}/${name}/actions/workflows?per_page=100`)
     return list(body.workflows).map((w) => ({ id: n(w.id), name: s(w.name), path: s(w.path), state: s(w.state) }))
   }
 
@@ -201,13 +207,15 @@ export class RestGitHubClient implements GitHubClient {
     if (query.event) params.set('event', query.event)
     if (query.status) params.set('status', query.status)
     const body = await this.json(
+      owner,
+      name,
       `/repos/${owner}/${name}/actions/workflows/${encodeURIComponent(String(workflow))}/runs?${params}`,
     )
     return list(body.workflow_runs).map(toRun)
   }
 
   async listJobs(owner: string, name: string, runId: number): Promise<GhJob[]> {
-    const body = await this.json(`/repos/${owner}/${name}/actions/runs/${runId}/jobs?filter=latest&per_page=100`)
+    const body = await this.json(owner, name, `/repos/${owner}/${name}/actions/runs/${runId}/jobs?filter=latest&per_page=100`)
     return list(body.jobs).map((job) => ({
       id: n(job.id),
       name: s(job.name),
@@ -223,13 +231,15 @@ export class RestGitHubClient implements GitHubClient {
   }
 
   async jobLog(owner: string, name: string, jobId: number): Promise<string> {
-    const response = await this.request(`/repos/${owner}/${name}/actions/jobs/${jobId}/logs`)
+    const response = await this.request(owner, name, `/repos/${owner}/${name}/actions/jobs/${jobId}/logs`)
     return response.text()
   }
 
   async fileAt(owner: string, name: string, path: string, ref: string): Promise<string | null> {
     try {
       const response = await this.request(
+        owner,
+        name,
         `/repos/${owner}/${name}/contents/${path.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(ref)}`,
         { accept: 'application/vnd.github.raw+json' },
       )
@@ -241,7 +251,7 @@ export class RestGitHubClient implements GitHubClient {
   }
 
   async compare(owner: string, name: string, base: string, head: string): Promise<GhCompare> {
-    const body = await this.json(`/repos/${owner}/${name}/compare/${base}...${head}`)
+    const body = await this.json(owner, name, `/repos/${owner}/${name}/compare/${base}...${head}`)
     return {
       htmlUrl: s(body.html_url),
       totalCommits: n(body.total_commits),
@@ -259,7 +269,7 @@ export class RestGitHubClient implements GitHubClient {
   }
 
   async getPull(owner: string, name: string, number: number): Promise<GhPull> {
-    const pr = await this.json(`/repos/${owner}/${name}/pulls/${number}`)
+    const pr = await this.json(owner, name, `/repos/${owner}/${name}/pulls/${number}`)
     const base = obj(pr.base)
     return {
       number: n(pr.number),
@@ -280,7 +290,7 @@ export class RestGitHubClient implements GitHubClient {
   async listPullFiles(owner: string, name: string, number: number): Promise<string[]> {
     const files: string[] = []
     for (let page = 1; page <= 30; page++) {
-      const response = await this.request(`/repos/${owner}/${name}/pulls/${number}/files?per_page=100&page=${page}`)
+      const response = await this.request(owner, name, `/repos/${owner}/${name}/pulls/${number}/files?per_page=100&page=${page}`)
       const batch = list(await response.json())
       for (const file of batch) {
         files.push(s(file.filename))

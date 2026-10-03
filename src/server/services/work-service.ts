@@ -127,7 +127,9 @@ export class WorkService {
     try {
       found = await gh.getRepo(owner, name)
     } catch (error) {
-      if (error instanceof GitHubNotFoundError) throw new DomainError('NOT_FOUND', `GitHub has no repository ${owner}/${name} visible to this token`)
+      if (error instanceof GitHubNotFoundError) {
+        throw new DomainError('NOT_FOUND', `${owner}/${name} is not visible to Bon Travail. Install the GitHub App on it first.`)
+      }
       throw error
     }
     const workflows = (await gh.listWorkflows(found.owner, found.name)).filter((w) => w.state === 'active')

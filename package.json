@@ -17,7 +17,8 @@
     "agent:tick": "tsx scripts/agent-tick.ts",
     "agent:loop": "tsx scripts/agent-loop.ts",
     "demo:seed": "tsx scripts/demo-seed.ts",
-    "arc:escrow": "tsx scripts/arc-studio-escrow.ts"
+    "arc:escrow": "tsx scripts/arc-studio-escrow.ts",
+    "github:app": "tsx scripts/github-app-setup.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",

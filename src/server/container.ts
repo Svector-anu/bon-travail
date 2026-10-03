@@ -4,7 +4,8 @@ import type { ChainReader } from './chain/chain-reader'
 import { FixtureChainReader } from './chain/fixture-reader'
 import { systemClock, type Clock } from './clock'
 import { loadConfig, type AppConfig } from './config'
-import { RestGitHubClient, type GitHubClient } from './github/client'
+import { GitHubApp, StaticTokenSource } from './github/app'
+import { RestGitHubClient, type GitHubClient, type RepoTokenSource } from './github/client'
 import { OpenIdentityVerifier, PrivyIdentityVerifier, type IdentityVerifier } from './identity'
 import { ArcEscrowRail, ArcPaymentRail } from './payments/arc-rail'
 import { LedgerPaymentProvider } from './payments/ledger-provider'
@@ -22,6 +23,7 @@ import { VerifierRegistry } from './verification/verifier'
 
 export interface App {
   config: AppConfig
+  githubApp: GitHubApp | null
   store: Store
   watch: WatchStore
   chain: ChainReader
@@ -86,7 +88,9 @@ export function createApp(config: AppConfig, store: Store, overrides: AppOverrid
   const identity = overrides.identity ?? defaultIdentity(config)
   const watch = new WatchStore(store.database, store.transactions)
   const chain = overrides.chain ?? defaultChain(config)
-  const github = overrides.github !== undefined ? overrides.github : config.githubToken ? new RestGitHubClient(config.githubToken) : null
+  const githubApp = config.githubApp ? new GitHubApp(config.githubApp) : null
+  const tokens: RepoTokenSource | null = githubApp ?? (config.githubToken ? new StaticTokenSource(config.githubToken) : null)
+  const github = overrides.github !== undefined ? overrides.github : tokens ? new RestGitHubClient(tokens) : null
   const payments = new LedgerPaymentProvider(
     store,
     overrides.rail ?? defaultRail(config),
@@ -136,7 +140,7 @@ export function createApp(config: AppConfig, store: Store, overrides: AppOverrid
     },
     github !== null,
   )
-  return { config, store, watch, chain, github, payments, tasks, work, agent, clock, identity }
+  return { config, githubApp, store, watch, chain, github, payments, tasks, work, agent, clock, identity }
 }
 
 const globalForStore = globalThis as typeof globalThis & { proofworkStore?: Promise<Store> }

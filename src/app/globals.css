@@ -1934,6 +1934,47 @@ button.text-link:disabled {
   overflow-wrap: anywhere;
 }
 
+.signed-in {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.connect-github {
+  justify-self: start;
+}
+
+.repo-row.installable {
+  border-style: dashed;
+}
+
+.repo-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--claimed);
+}
+
+.repo-row.installable strong {
+  font-weight: 400;
+}
+
+.watch-pick {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.watch-pick .input {
+  height: 42px;
+  max-width: 320px;
+}
+
+.repo-row .form-error {
+  grid-column: 2 / -1;
+}
+
 .check-now {
   display: grid;
   justify-items: end;

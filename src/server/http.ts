@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'node:crypto'
 import { getApp } from './container'
 import { DomainError } from './errors'
-import { requireOwner } from './owner'
+import { ownerAuth, requireOwner } from './owner'
 
 export function json(body: unknown, status = 200): Response {
   return Response.json(body, { status, headers: { 'cache-control': 'no-store' } })
@@ -78,7 +78,7 @@ export function field(body: Record<string, unknown>, name: string, maxLength = 2
 /** Owner-only: returns the actor name recorded on every decision. */
 export async function requireOwnerRequest(request: Request): Promise<string> {
   const app = await getApp()
-  return requireOwner(request, app.config.ownerAccessToken, app.clock.now())
+  return requireOwner(request, ownerAuth(app.config), app.clock.now())
 }
 
 export function optionalField(body: Record<string, unknown>, name: string, maxLength = 200): string | undefined {

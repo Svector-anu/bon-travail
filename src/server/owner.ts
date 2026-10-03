@@ -1,9 +1,23 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
+import type { AppConfig } from './config'
 import { DomainError } from './errors'
 
 export const OWNER_COOKIE = 'pw_owner'
 export const OWNER_SESSION_MS = 7 * 24 * 60 * 60 * 1000
-const OWNER_ACTOR = 'owner'
+
+/** How the console is protected in this deployment. Every field unset = console off. */
+export interface OwnerAuth {
+  /** Bearer token for scripts and CI. */
+  accessToken?: string
+  /** Signs session cookies. */
+  sessionSecret?: string
+  /** GitHub logins allowed into the console (lowercase). */
+  githubLogins: readonly string[]
+}
+
+export function ownerAuth(config: Pick<AppConfig, 'ownerAccessToken' | 'sessionSecret' | 'ownerGithubLogins'>): OwnerAuth {
+  return { accessToken: config.ownerAccessToken, sessionSecret: config.sessionSecret, githubLogins: config.ownerGithubLogins }
+}
 
 function safeEqual(a: string, b: string): boolean {
   const left = Buffer.from(a)
@@ -11,29 +25,47 @@ function safeEqual(a: string, b: string): boolean {
   return left.length === right.length && timingSafeEqual(left, right)
 }
 
-function sessionKey(ownerToken: string): Buffer {
-  return createHash('sha256').update(`proofwork-owner-session:${ownerToken}`).digest()
+function sessionKey(secret: string): Buffer {
+  return createHash('sha256').update(`proofwork-owner-session:${secret}`).digest()
 }
 
-/** A session is "v1.<issuedAt>.<hmac>"; rotating OWNER_ACCESS_TOKEN invalidates every session. */
-export function issueOwnerSession(ownerToken: string, now: number): string {
-  const issuedAt = String(now)
-  const mac = createHmac('sha256', sessionKey(ownerToken)).update(issuedAt).digest('hex')
-  return `v1.${issuedAt}.${mac}`
+function mac(secret: string, body: string): string {
+  return createHmac('sha256', sessionKey(secret)).update(body).digest('hex')
 }
 
-export function verifyOwnerSession(ownerToken: string, value: string | undefined, now: number): boolean {
-  if (!value) return false
-  const [version, issuedAt, mac] = value.split('.')
-  if (version !== 'v1' || !issuedAt || !mac || !/^\d+$/.test(issuedAt)) return false
+/**
+ * A session is "v2.<issuedAt>.<actor, base64url>.<hmac>". The actor is who
+ * signed in ("github:octocat"); rotating the session secret ends every session.
+ */
+export function issueOwnerSession(secret: string, now: number, actor: string): string {
+  const body = `${now}.${Buffer.from(actor).toString('base64url')}`
+  return `v2.${body}.${mac(secret, body)}`
+}
+
+/** Returns the signed-in actor, or null for anything missing, tampered or expired. */
+export function verifyOwnerSession(secret: string, value: string | undefined, now: number): string | null {
+  if (!value) return null
+  const [version, issuedAt, actor64, signature] = value.split('.')
+  if (version !== 'v2' || !issuedAt || !actor64 || !signature || !/^\d+$/.test(issuedAt)) return null
   const age = now - Number(issuedAt)
-  if (age < 0 || age > OWNER_SESSION_MS) return false
-  const expected = createHmac('sha256', sessionKey(ownerToken)).update(issuedAt).digest('hex')
-  return safeEqual(mac, expected)
+  if (age < 0 || age > OWNER_SESSION_MS) return null
+  if (!safeEqual(signature, mac(secret, `${issuedAt}.${actor64}`))) return null
+  return Buffer.from(actor64, 'base64url').toString('utf8')
 }
 
 export function ownerTokenMatches(ownerToken: string, presented: string): boolean {
   return safeEqual(presented, ownerToken)
+}
+
+/** A GitHub actor stays an owner only while their login is on the list. */
+export function actorAllowed(actor: string, auth: OwnerAuth): boolean {
+  if (actor === 'owner') return Boolean(auth.accessToken)
+  if (actor.startsWith('github:')) return auth.githubLogins.includes(actor.slice('github:'.length).toLowerCase())
+  return false
+}
+
+export function ownerConsoleEnabled(auth: OwnerAuth): boolean {
+  return Boolean(auth.accessToken) || (Boolean(auth.sessionSecret) && auth.githubLogins.length > 0)
 }
 
 function originHost(origin: string): string | null {
@@ -44,7 +76,7 @@ function originHost(origin: string): string | null {
   }
 }
 
-function readCookie(request: Request, name: string): string | undefined {
+export function readCookie(request: Request, name: string): string | undefined {
   const cookie = request.headers.get('cookie') ?? ''
   const match = cookie
     .split(';')
@@ -55,21 +87,22 @@ function readCookie(request: Request, name: string): string | undefined {
 
 /**
  * Engineer-only endpoints decide what work leaves the team, for how much and
- * to whom, so they fail closed: without OWNER_ACCESS_TOKEN nobody is an owner.
- * Browsers authenticate with the session cookie, and a cookie-authenticated
- * write must come from this site's own pages; scripts may send the token as a
- * bearer instead.
+ * to whom, so they fail closed. Browsers authenticate with the session cookie
+ * from "Sign in with GitHub"; a cookie-authenticated write must come from this
+ * site's own pages. Scripts may send OWNER_ACCESS_TOKEN as a bearer instead.
+ * Returns the actor recorded on every decision.
  */
-export function requireOwner(request: Request, ownerToken: string | undefined, now: number): string {
-  if (!ownerToken) throw new DomainError('UNAVAILABLE', 'OWNER_ACCESS_TOKEN is not configured; the engineer console is disabled')
+export function requireOwner(request: Request, auth: OwnerAuth, now: number): string {
+  if (!ownerConsoleEnabled(auth)) {
+    throw new DomainError('UNAVAILABLE', 'The engineer console is not configured in this deployment')
+  }
   const header = request.headers.get('authorization') ?? ''
   if (header.startsWith('Bearer ')) {
-    if (ownerTokenMatches(ownerToken, header.slice('Bearer '.length))) return OWNER_ACTOR
+    if (auth.accessToken && ownerTokenMatches(auth.accessToken, header.slice('Bearer '.length))) return 'owner'
     throw new DomainError('UNAUTHORIZED', 'Invalid owner token')
   }
-  if (!verifyOwnerSession(ownerToken, readCookie(request, OWNER_COOKIE), now)) {
-    throw new DomainError('UNAUTHORIZED', 'Sign in to the engineer console')
-  }
+  const actor = auth.sessionSecret ? verifyOwnerSession(auth.sessionSecret, readCookie(request, OWNER_COOKIE), now) : null
+  if (!actor || !actorAllowed(actor, auth)) throw new DomainError('UNAUTHORIZED', 'Sign in to the engineer console')
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     const origin = request.headers.get('origin')
     const host = request.headers.get('x-forwarded-host') ?? request.headers.get('host')
@@ -77,5 +110,5 @@ export function requireOwner(request: Request, ownerToken: string | undefined, n
       throw new DomainError('FORBIDDEN', 'Owner actions must come from the console itself')
     }
   }
-  return OWNER_ACTOR
+  return actor
 }

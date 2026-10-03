@@ -4,10 +4,11 @@ import Link from 'next/link'
 import type { FindingSummaryView } from '@/domain/views'
 import { AutoRefresh } from '@/components/auto-refresh'
 import { Ago } from '@/components/clock'
-import { CheckNow, ConnectRepo, OwnerLogin, SignOut } from '@/components/owner-actions'
+import { CheckNow, ConnectRepo, GithubMark, OwnerLogin, SignOut, WatchRepo } from '@/components/owner-actions'
 import { Reveal } from '@/components/reveal'
 import { FINDING_STATUS, TASK_STATUS } from '@/lib/format'
-import { isOwnerSession } from '@/server/owner-session'
+import { getApp } from '@/server/container'
+import { ownerActor } from '@/server/owner-session'
 import { consoleSnapshot } from '@/server/queries'
 
 export const dynamic = 'force-dynamic'
@@ -33,11 +34,14 @@ function FindingRow({ finding, extra }: { finding: FindingSummaryView; extra?: R
   )
 }
 
-export default async function ConsolePage() {
-  if (!(await isOwnerSession())) {
+export default async function ConsolePage({ searchParams }: { searchParams: Promise<{ error?: string; login?: string }> }) {
+  const actor = await ownerActor()
+  if (!actor) {
+    const { error, login } = await searchParams
+    const { config } = await getApp()
     return (
       <Reveal>
-        <OwnerLogin />
+        <OwnerLogin error={error ?? null} login={login ?? null} enabled={Boolean(config.githubApp && config.ownerGithubLogins.length > 0)} />
       </Reveal>
     )
   }
@@ -51,7 +55,10 @@ export default async function ConsolePage() {
           <h1>Console</h1>
           <p>What your agents found, and what you decided. Nothing leaves the team until you approve it.</p>
         </div>
-        <SignOut />
+        <div className="signed-in">
+          {actor.startsWith('github:') && <span className="muted">@{actor.slice('github:'.length)}</span>}
+          <SignOut />
+        </div>
       </div>
 
       {!snapshot.githubEnabled && (
@@ -125,8 +132,20 @@ export default async function ConsolePage() {
             <CheckNow repoId={repo.id} />
           </div>
         ))}
-        <ConnectRepo />
-        <p className="muted console-note">Read-only: Bon Travail reads workflow runs, logs and pull requests. It never writes to your repository.</p>
+        {snapshot.installable.map((repo) => (
+          <WatchRepo key={repo.slug} slug={repo.slug} isPrivate={repo.private} />
+        ))}
+        {snapshot.githubError && <p className="form-error">GitHub: {snapshot.githubError}</p>}
+        {snapshot.installUrl ? (
+          <a className="btn btn-glass connect-github" href={snapshot.installUrl}>
+            <GithubMark /> {snapshot.repos.length + snapshot.installable.length === 0 ? 'Connect GitHub' : 'Add or remove repositories on GitHub'}
+          </a>
+        ) : (
+          <ConnectRepo />
+        )}
+        <p className="muted console-note">
+          Read-only: Bon Travail can read workflow runs, logs and pull requests on the repositories you choose. It never writes to them.
+        </p>
       </section>
 
       {(snapshot.watching.length > 0 || snapshot.settled.length > 0) && (

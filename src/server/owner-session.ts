@@ -1,11 +1,16 @@
 import { cookies } from 'next/headers'
 import { getApp } from './container'
-import { OWNER_COOKIE, verifyOwnerSession } from './owner'
+import { OWNER_COOKIE, actorAllowed, ownerAuth, verifyOwnerSession } from './owner'
 
-/** For server components: is the person viewing this page the signed-in engineer? */
-export async function isOwnerSession(): Promise<boolean> {
+/** For server components: the signed-in engineer ("github:octocat"), or null. */
+export async function ownerActor(): Promise<string | null> {
   const app = await getApp()
-  const token = app.config.ownerAccessToken
-  if (!token) return false
-  return verifyOwnerSession(token, (await cookies()).get(OWNER_COOKIE)?.value, app.clock.now())
+  const auth = ownerAuth(app.config)
+  if (!auth.sessionSecret) return null
+  const actor = verifyOwnerSession(auth.sessionSecret, (await cookies()).get(OWNER_COOKIE)?.value, app.clock.now())
+  return actor && actorAllowed(actor, auth) ? actor : null
+}
+
+export async function isOwnerSession(): Promise<boolean> {
+  return (await ownerActor()) !== null
 }

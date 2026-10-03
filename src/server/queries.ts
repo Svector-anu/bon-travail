@@ -151,6 +151,10 @@ export async function homeSnapshot(): Promise<HomeSnapshot> {
 
 export interface ConsoleSnapshot {
   repos: RepoView[]
+  /** Repositories the GitHub App is installed on and not watched yet. */
+  installable: { slug: string; private: boolean }[]
+  installUrl: string | null
+  githubError: string | null
   needsDecision: FindingSummaryView[]
   watching: FindingSummaryView[]
   inFlight: { finding: FindingSummaryView; task: TaskView | null }[]
@@ -181,8 +185,23 @@ export async function consoleSnapshot(): Promise<ConsoleSnapshot> {
         }
       }),
   )
+  let installable: ConsoleSnapshot['installable'] = []
+  let githubError: string | null = null
+  if (app.githubApp) {
+    try {
+      const watched = new Set(repos.filter((r) => r.active).map((r) => r.id))
+      installable = (await app.githubApp.listRepos())
+        .filter((r) => !watched.has(`${r.owner}/${r.name}`.toLowerCase()))
+        .map((r) => ({ slug: `${r.owner}/${r.name}`, private: r.private }))
+    } catch (error) {
+      githubError = error instanceof Error ? error.message : 'GitHub is unreachable'
+    }
+  }
   return {
     repos: repos.map(toRepoView),
+    installable,
+    installUrl: app.githubApp?.installUrl ?? null,
+    githubError,
     needsDecision: summary(NEEDS_DECISION),
     watching: summary(['watching']),
     inFlight,

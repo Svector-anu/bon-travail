@@ -26,6 +26,10 @@ export interface AppConfig {
   privyAppSecret: string | undefined
   privyVerificationKey: string | undefined
   githubToken: string | undefined
+  githubApp: { appId: string; privateKey: string; slug: string; clientId: string; clientSecret: string } | undefined
+  /** Lowercase GitHub logins allowed into the engineer console. */
+  ownerGithubLogins: string[]
+  sessionSecret: string | undefined
   ownerAccessToken: string | undefined
   cronSecret: string | undefined
   observeIntervalMs: number
@@ -54,6 +58,21 @@ function secret(env: Env, name: string): string | undefined {
   const value = env[name] || undefined
   if (value !== undefined && value.length < 32) throw new Error(`${name} must be at least 32 characters`)
   return value
+}
+
+/** All five GitHub App values, or none. A partial app config is a deployment mistake, not a fallback. */
+function githubApp(env: Env): AppConfig['githubApp'] {
+  const values = {
+    appId: env.GITHUB_APP_ID,
+    privateKey: env.GITHUB_APP_PRIVATE_KEY,
+    slug: env.GITHUB_APP_SLUG,
+    clientId: env.GITHUB_APP_CLIENT_ID,
+    clientSecret: env.GITHUB_APP_CLIENT_SECRET,
+  }
+  const set = Object.values(values).filter(Boolean).length
+  if (set === 0) return undefined
+  if (set !== 5) throw new Error('Set all of GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY, GITHUB_APP_SLUG, GITHUB_APP_CLIENT_ID and GITHUB_APP_CLIENT_SECRET, or none')
+  return values as NonNullable<AppConfig['githubApp']>
 }
 
 function oneOf<T extends string>(env: Env, name: string, allowed: readonly T[], fallback?: T): T {
@@ -93,6 +112,12 @@ export function loadConfig(env: Env = process.env): AppConfig {
     privyAppSecret: env.PRIVY_APP_SECRET || undefined,
     privyVerificationKey: env.PRIVY_VERIFICATION_KEY || undefined,
     githubToken: env.GITHUB_TOKEN || undefined,
+    githubApp: githubApp(env),
+    ownerGithubLogins: (env.OWNER_GITHUB_LOGINS ?? '')
+      .split(',')
+      .map((login) => login.trim().replace(/^@/, '').toLowerCase())
+      .filter(Boolean),
+    sessionSecret: secret(env, 'SESSION_SECRET') ?? secret(env, 'OWNER_ACCESS_TOKEN'),
     ownerAccessToken: secret(env, 'OWNER_ACCESS_TOKEN'),
     cronSecret: secret(env, 'CRON_SECRET'),
     observeIntervalMs: nonNegativeInt(env, 'OBSERVE_INTERVAL_SECONDS', 60) * 1000,
