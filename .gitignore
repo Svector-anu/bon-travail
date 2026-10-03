@@ -9,3 +9,6 @@ next-env.d.ts
 coverage
 .DS_Store
 /memory
+.vercel
+.env*
+!.env.example
