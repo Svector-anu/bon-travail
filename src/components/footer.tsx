@@ -12,6 +12,9 @@ const LINKS = [
   { href: 'https://github.com/apps/bon-travail', label: 'github', external: true },
 ] as const
 
+/** Resting values for reduced motion: the server renders the scroll-reveal start, so "no style" would leave it hidden. */
+const STILL = { opacity: 1, y: 0, scale: 1 }
+
 /**
  * The last scene of every page: the monolith at sunset, with the product's
  * one-line promise set over the sky. As it scrolls into view the landscape
@@ -30,7 +33,7 @@ export function Footer() {
 
   return (
     <footer ref={ref} className="scene-footer">
-      <motion.div className="scene-media" style={reduce ? undefined : { y: imageY, scale: imageScale }} aria-hidden>
+      <motion.div className="scene-media" style={reduce ? STILL : { y: imageY, scale: imageScale }} aria-hidden>
         <picture>
           <source media="(max-width: 720px)" srcSet="/scenes/footer-scene-sm.jpg" />
           <img src="/scenes/footer-scene.jpg" alt="" loading="lazy" decoding="async" />
@@ -38,7 +41,7 @@ export function Footer() {
       </motion.div>
       <div className="scene-shade" aria-hidden />
 
-      <motion.div className="scene-copy" style={reduce ? undefined : { opacity: copyOpacity, y: copyY }}>
+      <motion.div className="scene-copy" style={reduce ? STILL : { opacity: copyOpacity, y: copyY }}>
         <Link href="/" className="scene-brand">
           <img src="/mascots/seedling.png" alt="" />
           bon travail
@@ -64,7 +67,7 @@ export function Footer() {
         </p>
       </motion.div>
 
-      <motion.div className="scene-meta" style={reduce ? undefined : { opacity: metaOpacity }}>
+      <motion.div className="scene-meta" style={reduce ? { opacity: 1 } : { opacity: metaOpacity }}>
         <span>built with aeon</span>
         <span>settled on arc</span>
         <span>work, verified.</span>
