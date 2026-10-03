@@ -10,36 +10,18 @@ text, no logos, no people, no watermarks. Export JPEG at ~85% quality.
 
 | File | Size | Used on |
 |---|---|---|
-| `hero-field.jpg` | 2400 x 1500 (landscape, subject in right half) | Home hero, full bleed |
 | `task-stage.jpg` | 2400 x 800 (wide band) | Task detail, scene under the Claim button |
 | `monolith-tall.jpg` | 900 x 1700 (portrait) | Submit screen, Agent page |
 | `monolith-refund.jpg` | 900 x 1100 | Refund receipt, behind the amount |
 | `glass-ring.jpg` | 800 x 600 | Paid receipt proof object |
 
-## hero-field.jpg
+## Home hero: proofwork-meadow.mp4
 
-The current file is a close-up cropped from the reference board, so no crop can
-produce the reference composition. Regenerate it as a wide scene:
-
-- 16:9, at least 2400 x 1350, cinematic landscape photograph
-- camera pulled far back, low-ish horizon, environmental depth
-- an old beige Macintosh-style computer, small and distant, standing in the grass
-- computer around right-center (about 62-70% across, horizon on the lower third),
-  roughly 20-30% of the image height
-- at least the top half is open blue sky with soft warm clouds, brightest upper right
-- grassy field with small wildflowers running across the full width of the foreground
-- warm low sunlight from the right, soft rim light on the computer
-- left 40% calm (sky and grass only) so the headline can sit there
-- no close-up, no UI, no text, no logos, no people
-
-> Wide cinematic 16:9 landscape photograph at golden hour. A vast grassy meadow
-> with small white and lilac wildflowers stretches across the whole foreground.
-> Far away, slightly right of center, a lone beige 1980s all-in-one personal
-> computer stands in the grass, small in the frame. Above, a huge open blue sky
-> with soft warm clouds fills more than half the image, brightest toward the
-> upper right where low sunlight rims the computer. The left side is calm, open
-> sky and grass. Camera pulled far back, shallow depth of field on the
-> foreground grass, 35mm film look, quiet and surreal. No text, no people.
+The landing hero is a video now: `public/scenes/proofwork-meadow.mp4` (1920x1080,
+desktop) and `proofwork-meadow-sm.mp4` (1280x720, phones), both cut from the
+supplied 8 s clip as a forward-then-reverse 16 s ping-pong so the loop has no
+jump, H.264 with faststart and no audio. `proofwork-meadow.jpg` is its first
+frame, used as the poster and as the fallback when video cannot play.
 
 ## task-stage.jpg
 

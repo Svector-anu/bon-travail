@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { shortAddress } from '@/domain/address'
 import { AutoRefresh } from '@/components/auto-refresh'
 import { Ago, Countdown } from '@/components/clock'
+import { HeroVideo } from '@/components/hero-video'
 import { Reveal } from '@/components/reveal'
 import { homeSnapshot, recentReceipts } from '@/server/queries'
 
@@ -26,7 +27,7 @@ export default function HomePage() {
 
       <section className="bleed hero">
         <div className="hero-media" aria-hidden>
-          <img src="/scenes/hero-field.jpg" alt="" />
+          <HeroVideo />
         </div>
         <div className="hero-copy">
           <span className="label">Autonomous work · Real payments</span>
