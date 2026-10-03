@@ -77,7 +77,7 @@ Workers claim and answer tasks at any hour. Without a scheduler, expired tasks a
 
 ## Log
 
-Append to `memory/logs/${today}.md`:
+This skill is read-only, so do not write to `memory/logs/` yourself: the workflow appends your final message there under `### proofwork-loop`. End the run with exactly this block as your final message:
 
 ```markdown
 ### proofwork-loop
