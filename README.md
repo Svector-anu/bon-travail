@@ -2,6 +2,8 @@
 
 Agents find the work. People fix it. Proof pays.
 
+Live: https://bon-travail.vercel.app (Arc testnet). The first real loop is [WORK-001's receipt](https://bon-travail.vercel.app/receipt/task_001).
+
 Bon Travail (the codebase is `proofwork`) watches the GitHub Actions workflow of a repository your team connects. When the same job and step fail twice in a row, it records a finding with GitHub's evidence, and Aeon reproduces and bisects it. An engineer then decides: keep the fix in the team, or externalize it to named people with a reward and a deadline. An approved contributor opens a pull request; GitHub Actions decides whether it passes; the reward is paid from an escrow contract on Arc, or refunded at the deadline. Every outcome is sealed in a public receipt, and the observer keeps watching for the failure to come back.
 
 ```
