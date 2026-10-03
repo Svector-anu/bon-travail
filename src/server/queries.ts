@@ -283,7 +283,8 @@ export async function findingsForInvestigation(statuses: FindingStatus[]) {
         lastFailedRunUrl: f.lastFailedRunUrl,
         lastGreenSha: f.regression?.lastGreenSha ?? null,
         regressionCommits: f.regression?.commits ?? [],
-        alreadyInvestigated: f.investigation !== null,
+        // An investigation older than the latest recurrence explains the previous episode, not this one.
+        alreadyInvestigated: f.investigation !== null && f.investigation.submittedAt > (f.lastRecurrenceAt ?? 0),
         recurrenceCount: f.recurrenceCount,
       }
     }),

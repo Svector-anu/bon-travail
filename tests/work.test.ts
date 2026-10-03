@@ -122,6 +122,21 @@ describe('observing CI', () => {
     expect(await app.watch.listFindings()).toHaveLength(1)
   })
 
+  it('starts a new evidence window when a fixed failure comes back', async () => {
+    // #given a finding fixed at d1 that fails again at e1
+    const { app, github, repo, finding } = await watched()
+    github.addRun({ sha: sha('d1'), at: T0 - HOUR, conclusion: 'success' })
+    await app.work.observe(repo)
+    github.addRun({ sha: sha('e1'), at: T0 - HOUR / 2, conclusion: 'failure' })
+    // #when
+    await app.work.observe(repo)
+    // #then the episode runs from the fix to the new failure
+    expect(await app.watch.requireFinding(finding.id)).toMatchObject({
+      firstFailedSha: sha('e1'),
+      regression: { lastGreenSha: sha('d1'), firstRedSha: sha('e1') },
+    })
+  })
+
   it('keeps an append-only history of the finding', async () => {
     // #given a finding
     const { app, finding } = await watched()

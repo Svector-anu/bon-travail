@@ -225,7 +225,18 @@ export class Observer {
         lastFailedRunId: run.id,
         lastFailedAt: run.createdAt,
         lastFailedRunUrl: run.htmlUrl,
-        ...(recurring ? { recurrenceCount: existing.recurrenceCount + 1, lastRecurrenceAt: run.createdAt } : {}),
+        // A recurrence starts a new failure episode: the evidence window and
+        // Aeon's reproduction run from the fix's green commit to this red one.
+        // The original episode stays in the finding's event history.
+        ...(recurring
+          ? {
+              recurrenceCount: existing.recurrenceCount + 1,
+              lastRecurrenceAt: run.createdAt,
+              firstFailedRunId: run.id,
+              firstFailedSha: run.headSha,
+              firstFailedAt: run.createdAt,
+            }
+          : {}),
       },
     })
     if (recurring) {

@@ -90,6 +90,9 @@ function rowToFinding(row: Row): FindingRecord {
 type FindingPatch = Partial<
   Pick<
     FindingRecord,
+    | 'firstFailedRunId'
+    | 'firstFailedSha'
+    | 'firstFailedAt'
     | 'failureCount'
     | 'lastFailedRunId'
     | 'lastFailedAt'
@@ -110,6 +113,9 @@ type FindingPatch = Partial<
 >
 
 const FINDING_COLUMNS: Record<keyof FindingPatch, string> = {
+  firstFailedRunId: 'first_failed_run_id',
+  firstFailedSha: 'first_failed_sha',
+  firstFailedAt: 'first_failed_at',
   failureCount: 'failure_count',
   lastFailedRunId: 'last_failed_run_id',
   lastFailedAt: 'last_failed_at',
