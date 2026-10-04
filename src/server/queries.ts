@@ -1,5 +1,5 @@
 import { checkAddress } from '@/domain/address'
-import { NEEDS_DECISION, type FindingStatus } from '@/domain/findings'
+import { investigationIsCurrent, NEEDS_DECISION, type FindingStatus } from '@/domain/findings'
 import { formatUsdc } from '@/domain/money'
 import { isTerminal } from '@/domain/task-state'
 import { TASK_KIND_CI_FIX, type TaskKind, type TaskRecord } from '@/domain/types'
@@ -233,7 +233,7 @@ export async function findingsForInvestigation(statuses: FindingStatus[]) {
         lastGreenSha: f.regression?.lastGreenSha ?? null,
         regressionCommits: f.regression?.commits ?? [],
         // An investigation older than the latest recurrence explains the previous episode, not this one.
-        alreadyInvestigated: f.investigation !== null && f.investigation.submittedAt > (f.lastRecurrenceAt ?? 0),
+        alreadyInvestigated: investigationIsCurrent(f),
         recurrenceCount: f.recurrenceCount,
       }
     }),

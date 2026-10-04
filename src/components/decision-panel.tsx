@@ -1,6 +1,6 @@
 'use client'
 
-import { Plus, Send, Trash2 } from 'lucide-react'
+import { ArrowRight, Plus, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { ActionButton, postJson, useAction } from './owner-actions'
 import { Roll } from './roll'
@@ -71,26 +71,38 @@ export function DecisionPanel({ findingId, canDecide, canExternalize, maxReward,
   if (!canDecide && !canExternalize) return null
 
   return (
-    <section className="panel decision">
-      <div className="panel-title">
-        <span className="label">Your decision</span>
-      </div>
+    <section className="cand-decide" aria-label="Your decision">
+      <span className="label">Your decision</span>
       {!open ? (
-        <div className="decision-actions">
-          {canExternalize && (
-            <button type="button" className="btn btn-primary" onClick={() => setOpen(true)}>
-              <Roll><Send size={15} /> Hand it to a human</Roll>
-            </button>
-          )}
+        <>
+          <div className="cand-choices">
+            {canDecide && (
+              <div className="cand-choice">
+                <h2>Keep it internal</h2>
+                <p>Your team fixes it. Nothing leaves the company, no money moves, and Aeon tells you when it is green again.</p>
+                <ActionButton url={`/api/owner/findings/${findingId}/internal`}>Keep it internal</ActionButton>
+              </div>
+            )}
+            {canExternalize && (
+              <div className="cand-choice primary">
+                <h2>Hand it to a human</h2>
+                <p>You set the reward and the deadline and name who may take it. The money is held until your tests pass, and comes back if they do not.</p>
+                <button type="button" className="btn btn-primary" onClick={() => setOpen(true)}>
+                  <Roll>
+                    Externalize this work <ArrowRight size={15} aria-hidden />
+                  </Roll>
+                </button>
+              </div>
+            )}
+          </div>
           {canDecide && (
-            <ActionButton url={`/api/owner/findings/${findingId}/internal`}>Keep it internal</ActionButton>
+            <div className="cand-dismiss">
+              <ActionButton url={`/api/owner/findings/${findingId}/dismiss`} className="text-link" confirmText="Dismiss this finding?">
+                Not worth fixing: dismiss
+              </ActionButton>
+            </div>
           )}
-          {canDecide && (
-            <ActionButton url={`/api/owner/findings/${findingId}/dismiss`} className="text-link" confirmText="Dismiss this finding?">
-              Dismiss
-            </ActionButton>
-          )}
-        </div>
+        </>
       ) : (
         <form className="externalize" onSubmit={onSubmit}>
           <div className="field-row">

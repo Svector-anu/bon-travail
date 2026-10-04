@@ -6,6 +6,7 @@ import { AutoRefresh } from '@/components/auto-refresh'
 import { Ago } from '@/components/clock'
 import { CheckNow, ConnectRepo, GithubMark, OwnerLogin, SignOut, WatchPicker } from '@/components/owner-actions'
 import { Reveal } from '@/components/reveal'
+import { candidateLabel } from '@/lib/candidate'
 import { FINDING_STATUS, TASK_STATUS } from '@/lib/format'
 import { getApp } from '@/server/container'
 import { ownerActor } from '@/server/owner-session'
@@ -31,6 +32,34 @@ function FindingRow({ finding, extra }: { finding: FindingSummaryView; extra?: R
       </small>
       {extra}
       <ArrowRight size={16} className="go" aria-hidden />
+    </Link>
+  )
+}
+
+/** A candidate waiting on the engineer: what failed, and what Aeon already worked out. */
+function CandidateCard({ finding }: { finding: FindingSummaryView }) {
+  return (
+    <Link href={`/console/findings/${finding.id}`} className="cand-card">
+      <span className="label">{candidateLabel(finding)}</span>
+      <h3>
+        {finding.jobName} <span aria-hidden>›</span> {finding.stepName}
+      </h3>
+      <p className="cand-card-where">
+        {finding.repo} · failed <span className="tnum">{finding.failureCount}</span> in a row · first seen <Ago ts={finding.firstFailedAt} />
+        {finding.recurrenceCount > 0 && ` · came back ${finding.recurrenceCount}×`}
+      </p>
+      <p className={finding.investigationSummary ? 'cand-card-found' : 'cand-card-found pending'}>
+        {finding.investigationSummary ? (
+          <>
+            <span className="label">Aeon found</span> {finding.investigationSummary}
+          </>
+        ) : (
+          'Aeon is investigating: rerunning the step, narrowing the commits, drafting how a fix should be judged.'
+        )}
+      </p>
+      <span className="cand-card-go">
+        Review <ArrowRight size={14} aria-hidden />
+      </span>
     </Link>
   )
 }
@@ -77,9 +106,9 @@ export default async function ConsolePage({ searchParams }: { searchParams: Prom
         {snapshot.needsDecision.length === 0 ? (
           <p className="muted">Nothing is failing repeatedly. Aeon keeps watching.</p>
         ) : (
-          <div className="rows">
+          <div className="cand-cards">
             {snapshot.needsDecision.map((f) => (
-              <FindingRow key={f.id} finding={f} />
+              <CandidateCard key={f.id} finding={f} />
             ))}
           </div>
         )}

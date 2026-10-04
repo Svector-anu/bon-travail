@@ -66,6 +66,14 @@ export interface InvestigationCommand {
 }
 
 /**
+ * An investigation describes one failure episode. Once the failure comes back
+ * after a fix, the earlier investigation no longer explains the new one.
+ */
+export function investigationIsCurrent(finding: { investigation: { submittedAt: number } | null; lastRecurrenceAt: number | null }): boolean {
+  return finding.investigation !== null && finding.investigation.submittedAt > (finding.lastRecurrenceAt ?? 0)
+}
+
+/**
  * Written by Aeon after reproducing the failure in its own runner. Proofwork
  * stores it as a recommendation; the engineer edits and approves the final
  * acceptance condition and scope.

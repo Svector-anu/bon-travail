@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { FindingEvent, FindingRecord, RepoRecord, WorkflowRunRecord } from '@/domain/findings'
+import { investigationIsCurrent, type FindingEvent, type FindingRecord, type RepoRecord, type WorkflowRunRecord } from '@/domain/findings'
 import { formatUsdc } from '@/domain/money'
 import { isTerminal } from '@/domain/task-state'
 import {
@@ -270,7 +270,8 @@ export function toFindingSummary(finding: FindingRecord, repo: Pick<RepoRecord, 
     lastFailedAt: finding.lastFailedAt,
     lastFailedRunUrl: finding.lastFailedRunUrl,
     recurrenceCount: finding.recurrenceCount,
-    investigated: finding.investigation !== null,
+    investigated: investigationIsCurrent(finding),
+    investigationSummary: investigationIsCurrent(finding) ? (finding.investigation?.summary ?? null) : null,
     taskId: finding.taskId,
   }
 }

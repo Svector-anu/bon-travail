@@ -188,7 +188,10 @@ export interface FindingSummaryView {
   lastFailedAt: number
   lastFailedRunUrl: string
   recurrenceCount: number
+  /** Aeon investigated this episode (an investigation from before the last recurrence does not count). */
   investigated: boolean
+  /** The first line of what Aeon found, for this episode only. */
+  investigationSummary: string | null
   taskId: string | null
 }
 

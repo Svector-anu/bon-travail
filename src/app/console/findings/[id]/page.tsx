@@ -1,22 +1,23 @@
-import { ArrowLeft, ArrowUpRight } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, Check, CircleDashed, Minus } from 'lucide-react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
-import { INVESTIGABLE, NEEDS_DECISION } from '@/domain/findings'
+import { INVESTIGABLE, investigationIsCurrent, NEEDS_DECISION } from '@/domain/findings'
 import type { FindingView } from '@/domain/views'
 import { AutoRefresh } from '@/components/auto-refresh'
 import { Ago, LocalTime } from '@/components/clock'
 import { DecisionPanel } from '@/components/decision-panel'
-import { Evidence } from '@/components/evidence'
+import { CandidateEvidence } from '@/components/candidate-evidence'
 import { ActionButton } from '@/components/owner-actions'
 import { Reveal } from '@/components/reveal'
+import { candidateLabel, preparation } from '@/lib/candidate'
 import { FINDING_STATUS, TASK_STATUS } from '@/lib/format'
 import { isOwnerSession } from '@/server/owner-session'
 import { getFindingDetail } from '@/server/queries'
 import { Roll } from '@/components/roll'
 
 export const dynamic = 'force-dynamic'
-export const metadata: Metadata = { title: 'Finding' }
+export const metadata: Metadata = { title: 'Candidate work' }
 
 const EVENT_LABELS: Record<string, string> = {
   detected: 'First failure seen',
@@ -32,7 +33,7 @@ const EVENT_LABELS: Record<string, string> = {
 }
 
 function defaults(finding: FindingView) {
-  const inv = finding.investigation
+  const inv = investigationIsCurrent(finding) ? finding.investigation : null
   return {
     acceptance:
       inv?.proposedAcceptance ??
@@ -73,6 +74,11 @@ export default async function FindingPage({ params }: { params: Promise<{ id: st
   const status = FINDING_STATUS[finding.status]
   const canDecide = NEEDS_DECISION.includes(finding.status)
   const canExternalize = canDecide || finding.status === 'internal'
+  const current = investigationIsCurrent(finding)
+  const inv = current ? finding.investigation : null
+  const prep = preparation(finding)
+  const proposal = defaults(finding)
+  const timeline = history(finding)
 
   return (
     <Reveal>
@@ -87,20 +93,101 @@ export default async function FindingPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
-      <div className="finding-head">
+      <header className="cand-head">
+        <span className="label">{candidateLabel(finding)}</span>
         <h1>
-          {finding.jobName} › {finding.stepName}
+          {finding.jobName} <span aria-hidden>›</span> {finding.stepName}
         </h1>
-        <p className="muted">
+        <p className="cand-where">
           <a href={finding.repoUrl} target="_blank" rel="noreferrer">
             {finding.repo}
           </a>{' '}
-          · {finding.workflowName} on {finding.defaultBranch} · first failed <LocalTime ts={finding.firstFailedAt} />
-          {finding.recurrenceCount > 0 && ` · came back ${finding.recurrenceCount}×`}
+          · {finding.workflowName} on {finding.defaultBranch}
         </p>
-      </div>
+        <dl className="cand-stats">
+          <div>
+            <dt>Failed in a row</dt>
+            <dd className="tnum">{finding.failureCount}</dd>
+          </div>
+          <div>
+            <dt>First seen</dt>
+            <dd>
+              <Ago ts={finding.firstFailedAt} />
+            </dd>
+          </div>
+          <div>
+            <dt>{finding.recurrenceCount > 0 ? 'Came back' : 'Last failed'}</dt>
+            <dd className="tnum">{finding.recurrenceCount > 0 ? `${finding.recurrenceCount}×` : <Ago ts={finding.lastFailedAt} />}</dd>
+          </div>
+        </dl>
+      </header>
 
-      {task && (
+      <section className="cand-found">
+        <div className="cand-finding">
+          <span className="label">Aeon found</span>
+          {inv ? (
+            <>
+              <p className="cand-statement">{inv.summary}</p>
+              <p className="cand-cause">{inv.rootCause}</p>
+              <p className="cand-meta">
+                {inv.firstBadSha && (
+                  <span>
+                    first bad commit <span className="mono">{inv.firstBadSha.slice(0, 7)}</span>
+                  </span>
+                )}
+                <span>{inv.confidence} confidence</span>
+                {inv.runUrl && (
+                  <a href={inv.runUrl} target="_blank" rel="noreferrer">
+                    Aeon&apos;s run <ArrowUpRight size={12} aria-hidden />
+                  </a>
+                )}
+              </p>
+            </>
+          ) : (
+            <p className="cand-statement pending">
+              {!INVESTIGABLE.includes(finding.status)
+                ? 'This was decided before Aeon investigated it, so the evidence below is what GitHub recorded.'
+                : finding.investigation
+                  ? 'This failure came back after a fix. Aeon is looking at it again; what it found last time is in the history.'
+                  : 'Aeon is investigating. It reruns the failing step in its own runner and attaches what it finds.'}
+            </p>
+          )}
+        </div>
+        <aside className="cand-prep" aria-label="What Aeon did before asking you">
+          <span className="label">Before asking you, Aeon</span>
+          <ul>
+            {prep.map((item) => (
+              <li key={item.key} className={item.state}>
+                {item.state === 'done' ? <Check size={14} aria-hidden /> : item.state === 'pending' ? <CircleDashed size={14} aria-hidden /> : <Minus size={14} aria-hidden />}
+                <span>{item.text}</span>
+              </li>
+            ))}
+          </ul>
+        </aside>
+      </section>
+
+      <CandidateEvidence
+        log={finding.errorExcerpt}
+        stepCommand={finding.stepCommand}
+        failingRunUrl={finding.lastFailedRunUrl}
+        reproduction={inv?.reproduction ?? []}
+        commands={inv?.commands ?? []}
+        bisectMethod={inv?.bisectMethod ?? null}
+        regression={finding.regression}
+        firstBadSha={inv?.firstBadSha ?? null}
+      />
+
+      <section className="cand-accept">
+        <span className="label">How a fix is judged</span>
+        <blockquote>{proposal.acceptance}</blockquote>
+        <p>
+          By GitHub Actions on your repository: <strong>{finding.workflowName} › {finding.jobName}</strong> on {finding.defaultBranch}. The person
+          fixing it cannot change the workflow, its tests or this condition.
+          {!inv && ' Aeon will propose a sharper condition once it has reproduced the failure; you can edit it before approving.'}
+        </p>
+      </section>
+
+      {task ? (
         <section className="panel in-flight-panel">
           <div className="panel-title">
             <span className="label">Work package {task.displayId}</span>
@@ -108,7 +195,7 @@ export default async function FindingPage({ params }: { params: Promise<{ id: st
           </div>
           <p>
             {task.reward} USDC · open to {task.ci?.contributors.map((c) => `@${c}`).join(', ')}
-            {task.claimantHandle && ` · claimed by @${task.claimantHandle}`}
+            {task.claimantHandle && ` · @${task.claimantHandle} is on it`}
           </p>
           <div className="decision-actions">
             <Link className="btn btn-glass" href={`/task/${task.id}`}>
@@ -121,78 +208,48 @@ export default async function FindingPage({ params }: { params: Promise<{ id: st
             )}
           </div>
         </section>
-      )}
-
-      <DecisionPanel
-        findingId={finding.id}
-        canDecide={canDecide}
-        canExternalize={canExternalize && !task}
-        maxReward={detail.maxReward}
-        simulatedPayments={detail.simulatedPayments}
-        defaults={defaults(finding)}
-      />
-
-      {!finding.investigation && INVESTIGABLE.includes(finding.status) && (
-        <p className="notice-line">Aeon picks this up on its next investigation run and attaches what it reproduces.</p>
-      )}
-
-      <Evidence
-        facts={finding}
-        investigation={
-          finding.investigation
-            ? {
-                summary: finding.investigation.summary,
-                rootCause: finding.investigation.rootCause,
-                firstBadSha: finding.investigation.firstBadSha,
-                confidence: finding.investigation.confidence,
-                runUrl: finding.investigation.runUrl,
-              }
-            : null
-        }
-      />
-
-      {finding.investigation && (
-        <section className="panel verification">
-          <div className="panel-title">
-            <span className="label">How Aeon reproduced it</span>
-          </div>
-          {finding.investigation.reproduction.length > 0 && (
-            <ol className="repro">
-              {finding.investigation.reproduction.map((step, i) => (
-                <li key={i}>{step}</li>
-              ))}
-            </ol>
-          )}
-          {finding.investigation.commands.length > 0 && (
-            <ul className="commands">
-              {finding.investigation.commands.map((c, i) => (
-                <li key={i}>
-                  <span className={`status ${c.outcome === 'passed' ? 'paid' : c.outcome === 'failed' ? 'refund' : ''}`}>{c.outcome}</span>
-                  <code>{c.command}</code>
-                  {c.sha && <span className="mono muted">{c.sha.slice(0, 7)}</span>}
-                </li>
-              ))}
-            </ul>
-          )}
-          {finding.investigation.bisectMethod && <p className="muted">{finding.investigation.bisectMethod}</p>}
+      ) : finding.status === 'resolved' ? (
+        <section className="cand-resolved">
+          <span className="label">Fixed</span>
+          <p>
+            Green again{finding.resolvedSha ? <> at <span className="mono">{finding.resolvedSha.slice(0, 7)}</span></> : null}
+            {finding.resolvedAt ? (
+              <>
+                {' '}
+                <Ago ts={finding.resolvedAt} />
+              </>
+            ) : null}
+            . Aeon keeps watching; if the same step fails again, it comes back here as a new episode.
+          </p>
         </section>
+      ) : (
+        <DecisionPanel
+          findingId={finding.id}
+          canDecide={canDecide}
+          canExternalize={canExternalize}
+          maxReward={detail.maxReward}
+          simulatedPayments={detail.simulatedPayments}
+          defaults={proposal}
+        />
       )}
 
-      {finding.stepCommand && (
-        <section className="panel verification">
-          <div className="panel-title">
-            <span className="label">Failing step command</span>
-          </div>
-          <pre className="log">{finding.stepCommand}</pre>
-        </section>
+      {pastTasks.length > 0 && (
+        <p className="cand-past muted">
+          Earlier work on this failure:{' '}
+          {pastTasks.map((t) => (
+            <Link key={t.id} href={`/receipt/${t.id}`}>
+              {t.displayId} ({TASK_STATUS[t.state].label})
+            </Link>
+          ))}
+        </p>
       )}
 
-      <section className="panel verification">
-        <div className="panel-title">
-          <span className="label">Runs and history</span>
-        </div>
+      <details className="cand-history">
+        <summary>
+          History <span className="tnum">· {timeline.length}</span>
+        </summary>
         <ul className="history">
-          {history(finding).map((item, i) =>
+          {timeline.map((item, i) =>
             item.kind === 'run' ? (
               <li key={`r${item.run.runId}`}>
                 <span className={`status ${item.run.conclusion === 'success' ? 'paid' : 'refund'}`}>{item.run.conclusion}</span>
@@ -201,7 +258,7 @@ export default async function FindingPage({ params }: { params: Promise<{ id: st
                 </a>
                 <span className="mono muted">{item.run.sha.slice(0, 7)}</span>
                 <small>
-                  <Ago ts={item.at} />
+                  <LocalTime ts={item.at} />
                 </small>
               </li>
             ) : (
@@ -210,23 +267,13 @@ export default async function FindingPage({ params }: { params: Promise<{ id: st
                 <span>{EVENT_LABELS[item.event.type] ?? item.event.type}</span>
                 <span />
                 <small>
-                  <Ago ts={item.at} />
+                  <LocalTime ts={item.at} />
                 </small>
               </li>
             ),
           )}
         </ul>
-        {pastTasks.length > 0 && (
-          <p className="muted">
-            Earlier work packages:{' '}
-            {pastTasks.map((t) => (
-              <Link key={t.id} href={`/receipt/${t.id}`} style={{ marginRight: 10 }}>
-                {t.displayId} ({TASK_STATUS[t.state].label})
-              </Link>
-            ))}
-          </p>
-        )}
-      </section>
+      </details>
     </Reveal>
   )
 }
