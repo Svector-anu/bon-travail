@@ -159,7 +159,7 @@ img {
   height: 88px;
 }
 
-/* The nav floats: a small paper pill at the top centre that opens a second bar of links. */
+/* The nav floats: a small dark pill with an amber edge at the top centre that opens a second bar of links. */
 .nav-dock {
   position: fixed;
   top: 18px;
@@ -178,11 +178,11 @@ img {
   z-index: 1;
   display: flex;
   align-items: center;
-  gap: 32px;
-  height: 52px;
-  padding: 0 14px 0 20px;
+  gap: 28px;
+  height: 46px;
+  padding: 0 10px 0 20px;
   border-radius: var(--radius-control);
-  color: var(--ink);
+  color: var(--paper);
 }
 
 /* ---- the liquid menu: pill, drop and bar drawn as one gooey shape ---------- */
@@ -197,30 +197,31 @@ img {
   position: absolute;
   inset: 0 -40px -40px;
   pointer-events: none;
-  filter: url(#nav-goo) drop-shadow(0 8px 22px rgba(14, 12, 10, 0.22));
+  /* The goo merges the shapes; the shadows then trace one thin amber edge and a soft glow around all of them. */
+  filter: url(#nav-goo) drop-shadow(0 0 0.6px rgba(232, 165, 87, 0.75)) drop-shadow(0 0 16px rgba(232, 165, 87, 0.16)) drop-shadow(0 10px 24px rgba(0, 0, 0, 0.5));
 }
 
 .nav-goo span {
   position: absolute;
   left: 50%;
-  background: var(--paper);
+  background: #1a1612;
 }
 
 .goo-pill {
   top: 0;
   width: var(--pill-w, 210px);
-  height: var(--pill-h, 52px);
+  height: var(--pill-h, 46px);
   border-radius: var(--radius-card);
   transform: translateX(-50%);
 }
 
-/* Closed, the drop hides inside the pill; open, it swells out, falls and lands mid-bar. */
+/* Closed, the drop peeks out under the menu button as a small tail; open, it swells, falls and lands mid-bar. */
 .goo-drop {
-  top: calc(var(--pill-h, 52px) - 34px);
+  top: calc(var(--pill-h, 46px) - 18px);
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  transform: translate(-50%, 0) scale(0.7);
+  transform: translate(calc(var(--pill-w, 210px) / 2 - 34px - 50%), 0) scale(0.6);
   transition: transform 300ms cubic-bezier(0.5, 0, 0.6, 1) 260ms;
 }
 
@@ -237,7 +238,7 @@ img {
 }
 
 .nav-dock[data-open] .goo-drop {
-  transform: translate(-50%, calc(12px + var(--menu-h, 52px) / 2 + 19px)) scale(1);
+  transform: translate(-50%, calc(12px + var(--menu-h, 52px) / 2 + 8px)) scale(1);
   transition: transform 520ms cubic-bezier(0.55, 0, 0.75, 0.6);
 }
 
@@ -264,7 +265,7 @@ img {
   right: 11px;
   height: 2px;
   border-radius: 2px;
-  background: var(--ink);
+  background: var(--paper);
   transition: transform 500ms var(--spring);
 }
 
@@ -330,14 +331,14 @@ img {
 .nav-menu a {
   padding: 9px 16px;
   border-radius: 8px;
-  color: var(--ink);
-  font-size: 16px;
+  color: var(--paper);
+  font-size: 15px;
   font-weight: 500;
 }
 
 .nav-menu a:hover,
 .nav-menu a[aria-current='page'] {
-  background: rgba(23, 19, 15, 0.07);
+  background: rgba(242, 236, 227, 0.08);
 }
 
 /* The engineers' door: always on screen, top right on wide screens and bottom right on phones. */
@@ -346,13 +347,14 @@ img {
   top: 18px;
   right: max(16px, calc((100vw - 1120px) / 2));
   z-index: 50;
-  height: 52px;
+  height: 46px;
   padding: 0 20px;
-  border: 0;
+  border: 1px solid rgba(242, 236, 227, 0.16);
   border-radius: var(--radius-control);
-  background: var(--paper);
-  color: var(--ink);
-  box-shadow: 0 0 0 1px rgba(23, 19, 15, 0.06), 0 8px 28px rgba(14, 12, 10, 0.18);
+  background: rgba(26, 22, 18, 0.72);
+  color: var(--paper);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
 .brand {
@@ -373,7 +375,7 @@ img {
 }
 
 .brand .wordmark {
-  height: 18px;
+  height: 21px;
 }
 
 .pill-btn {
@@ -2980,7 +2982,7 @@ textarea.input.mono {
   display: grid;
   grid-template-rows: 1fr auto;
   width: 100vw;
-  min-height: max(560px, 78svh);
+  min-height: 0;
   /* On paper, like the middle of the home page: ink type on cream, rounded into the dark below. */
   border-radius: 0 0 32px 32px;
   background: var(--paper);
@@ -2993,22 +2995,22 @@ textarea.input.mono {
 
 .agent-hero-copy {
   align-self: center;
-  padding: 40px var(--gutter);
+  padding: 72px var(--gutter) 48px;
 }
 
 .agent-hero-copy h1 {
-  margin-top: 18px;
+  margin-top: 14px;
   font-family: var(--serif);
   font-weight: 400;
-  font-size: var(--title-xl);
+  font-size: var(--title-lg);
   line-height: var(--leading-display);
 }
 
 .agent-hero-copy > p {
-  max-width: 30ch;
-  margin-top: 22px;
+  max-width: 34ch;
+  margin-top: 14px;
   color: #e6ddd2;
-  font-size: clamp(17px, 1.5vw, 21px);
+  font-size: 16px;
   line-height: 1.5;
 }
 
@@ -3017,11 +3019,11 @@ textarea.input.mono {
   flex-wrap: wrap;
   align-items: center;
   gap: 10px 0;
-  margin: 34px 0 0;
+  margin: 22px 0 0;
   padding: 0;
   list-style: none;
   color: var(--muted);
-  font-size: 15px;
+  font-size: 13px;
 }
 
 .agent-status li {
@@ -3040,7 +3042,7 @@ textarea.input.mono {
 .agent-status strong {
   color: var(--text);
   font-weight: 500;
-  font-size: 17px;
+  font-size: 14px;
 }
 
 .agent-now {
@@ -3048,17 +3050,17 @@ textarea.input.mono {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 28px;
+  gap: 20px;
   margin: 0 var(--gutter);
-  padding: 32px 0 48px;
+  padding: 22px 0 32px;
   border-top: 1px solid var(--line);
 }
 
 .agent-now h2 {
-  margin: 12px 0 0;
+  margin: 8px 0 0;
   font-family: var(--serif);
   font-weight: 400;
-  font-size: var(--title-md);
+  font-size: var(--title-sm);
   line-height: var(--leading-display);
 }
 
@@ -3069,9 +3071,9 @@ textarea.input.mono {
 
 .agent-now-meta {
   max-width: 52ch;
-  margin-top: 8px;
+  margin-top: 6px;
   color: var(--muted);
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .agent-now-actions {
@@ -3401,7 +3403,7 @@ textarea.input.mono {
 /* ---- agent journey: a line that fills like syrup as you scroll ------------------ */
 
 .journey-section {
-  margin-top: 96px;
+  margin-top: 72px;
 }
 
 .journey-head {
@@ -3415,7 +3417,7 @@ textarea.input.mono {
   margin: 0;
   font-family: var(--serif);
   font-weight: 400;
-  font-size: var(--title-md);
+  font-size: var(--title-sm);
   line-height: var(--leading-display);
 }
 
@@ -3427,9 +3429,9 @@ textarea.input.mono {
 .journey {
   position: relative;
   display: grid;
-  gap: 72px;
-  margin: 72px 0 0;
-  padding: 24px 0 40px;
+  gap: 44px;
+  margin: 44px 0 0;
+  padding: 16px 0 24px;
   list-style: none;
 }
 
@@ -3457,14 +3459,14 @@ textarea.input.mono {
 .journey-stop {
   position: relative;
   display: grid;
-  grid-template-columns: 1fr 120px 1fr;
+  grid-template-columns: 1fr 96px 1fr;
   align-items: center;
 }
 
 .journey-text {
   grid-column: 1;
   justify-self: end;
-  max-width: 380px;
+  max-width: 300px;
   text-align: right;
   opacity: 0.32;
   transform: translateY(10px);
@@ -3486,25 +3488,25 @@ textarea.input.mono {
 
 .journey-count {
   display: inline-block;
-  padding: 3px 12px;
+  padding: 2px 10px;
   border: 1px solid var(--line-strong);
   border-radius: 999px;
   color: var(--accent);
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .journey-text h3 {
-  margin: 12px 0 0;
+  margin: 10px 0 0;
   font-family: var(--display);
   font-weight: 400;
-  font-size: var(--title-sm);
+  font-size: 22px;
   line-height: var(--leading-display);
 }
 
 .journey-text p {
-  margin-top: 12px;
+  margin-top: 6px;
   color: var(--muted);
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.6;
 }
 
@@ -3516,8 +3518,8 @@ textarea.input.mono {
   display: grid;
   place-items: center;
   justify-self: center;
-  width: 88px;
-  height: 88px;
+  width: 60px;
+  height: 60px;
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
   background: #1a1714;
@@ -4321,7 +4323,7 @@ p {
   }
 
   .agent-hero-copy {
-    padding: 48px var(--gutter);
+    padding: 48px var(--gutter) 32px;
   }
 
   .cand-card h3 {

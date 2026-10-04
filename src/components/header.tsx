@@ -15,7 +15,7 @@ const NAV = [
 ]
 
 /**
- * One small pill at the top centre: the wordmark and a menu button. The menu
+ * One small dark pill at the top centre: the serif wordmark and a menu button. The menu
  * drips out of it: a drop swells under the pill, falls, and spreads into the
  * bar of links (an SVG goo filter merges the shapes; the text sits above it,
  * unfiltered). The engineers' door stays visible on its
@@ -79,7 +79,7 @@ export function Header({ owner }: { owner: boolean }) {
         </div>
         <div ref={pillRef} className="nav-pill">
           <Link href="/" className="brand" onClick={close}>
-            <BonTravailWordmark />
+            <BonTravailWordmark variant="serif" />
           </Link>
           <button
             type="button"
