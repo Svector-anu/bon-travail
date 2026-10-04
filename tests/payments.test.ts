@@ -13,6 +13,16 @@ describe('payment configuration fails closed', () => {
     expect(() => loadConfig(env)).toThrow(PaymentConfigError)
   })
 
+  it('refuses a local database on Vercel, where it would not survive a deploy', () => {
+    // #when/#then
+    expect(() => loadConfig({ ...TEST_ENV, VERCEL: '1', DATABASE_URL: '', DATABASE_PATH: './data/pglite' })).toThrow(/Postgres/)
+  })
+
+  it('accepts Postgres on Vercel', () => {
+    // #when/#then
+    expect(() => loadConfig({ ...TEST_ENV, VERCEL: '1', DATABASE_URL: 'postgresql://u:p@db.example/neondb' })).not.toThrow()
+  })
+
   it('refuses an unknown provider', () => {
     // #when/#then
     expect(() => loadConfig({ ...TEST_ENV, PAYMENT_PROVIDER: 'stripe' })).toThrow(PaymentConfigError)

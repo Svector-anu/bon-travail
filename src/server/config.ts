@@ -139,6 +139,10 @@ export function loadConfig(env: Env = process.env): AppConfig {
   if (config.privyAppId && !config.privyAppSecret) {
     throw new Error('NEXT_PUBLIC_PRIVY_APP_ID is set but PRIVY_APP_SECRET is missing; claims cannot be verified')
   }
+  // Serverless instances have no durable disk: a local database there loses claims, payments and receipts.
+  if (env.VERCEL && !/^postgres(ql)?:\/\//.test(config.database)) {
+    throw new Error('On Vercel, DATABASE_URL must point at Postgres; a local database would not survive a deploy')
+  }
   if (config.agentApiToken !== undefined && config.agentApiToken.length < 32) {
     throw new Error('AGENT_API_TOKEN must be at least 32 characters')
   }
