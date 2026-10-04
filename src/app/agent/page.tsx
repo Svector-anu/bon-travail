@@ -16,7 +16,7 @@ const HEADLINE = {
   running: 'aeon is working.',
   alive: 'aeon is watching.',
   error: 'aeon needs a look.',
-  stale: 'aeon is resting.',
+  stale: 'aeon is watching.',
   never: 'aeon has not started.',
 } as const
 
@@ -24,7 +24,7 @@ const STATE_WORD = {
   running: 'working',
   alive: 'observing',
   error: 'needs attention',
-  stale: 'offline',
+  stale: 'between sweeps',
   never: 'not started',
 } as const
 

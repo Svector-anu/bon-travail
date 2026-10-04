@@ -78,7 +78,7 @@ export function AgentJourney({ stops }: { stops: JourneyStop[] }) {
               <p>{stop.copy}</p>
             </div>
             <span className="journey-tile" style={{ rotate: `${TILT[i % TILT.length]}deg` }} aria-hidden>
-              <Icon size={30} strokeWidth={1.5} />
+              <Icon size={22} strokeWidth={1.5} />
             </span>
           </li>
         )
