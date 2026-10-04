@@ -17,6 +17,10 @@
   --accent: #e8a557;
   --accent-soft: rgba(232, 165, 87, 0.14);
   --dusk: #8aa6d6;
+  /* The light surface: warm paper with ink, for the nav and the middle of the home page. */
+  --paper: #f2ece3;
+  --ink: #17130f;
+  --ink-muted: rgba(23, 19, 15, 0.6);
   --green: #86cf8f;
   --green-soft: rgba(134, 207, 143, 0.12);
   --refund: #e0795f;
@@ -125,13 +129,125 @@ img {
 }
 
 .topbar {
-  width: min(1120px, calc(100% - 32px));
-  margin: 0 auto;
+  height: 88px;
+}
+
+/* The nav floats: a small paper pill at the top centre that opens a second bar of links. */
+.nav-dock {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  z-index: 50;
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  justify-items: center;
+  gap: 12px;
+  transform: translateX(-50%);
+}
+
+.nav-pill {
+  display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 22px 0 18px;
+  gap: 32px;
+  height: 52px;
+  padding: 0 14px 0 20px;
+  border-radius: 12px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 0 0 1px rgba(23, 19, 15, 0.06), 0 8px 28px rgba(14, 12, 10, 0.18);
+}
+
+.nav-toggle {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.nav-toggle span {
+  position: absolute;
+  left: 5px;
+  right: 5px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--ink);
+  transition: transform 500ms var(--spring);
+}
+
+.nav-toggle span:first-child {
+  transform: translateY(-3.5px);
+}
+
+.nav-toggle span:last-child {
+  transform: translateY(3.5px);
+}
+
+.nav-dock[data-open] .nav-toggle span:first-child {
+  transform: rotate(45deg);
+}
+
+.nav-dock[data-open] .nav-toggle span:last-child {
+  transform: rotate(-45deg);
+}
+
+.nav-menu {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 6px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: var(--paper);
+  box-shadow: 0 0 0 1px rgba(23, 19, 15, 0.06), 0 8px 28px rgba(14, 12, 10, 0.18);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px) scale(0.96);
+  filter: blur(6px);
+  transition:
+    opacity 260ms var(--ease),
+    transform 600ms var(--spring),
+    filter 400ms var(--ease),
+    visibility 0s linear 600ms;
+}
+
+.nav-dock[data-open] .nav-menu {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  filter: none;
+  transition:
+    opacity 260ms var(--ease),
+    transform 600ms var(--spring),
+    filter 400ms var(--ease);
+}
+
+.nav-menu a {
+  padding: 9px 16px;
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.nav-menu a:hover,
+.nav-menu a[aria-current='page'] {
+  background: rgba(23, 19, 15, 0.07);
+}
+
+/* The engineers' door: always on screen, top right on wide screens and bottom right on phones. */
+.topbar .nav-cta {
+  position: fixed;
+  top: 18px;
+  right: max(16px, calc((100vw - 1120px) / 2));
+  z-index: 50;
+  height: 52px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 0 0 1px rgba(23, 19, 15, 0.06), 0 8px 28px rgba(14, 12, 10, 0.18);
 }
 
 .brand {
@@ -141,9 +257,8 @@ img {
   font-size: 17px;
   font-weight: 500;
   letter-spacing: -0.01em;
-  justify-self: start;
   padding: 6px 0;
-  color: var(--text);
+  color: inherit;
 }
 
 .wordmark {
@@ -155,35 +270,6 @@ img {
 
 .brand .wordmark {
   height: 18px;
-}
-
-.nav {
-  display: flex;
-  gap: 4px;
-}
-
-.nav a {
-  padding: 7px 14px;
-  border-radius: 999px;
-  font-size: 14px;
-  color: var(--muted);
-  border: 1px solid transparent;
-  transition: color 200ms var(--ease), border-color 200ms var(--ease);
-}
-
-.nav a:hover {
-  color: var(--text);
-}
-
-.nav a[aria-current='page'] {
-  color: #f3c98f;
-  border-color: rgba(232, 165, 87, 0.7);
-  background: var(--accent-soft);
-}
-
-.top-actions {
-  justify-self: end;
-  position: relative;
 }
 
 .pill-btn {
@@ -322,12 +408,12 @@ img {
     filter: blur(0);
   }
 
-  .nav a,
+  .nav-menu a,
   .pill-btn {
     transition: transform 360ms var(--spring), background 200ms var(--ease), color 200ms var(--ease);
   }
 
-  .nav a:hover,
+  .nav-menu a:hover,
   .pill-btn:hover {
     transform: scale(0.98);
   }
@@ -534,17 +620,11 @@ button.text-link:disabled {
   overflow: hidden;
   border-radius: 28px;
   border: 1px solid var(--line);
-  margin-top: -84px;
-  padding-top: 84px;
+  margin-top: -88px;
+  padding-top: 88px;
   isolation: isolate;
 }
 
-.shell:has(.stage) .topbar {
-  position: relative;
-  z-index: 5;
-  padding-left: 32px;
-  padding-right: 32px;
-}
 
 .hero {
   min-height: 680px;
@@ -2311,7 +2391,7 @@ textarea.input.mono {
 
 /* After the pinned loop, the closing scene starts right away so its rounded edge peeks in at the last step. */
 .shell:has(.loop) .site-foot {
-  margin-top: 0;
+  margin-top: -32px;
 }
 
 .foot-scene {
@@ -2547,36 +2627,28 @@ textarea.input.mono {
     padding: 18px;
   }
 
-  .main,
-  .topbar {
+  .main {
     width: calc(100% - 32px);
   }
 
   .topbar {
-    grid-template-columns: auto 1fr;
-    padding-top: 16px;
+    height: 80px;
   }
 
-  .brand .wordmark {
-    height: 16px;
+  .nav-dock {
+    top: 14px;
   }
 
-  .shell:has(.stage) .topbar {
-    padding-left: 18px;
-    padding-right: 18px;
-  }
-
-  .nav {
-    grid-column: 1 / -1;
-    order: 3;
-    overflow-x: auto;
-    scrollbar-width: none;
-    margin: 0 -4px;
+  .topbar .nav-cta {
+    top: auto;
+    right: 16px;
+    bottom: 16px;
+    height: 46px;
   }
 
   .bleed {
-    margin-top: -126px;
-    padding-top: 126px;
+    margin-top: -80px;
+    padding-top: 80px;
   }
 
   .hero {
@@ -2809,8 +2881,8 @@ textarea.input.mono {
   border: 0;
   border-radius: 0;
   min-height: max(640px, 100svh);
-  margin-top: -96px;
-  padding-top: 96px;
+  margin-top: -88px;
+  padding-top: 88px;
 }
 
 .hero.bleed::before {
@@ -2850,8 +2922,8 @@ textarea.input.mono {
 @media (max-width: 720px) {
   .hero.bleed {
     min-height: 0;
-    margin-top: -138px;
-    padding-top: 138px;
+    margin-top: -80px;
+    padding-top: 80px;
   }
 
   .hero.bleed .hero-copy {
@@ -2910,9 +2982,18 @@ textarea.input.mono {
 
 .hero.bleed .hero-copy .label,
 .hero.bleed .hero-copy > p,
-.hero.bleed .hero-ctas,
-.shell:has(.hero.bleed) .topbar {
+.hero.bleed .hero-ctas {
   animation: hero-rise 900ms var(--ease) both;
+}
+
+.shell:has(.hero.bleed) .topbar {
+  animation: hero-fade 900ms var(--ease) both;
+}
+
+@keyframes hero-fade {
+  from {
+    opacity: 0;
+  }
 }
 
 .hero.bleed .hero-copy .label {
@@ -2946,8 +3027,19 @@ textarea.input.mono {
 
 .loop {
   position: relative;
+  z-index: 1;
   /* About half a screen of scrolling per step: enough to see each form settle, short enough not to drag. */
   height: calc(var(--loop-steps) * 50svh + 100svh);
+  /* A paper panel between the dark hero and the dark footer, edge to edge with rounded corners. */
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  border-radius: 32px;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.loop .label {
+  color: var(--ink-muted);
 }
 
 .loop-pin {
@@ -2959,7 +3051,7 @@ textarea.input.mono {
   grid-template-rows: auto minmax(0, 1fr) auto auto auto;
   justify-items: center;
   gap: 14px;
-  padding: clamp(64px, 9vh, 104px) 16px clamp(28px, 5vh, 52px);
+  padding: clamp(96px, 12vh, 128px) 16px clamp(28px, 5vh, 52px);
   text-align: center;
 }
 
@@ -2978,7 +3070,7 @@ textarea.input.mono {
   height: 100%;
   min-height: 0;
   /* Warm light behind the cloud, the sunset's last glow; it fades to nothing before any edge. */
-  background: radial-gradient(closest-side, rgba(232, 165, 87, 0.08), transparent);
+  background: radial-gradient(closest-side, rgba(232, 165, 87, 0.18), transparent);
 }
 
 .loop-canvas {
@@ -3005,7 +3097,7 @@ textarea.input.mono {
   padding: 4px 0;
   border: 0;
   background: none;
-  color: var(--dim);
+  color: rgba(23, 19, 15, 0.4);
   font-size: 14px;
   transition: font-size var(--spring-time) var(--spring), color 300ms var(--ease);
 }
@@ -3019,21 +3111,27 @@ textarea.input.mono {
 }
 
 .loop-steps button:hover {
-  color: var(--muted);
+  color: var(--ink-muted);
 }
 
 .loop-steps button[aria-current='step'] {
-  color: var(--text);
+  color: var(--ink);
   font-size: clamp(20px, 2vw, 26px);
 }
 
 .loop-caption {
   max-width: 540px;
   min-height: 3.1em;
-  color: var(--muted);
+  color: var(--ink-muted);
   font-size: 15px;
   line-height: 1.55;
   animation: loop-caption-in 600ms var(--ease) both;
+}
+
+.loop .loop-more {
+  border-color: transparent;
+  background: var(--ink);
+  color: var(--paper);
 }
 
 @keyframes loop-caption-in {
@@ -3052,9 +3150,13 @@ textarea.input.mono {
     height: calc(var(--loop-steps) * 45svh + 100svh);
   }
 
+  .loop {
+    border-radius: 24px;
+  }
+
   .loop-pin {
     gap: 10px;
-    padding-top: 48px;
+    padding-top: 84px;
   }
 
   .loop-steps {
@@ -3175,13 +3277,6 @@ textarea.input.mono {
   text-shadow: 0 2px 24px rgba(24, 14, 6, 0.35);
 }
 
-.shell:has(.hero.bleed) .nav a {
-  text-shadow: 0 1px 10px rgba(24, 14, 6, 0.45);
-}
-
-.shell:has(.hero.bleed) .brand .wordmark {
-  filter: drop-shadow(0 1px 10px rgba(24, 14, 6, 0.45));
-}
 
 @media (max-width: 720px) {
   .hero.bleed {

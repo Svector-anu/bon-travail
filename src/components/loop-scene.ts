@@ -1,9 +1,9 @@
-import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, Group, PerspectiveCamera, Points, Scene, ShaderMaterial, WebGLRenderer } from 'three'
+import { BufferAttribute, BufferGeometry, Color, Group, PerspectiveCamera, Points, Scene, ShaderMaterial, WebGLRenderer } from 'three'
 import { buildLoopShapes, LOOP_SHAPE_COUNT } from './loop-shapes'
 
-/** Golden hour: warm light that gathers into amber at the payout; checks turn the brand's green, the failure terracotta. */
-const STEP_COLORS = ['#efe2cf', '#f5d8b0', '#f2ece3', '#9ad8a0', '#e8a557']
-const FAILURE_COLOR = '#e0795f'
+/** Ink on paper that warms into amber at the payout; checks turn green, the failure terracotta. */
+const STEP_COLORS = ['#3b3027', '#5b4331', '#2a231c', '#2f8a52', '#c47a22']
+const FAILURE_COLOR = '#c4532f'
 /** How far the camera looks down on each form: the board of checks reads best from above. */
 const TILT = [0.18, 0.12, 0.08, 0.82, 0.42]
 
@@ -94,7 +94,6 @@ export function createLoopScene(canvas: HTMLCanvasElement, options: { reduceMoti
     fragmentShader,
     transparent: true,
     depthWrite: false,
-    blending: AdditiveBlending,
     uniforms: {
       uMorph: { value: 0 },
       uTime: { value: 0 },
@@ -115,7 +114,7 @@ export function createLoopScene(canvas: HTMLCanvasElement, options: { reduceMoti
     renderer.setSize(w, h, false)
     camera.aspect = w / h
     // Narrow screens pull the camera back so the widest form (the board) still fits.
-    camera.position.z = 4.6 / Math.min(1, camera.aspect * 1.1)
+    camera.position.z = 4.6 / Math.min(1, camera.aspect * 0.9)
     camera.updateProjectionMatrix()
     material.uniforms.uSize!.value = ((small ? 7 : 8.5) / 4.6) * renderer.getPixelRatio()
     material.uniforms.uDistance!.value = camera.position.z
