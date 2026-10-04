@@ -2394,6 +2394,11 @@ textarea.input.mono {
   padding-top: 32px;
 }
 
+/* Inner pages end on the information alone, with room to breathe below it. */
+.site-foot.quiet .foot-info {
+  padding-bottom: 56px;
+}
+
 .foot-info {
   position: relative;
   z-index: 1;
@@ -2547,6 +2552,11 @@ textarea.input.mono {
 
   .foot-info {
     padding: 72px 0 40px;
+  }
+
+  /* Clear of the floating engineers pill at the very bottom. */
+  .site-foot.quiet .foot-info {
+    padding-bottom: 96px;
   }
 
   .foot-brand .wordmark {

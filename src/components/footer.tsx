@@ -3,6 +3,7 @@
 import { ArrowRight, ArrowUpRight } from 'lucide-react'
 import { useReducedMotion, useScroll, useTransform } from 'motion/react'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useRef, useSyncExternalStore } from 'react'
 import { FooterVideo } from './footer-video'
 import { Roll } from './roll'
@@ -16,20 +17,29 @@ interface FooterLink {
 
 const subscribeNothing = () => () => {}
 
-/**
- * Every page ends on the same final scene. The information comes first and
- * stays quiet (the wordmark, one line on what bon travail does, three short
- * columns of links); then the Macintosh in the meadow plays underneath, with
- * nothing laid over it, as the last thing on the page.
- */
-export function Footer({ escrowUrl }: { escrowUrl: string | null }) {
+/** The home page's last beat: the Macintosh film, settling from a slight zoom as it scrolls in. */
+function FooterScene() {
   const sceneRef = useRef<HTMLDivElement>(null)
   const reduce = useReducedMotion()
   // Scroll-linked styles switch on after mount, so the server render and no-JS visitors see the scene at rest.
   const hydrated = useSyncExternalStore(subscribeNothing, () => true, () => false)
   const { scrollYProgress } = useScroll({ target: sceneRef, offset: ['start end', 'end end'] })
-  // The scene settles from a slight zoom as it arrives; the frame itself never moves.
   const videoScale = useTransform(scrollYProgress, [0, 1], [1.06, 1])
+  return (
+    <div ref={sceneRef} className="foot-scene">
+      <FooterVideo scale={hydrated && !reduce ? videoScale : undefined} />
+    </div>
+  )
+}
+
+/**
+ * Every page ends on the same quiet information: the wordmark, one line on
+ * what bon travail does, three short columns of links. The home page alone
+ * goes on into the final scene, the Macintosh in the meadow.
+ */
+export function Footer({ escrowUrl }: { escrowUrl: string | null }) {
+  // The film is the home page's last beat; inner pages end quietly on the information.
+  const withScene = usePathname() === '/'
 
   const columns: { title: string; links: FooterLink[] }[] = [
     {
@@ -59,7 +69,7 @@ export function Footer({ escrowUrl }: { escrowUrl: string | null }) {
   ]
 
   return (
-    <footer className="site-foot">
+    <footer className={withScene ? 'site-foot' : 'site-foot quiet'}>
       <div className="foot-info">
         <div className="foot-brand">
           <Link href="/" aria-label="bon travail, home">
@@ -101,9 +111,7 @@ export function Footer({ escrowUrl }: { escrowUrl: string | null }) {
         </div>
       </div>
 
-      <div ref={sceneRef} className="foot-scene">
-        <FooterVideo scale={hydrated && !reduce ? videoScale : undefined} />
-      </div>
+      {withScene && <FooterScene />}
     </footer>
   )
 }
