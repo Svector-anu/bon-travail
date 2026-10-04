@@ -146,15 +146,79 @@ img {
 }
 
 .nav-pill {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 32px;
   height: 52px;
   padding: 0 14px 0 20px;
   border-radius: 12px;
-  background: var(--paper);
   color: var(--ink);
-  box-shadow: 0 0 0 1px rgba(23, 19, 15, 0.06), 0 8px 28px rgba(14, 12, 10, 0.18);
+}
+
+/* ---- the liquid menu: pill, drop and bar drawn as one gooey shape ---------- */
+
+.nav-goo-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+.nav-goo {
+  position: absolute;
+  inset: 0 -40px -40px;
+  pointer-events: none;
+  filter: url(#nav-goo) drop-shadow(0 8px 22px rgba(14, 12, 10, 0.22));
+}
+
+.nav-goo span {
+  position: absolute;
+  left: 50%;
+  background: var(--paper);
+}
+
+.goo-pill {
+  top: 0;
+  width: var(--pill-w, 210px);
+  height: var(--pill-h, 52px);
+  border-radius: 14px;
+  transform: translateX(-50%);
+}
+
+/* Closed, the drop hides inside the pill; open, it swells out, falls and lands mid-bar. */
+.goo-drop {
+  top: calc(var(--pill-h, 52px) - 34px);
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  transform: translate(-50%, 0) scale(0.7);
+  transition: transform 300ms cubic-bezier(0.5, 0, 0.6, 1) 260ms;
+}
+
+.goo-bar {
+  top: calc(var(--pill-h, 52px) + 12px);
+  width: var(--menu-w, 300px);
+  height: var(--menu-h, 52px);
+  border-radius: 14px;
+  opacity: 0;
+  transform: translateX(-50%) scale(0.1, 0.55);
+  transition:
+    transform 260ms cubic-bezier(0.5, 0, 0.7, 0.4),
+    opacity 0s linear 240ms;
+}
+
+.nav-dock[data-open] .goo-drop {
+  transform: translate(-50%, calc(12px + var(--menu-h, 52px) / 2 + 19px)) scale(1);
+  transition: transform 520ms cubic-bezier(0.55, 0, 0.75, 0.6);
+}
+
+.nav-dock[data-open] .goo-bar {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+  transition:
+    transform 640ms var(--spring) 470ms,
+    opacity 0s linear 470ms;
 }
 
 .nav-toggle {
@@ -193,34 +257,46 @@ img {
 }
 
 .nav-menu {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: 4px 6px;
   padding: 8px 14px;
   border-radius: 12px;
-  background: var(--paper);
-  box-shadow: 0 0 0 1px rgba(23, 19, 15, 0.06), 0 8px 28px rgba(14, 12, 10, 0.18);
-  opacity: 0;
   visibility: hidden;
-  transform: translateY(-10px) scale(0.96);
-  filter: blur(6px);
+  transition: visibility 0s linear 300ms;
+}
+
+.nav-menu a {
+  opacity: 0;
+  transform: translateY(4px);
   transition:
-    opacity 260ms var(--ease),
-    transform 600ms var(--spring),
-    filter 400ms var(--ease),
-    visibility 0s linear 600ms;
+    opacity 140ms var(--ease),
+    transform 140ms var(--ease);
 }
 
 .nav-dock[data-open] .nav-menu {
-  opacity: 1;
   visibility: visible;
+  transition: none;
+}
+
+.nav-dock[data-open] .nav-menu a {
+  opacity: 1;
   transform: none;
-  filter: none;
   transition:
-    opacity 260ms var(--ease),
-    transform 600ms var(--spring),
-    filter 400ms var(--ease);
+    opacity 320ms var(--ease) 760ms,
+    transform 420ms var(--spring) 760ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .goo-drop,
+  .goo-bar,
+  .nav-menu,
+  .nav-menu a {
+    transition: none !important;
+  }
 }
 
 .nav-menu a {

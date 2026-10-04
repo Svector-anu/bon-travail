@@ -16,14 +16,37 @@ const NAV = [
 
 /**
  * One small pill at the top centre: the wordmark and a menu button. The menu
- * opens as a second bar beneath it. The engineers' door stays visible on its
+ * drips out of it: a drop swells under the pill, falls, and spreads into the
+ * bar of links (an SVG goo filter merges the shapes; the text sits above it,
+ * unfiltered). The engineers' door stays visible on its
  * own, since contributors need no account and only the engineer signs in.
  */
 export function Header({ owner }: { owner: boolean }) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const dockRef = useRef<HTMLDivElement>(null)
+  const pillRef = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLElement>(null)
   const close = () => setOpen(false)
+
+  // The liquid shapes are drawn behind the real pill and menu, so they track their measured size.
+  useEffect(() => {
+    const dock = dockRef.current
+    const pill = pillRef.current
+    const menu = menuRef.current
+    if (!dock || !pill || !menu) return
+    const measure = () => {
+      dock.style.setProperty('--pill-w', `${pill.offsetWidth}px`)
+      dock.style.setProperty('--pill-h', `${pill.offsetHeight}px`)
+      dock.style.setProperty('--menu-w', `${menu.offsetWidth}px`)
+      dock.style.setProperty('--menu-h', `${menu.offsetHeight}px`)
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(pill)
+    observer.observe(menu)
+    return () => observer.disconnect()
+  }, [])
 
   useEffect(() => {
     if (!open) return
@@ -42,7 +65,19 @@ export function Header({ owner }: { owner: boolean }) {
   return (
     <header className="topbar">
       <div ref={dockRef} className="nav-dock" data-open={open || undefined}>
-        <div className="nav-pill">
+        <svg className="nav-goo-defs" aria-hidden focusable="false">
+          <filter id="nav-goo">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="7" result="blur" />
+            <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -10" result="goo" />
+            <feComposite in="SourceGraphic" in2="goo" operator="atop" />
+          </filter>
+        </svg>
+        <div className="nav-goo" aria-hidden>
+          <span className="goo-pill" />
+          <span className="goo-drop" />
+          <span className="goo-bar" />
+        </div>
+        <div ref={pillRef} className="nav-pill">
           <Link href="/" className="brand" onClick={close}>
             <BonTravailWordmark />
           </Link>
@@ -58,7 +93,7 @@ export function Header({ owner }: { owner: boolean }) {
             <span aria-hidden />
           </button>
         </div>
-        <nav id="site-menu" className="nav-menu" aria-label="Primary" inert={!open}>
+        <nav ref={menuRef} id="site-menu" className="nav-menu" aria-label="Primary" inert={!open}>
           {NAV.map((item) => (
             <Link
               key={item.href}
