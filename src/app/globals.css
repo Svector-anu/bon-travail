@@ -3484,6 +3484,178 @@ textarea.input.mono {
   }
 }
 
+/* ---- agent journey: a line that fills like syrup as you scroll ------------------ */
+
+.journey-section {
+  margin-top: 96px;
+}
+
+.journey-head {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.journey-head h2 {
+  margin: 0;
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: clamp(36px, 4vw, 56px);
+  line-height: 1.05;
+}
+
+.journey-head p {
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.journey {
+  position: relative;
+  display: grid;
+  gap: 72px;
+  margin: 72px 0 0;
+  padding: 24px 0 40px;
+  list-style: none;
+}
+
+.journey-track,
+.journey-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 2px;
+}
+
+.journey-track {
+  background: var(--line-strong);
+}
+
+.journey-fill {
+  background: linear-gradient(180deg, rgba(232, 165, 87, 0.5), var(--accent));
+  transform-origin: 50% 0;
+  box-shadow: 0 0 14px rgba(232, 165, 87, 0.45);
+}
+
+.journey-stop {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 120px 1fr;
+  align-items: center;
+}
+
+.journey-text {
+  grid-column: 1;
+  justify-self: end;
+  max-width: 380px;
+  text-align: right;
+  opacity: 0.32;
+  transform: translateY(10px);
+  transition:
+    opacity 600ms var(--ease),
+    transform 700ms var(--spring);
+}
+
+.journey-stop.right .journey-text {
+  grid-column: 3;
+  justify-self: start;
+  text-align: left;
+}
+
+.journey-stop.lit .journey-text {
+  opacity: 1;
+  transform: none;
+}
+
+.journey-count {
+  display: inline-block;
+  padding: 3px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 14px;
+}
+
+.journey-text h3 {
+  margin: 12px 0 0;
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: clamp(22px, 2vw, 28px);
+}
+
+.journey-text p {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.journey-tile {
+  position: relative;
+  z-index: 1;
+  grid-column: 2;
+  grid-row: 1;
+  display: grid;
+  place-items: center;
+  justify-self: center;
+  width: 88px;
+  height: 88px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: #1a1714;
+  color: rgba(232, 165, 87, 0.45);
+  box-shadow: 0 0 0 rgba(232, 165, 87, 0);
+  transition:
+    color 500ms var(--ease),
+    box-shadow 700ms var(--ease);
+}
+
+.journey-stop.lit .journey-tile {
+  color: var(--accent);
+  box-shadow: 0 0 60px rgba(232, 165, 87, 0.16);
+}
+
+@media (max-width: 720px) {
+  .journey {
+    gap: 48px;
+    margin-top: 48px;
+  }
+
+  .journey-track,
+  .journey-fill {
+    left: 36px;
+  }
+
+  .journey-stop {
+    grid-template-columns: 72px 1fr;
+    align-items: start;
+  }
+
+  .journey-tile {
+    grid-column: 1;
+    width: 60px;
+    height: 60px;
+    border-radius: 16px;
+  }
+
+  .journey-tile svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .journey-text,
+  .journey-stop.right .journey-text {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: start;
+    padding-left: 14px;
+    text-align: left;
+  }
+}
+
 /* ---- candidate work: what failed, what Aeon did, what you decide ---------------- */
 
 .cand-head {

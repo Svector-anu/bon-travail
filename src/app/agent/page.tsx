@@ -2,6 +2,7 @@ import { ArrowRight, Lock, Users } from 'lucide-react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ActivityTimeline } from '@/components/activity-timeline'
+import { AgentJourney, type JourneyStop } from '@/components/agent-journey'
 import { AutoRefresh } from '@/components/auto-refresh'
 import { Ago } from '@/components/clock'
 import { ActionButton } from '@/components/owner-actions'
@@ -31,6 +32,24 @@ const STATE_WORD = {
 const SOURCE = { aeon: 'Aeon', 'local-loop': 'local loop', manual: 'manual run', cron: 'Vercel cron' } as Record<string, string>
 
 const stage = (pipeline: AgentPipeline, key: string) => pipeline.stages.find((s) => s.key === key)?.count ?? 0
+
+/** The loop, stop by stop, with how much work is standing at each one right now. */
+function journey(pipeline: AgentPipeline): JourneyStop[] {
+  return [
+    { key: 'observing', count: stage(pipeline, 'observing'), title: 'Watching', copy: 'Aeon reads every workflow run on the repositories you connect. One red run is noise.' },
+    { key: 'investigating', count: stage(pipeline, 'investigating'), title: 'Investigating', copy: 'The same step failed twice. Aeon reruns it, narrows the commits and finds the one that broke it.' },
+    { key: 'awaiting', count: stage(pipeline, 'awaiting'), title: 'Waiting on you', copy: 'The evidence is ready. You keep it internal, or set a reward and name who may take it.' },
+    {
+      key: 'humans',
+      count: stage(pipeline, 'open') + stage(pipeline, 'assigned'),
+      title: 'With a human',
+      copy: 'Someone you approved fixes it inside the scope you wrote. The money is already set aside.',
+    },
+    { key: 'verifying', count: stage(pipeline, 'verifying'), title: 'Verifying', copy: 'Your own GitHub Actions decide. Not the person, not the agent.' },
+    { key: 'paid', count: stage(pipeline, 'paid'), title: 'Paid', copy: 'USDC leaves escrow on Arc for the approved wallet, and a sealed receipt keeps every step.' },
+    { key: 'watching', count: stage(pipeline, 'watching'), title: 'Watching again', copy: 'Aeon keeps an eye on the fix. If the same step fails again, the loop starts over.' },
+  ]
+}
 
 /** What the "currently" band says when there is no decision for this visitor to make. Counts only, so it is safe in public. */
 function publicNow(pipeline: AgentPipeline): { title: string; detail: string; href: string; cta: string } {
@@ -133,19 +152,16 @@ export default async function AgentPage() {
         </div>
       </section>
 
-      <section className="pipeline" aria-label="Where the work stands">
-        <p className="pipeline-scope">
-          Watching <strong className="tnum">{pipeline.reposWatched}</strong> {pipeline.reposWatched === 1 ? 'repository' : 'repositories'} ·{' '}
-          <strong className="tnum">{pipeline.runsObserved}</strong> runs read
-        </p>
-        <ol className="pipeline-stages">
-          {pipeline.stages.map((s) => (
-            <li key={s.key} className={s.count > 0 ? 'active' : ''}>
-              <strong className="tnum">{s.count}</strong>
-              <span>{s.label}</span>
-            </li>
-          ))}
-        </ol>
+      <section className="journey-section" aria-labelledby="journey-title">
+        <header className="journey-head">
+          <span className="label">The loop</span>
+          <h2 id="journey-title">From a red run to a paid fix</h2>
+          <p>
+            Watching <span className="tnum">{pipeline.reposWatched}</span> {pipeline.reposWatched === 1 ? 'repository' : 'repositories'} ·{' '}
+            <span className="tnum">{pipeline.runsObserved}</span> runs read
+          </p>
+        </header>
+        <AgentJourney stops={journey(pipeline)} />
       </section>
 
       <section className="agent-log">
