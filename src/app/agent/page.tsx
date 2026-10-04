@@ -28,7 +28,7 @@ export default async function AgentPage() {
       <div className="agent-head">
         <div>
           <h1>aeon</h1>
-          <p>Aeon watches CI, investigates what keeps failing, and settles what the tests confirm. Every action is logged here.</p>
+          <p>Aeon watches your code for things that keep breaking and gets them ready for a human to fix. Everything it does shows up here.</p>
         </div>
         <div className="presence">
           <span className={`presence-dot ${status.health}`} aria-hidden />

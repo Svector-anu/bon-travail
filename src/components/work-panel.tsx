@@ -67,7 +67,7 @@ export function WorkPanel({ task, attempts, claimedPrUrl, waitingFor, lastError 
       </Link>
     )
   } else if (task.state === 'DRAFT' || task.state === 'FUNDED') {
-    body = <p className="work-state">The engineer approved this work. The reward is being escrowed on Arc.</p>
+    body = <p className="work-state">The team approved this. The money is being set aside now.</p>
   } else if (task.state === 'OPEN') {
     body = (
       <form onSubmit={onClaim} className="work-form">
@@ -118,7 +118,7 @@ export function WorkPanel({ task, attempts, claimedPrUrl, waitingFor, lastError 
             disabled={busy !== null}
             onClick={() => void run('submit', () => post(`/api/work/${task.id}/submit`, { prUrl: claimedPrUrl }))}
           >
-            <Roll>{busy === 'submit' ? 'Sending it to the tests...' : 'Ready: request verification'}
+            <Roll>{busy === 'submit' ? 'Sending it to the tests...' : 'Done: check my fix'}
             {busy !== 'submit' && <ArrowRight size={16} />}</Roll>
           </button>
         )}
@@ -140,7 +140,7 @@ export function WorkPanel({ task, attempts, claimedPrUrl, waitingFor, lastError 
               {waitingFor ? `: ${waitingFor}.` : '.'}
             </>
           )}
-          {task.state === 'ACCEPTED' && 'The tests passed. Paying the reward now.'}
+          {task.state === 'ACCEPTED' && 'It works. Paying you now.'}
           {task.state === 'REJECTED' && `Rejected: ${lastVerdict?.reason ?? 'the acceptance check failed.'}`}
         </p>
         {lastError && verifying && <p className="work-hint">Last check could not reach GitHub ({lastError}); it will retry.</p>}

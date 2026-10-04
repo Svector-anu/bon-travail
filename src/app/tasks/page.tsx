@@ -6,7 +6,7 @@ import { TaskRow } from '@/components/task-row'
 import { listTaskViews } from '@/server/queries'
 
 export const dynamic = 'force-dynamic'
-export const metadata: Metadata = { title: 'Work' }
+export const metadata: Metadata = { title: 'Paid work' }
 
 const SETTLED = new Set(['PAID', 'REFUNDED', 'EXPIRED'])
 
@@ -20,18 +20,18 @@ export default async function WorkPage({ searchParams }: { searchParams: Promise
       <AutoRefresh />
       <div className="page-head">
         <div>
-          <h1>work</h1>
-          <p>Scoped fixes an engineering team chose to hand out. The reward is held up front and paid when the fix passes the project's tests.</p>
+          <h1>paid work</h1>
+          <p>Small fixes teams want done. The money is set aside before you start, and it's yours the moment your fix works.</p>
         </div>
         <Link className="text-link" href="/you">
-          your work on record →
+          your earnings →
         </Link>
         <nav className="segmented" aria-label="Filter work">
           <Link href="/tasks" aria-current={view === 'open'}>
             Open
           </Link>
           <Link href="/tasks?view=settled" aria-current={view === 'settled'}>
-            Settled
+            Done
           </Link>
         </nav>
       </div>
@@ -39,8 +39,8 @@ export default async function WorkPage({ searchParams }: { searchParams: Promise
       {tasks.length === 0 ? (
         <div className="empty">
           {view === 'open'
-            ? 'Nothing open. Work appears here when an engineer externalizes a finding from their console.'
-            : 'Nothing settled yet.'}
+            ? 'Nothing open right now. New work shows up here the moment a team posts it.'
+            : 'Nothing finished yet.'}
         </div>
       ) : (
         <div className="rows">

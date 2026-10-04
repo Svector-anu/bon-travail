@@ -172,7 +172,7 @@ async function WorkPackage({ task, attempts, work }: { task: TaskView; attempts:
       <section className="work-section">
         <span className="label">Scope</span>
         <p className="scope">{ci.scope}</p>
-        <p className="muted work-owner">Scoped and approved by the engineering team. Aeon prepared the evidence below; it did not set the reward or choose who can take this.</p>
+        <p className="muted work-owner">A team posted this and set the reward. Aeon gathered what broke below; it didn't pick the price or who can take it.</p>
       </section>
 
       {live?.finding && (

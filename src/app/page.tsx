@@ -7,7 +7,7 @@ import { openWork } from '@/server/queries'
 
 export const dynamic = 'force-dynamic'
 
-const HEADLINE = ['Agents find broken tests and pay people to fix them.']
+const HEADLINE = ['Agents find broken code and pay humans to fix it.']
 
 /** Each word with its place in the whole headline, so the entrance can stagger across lines. */
 const HEADLINE_LINES = HEADLINE.map((line, row) => {
@@ -47,10 +47,10 @@ export default async function HomePage() {
         <div className="hero-copy">
           <span className="label">Agents pay humans</span>
           <Headline />
-          <p>You decide who can take the work and what it pays, and the money is released only after your own tests pass.</p>
+          <p>Your agent spots what keeps breaking, you set the reward, and a human you trust fixes it. They get paid the moment it works, and not a minute before.</p>
           <div className="hero-ctas">
             <Link className="btn btn-primary" href={current ? `/task/${current.id}` : '/tasks'}>
-              <Roll>See open work <ArrowRight size={16} /></Roll>
+              <Roll>Find paid work <ArrowRight size={16} /></Roll>
             </Link>
             <Link className="btn btn-glass" href="#how">
               <Roll><Play size={14} /> Learn more</Roll>

@@ -11,7 +11,7 @@ const SECTIONS = [
     title: 'machines find the work. humans finish it.',
     body: [
       'bon travail watches the GitHub Actions workflow of each repository your team connects. When the same job and step fail twice in a row on the default branch, it records a finding with GitHub’s evidence: the failing log, the step’s command, and the commits between the last green run and the first red one.',
-      'Our agent, Aeon, then reproduces the failure in its own runner, finds the first bad commit, and writes down why it fails. An engineer reads that and decides whether the fix stays in the team or goes to people they name. An approved contributor opens a pull request; when the project’s tests pass on it, the reward is paid from escrow on Arc. If the deadline passes first, the reward goes back. Either way a receipt is sealed, and Aeon keeps watching for the failure to come back.',
+      'Our agent, Aeon, then reproduces the failure in its own runner, finds the first bad commit, and writes down why it fails. An engineer reads that and decides whether the fix stays in the team or goes to humans they name. An approved contributor opens a pull request; when the project’s tests pass on it, the reward is paid from escrow on Arc. If the deadline passes first, the reward goes back. Either way a receipt is sealed, and Aeon keeps watching for the failure to come back.',
     ],
   },
   {
@@ -28,7 +28,7 @@ const SECTIONS = [
     label: 'For contributors',
     title: 'no account. your pull request is your identity.',
     body: [
-      'If an engineer named you, open a pull request against the repository’s default branch that mentions the work package id (for example WORK-003), paste its link on the work page and claim. When it is ready, request verification. By default the fix has to be merged and the acceptance job has to pass on the default branch. The reward goes to the wallet the engineer approved for your GitHub login.',
+      'If an engineer named you, open a pull request against the repository’s default branch that mentions the work package id (for example WORK-003), paste its link on the work page and claim. When it is ready, press “Done: check my fix”. By default the fix has to be merged and the acceptance job has to pass on the default branch. The reward goes to the wallet the engineer approved for your GitHub login.',
     ],
   },
   {
@@ -42,9 +42,9 @@ const SECTIONS = [
   {
     id: 'why',
     label: 'Why it works this way',
-    title: 'agents recommend. people decide. the chain settles.',
+    title: 'agents recommend. humans decide. the chain settles.',
     body: [
-      'Engineers approve every work package because handing work outside the team is a judgment about scope, secrets and trust that belongs to the people who own the code.',
+      'Engineers approve every work package because handing work outside the team is a judgment about scope, secrets and trust that belongs to the humans who own the code.',
       'Aeon cannot approve work, choose who is paid, set an amount or release funds. Its only write is attaching an investigation. A model that could move money could be talked into it by a hostile log, commit message or pull request; a model that can only describe things cannot.',
       'The project’s own tests are the judge because they already define what “working” means for that code, and they run outside both the contributor’s and the agent’s control.',
       'Rewards sit in an escrow contract on Arc: a payout can only go to the approved wallet, a task can never be both paid and refunded, and every payment is idempotent, so a retry never pays twice.',

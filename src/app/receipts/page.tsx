@@ -16,11 +16,11 @@ export default async function ReceiptsPage() {
       <div className="page-head">
         <div>
           <h1>receipts</h1>
-          <p>Every payout and refund, sealed the moment it settled: the failure, the evidence, the fix and the transaction.</p>
+          <p>Every payment, with proof of what was fixed and why it was paid. Refunds too.</p>
         </div>
       </div>
       {settled.length === 0 ? (
-        <div className="empty">Nothing settled yet. The first payout or refund lands here.</div>
+        <div className="empty">Nothing paid yet. The first payment shows up here.</div>
       ) : (
         <div className="rows">
           {settled.map((task, i) => (

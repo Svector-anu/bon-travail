@@ -79,7 +79,7 @@ export function DecisionPanel({ findingId, canDecide, canExternalize, maxReward,
         <div className="decision-actions">
           {canExternalize && (
             <button type="button" className="btn btn-primary" onClick={() => setOpen(true)}>
-              <Roll><Send size={15} /> Externalize to an approved person</Roll>
+              <Roll><Send size={15} /> Hand it to a human</Roll>
             </button>
           )}
           {canDecide && (
@@ -130,7 +130,7 @@ export function DecisionPanel({ findingId, canDecide, canExternalize, maxReward,
               </div>
             ))}
             <button type="button" className="text-link" onClick={() => setRows([...rows, { login: '', wallet: '' }])}>
-              <Plus size={13} /> Add a person
+              <Plus size={13} /> Add a human
             </button>
             <small className="muted">The reward can only ever be paid to the wallet you enter for the login that opens the PR.</small>
           </fieldset>

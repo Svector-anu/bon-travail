@@ -15,10 +15,10 @@ export function TaskRow({ task, featured = false }: { task: TaskView; featured?:
     <Link href={href} className={featured ? 'task-row featured' : 'task-row'}>
       <span className={`status ${status.tone}`}>{ci && task.state === 'OPEN' ? 'Open' : status.label}</span>
       <span className="id">{task.displayId}</span>
-      <h3>{ci ? task.title : 'Read this Arc transaction'}</h3>
+      <h3>{ci ? `Fix what's breaking ${ci.repo.split('/').pop()}` : 'Read this Arc transaction'}</h3>
       {task.state === 'OPEN' && (
         <p className="desc">
-          {ci ? `Open to ${ci.contributors.map((c) => `@${c}`).join(', ')}.` : 'Reply with the recipient address and the USDC amount.'}
+          {ci ? `Saved for ${ci.contributors.map((c) => `@${c}`).join(', ')}.` : 'Reply with the recipient address and the USDC amount.'}
         </p>
       )}
       <div className="meta">
@@ -34,7 +34,7 @@ export function TaskRow({ task, featured = false }: { task: TaskView; featured?:
           )}
           {task.state === 'CLAIMED' &&
             (ci ? (
-              <>Claimed by @{task.claimantHandle}</>
+              <>@{task.claimantHandle} is on it</>
             ) : (
               task.claimExpiresAt && (
                 <>
@@ -52,8 +52,8 @@ export function TaskRow({ task, featured = false }: { task: TaskView; featured?:
               Refunded <Ago ts={task.settledAt} />
             </>
           )}
-          {['SUBMITTED', 'VERIFYING', 'ACCEPTED', 'REJECTED'].includes(task.state) && <>{ci ? 'Checks running' : 'In progress'}</>}
-          {(task.state === 'DRAFT' || task.state === 'FUNDED') && <>Escrowing</>}
+          {['SUBMITTED', 'VERIFYING', 'ACCEPTED', 'REJECTED'].includes(task.state) && <>{ci ? 'Checking the fix' : 'In progress'}</>}
+          {(task.state === 'DRAFT' || task.state === 'FUNDED') && <>Setting the money aside</>}
         </span>
         <span>
           {ci ? (

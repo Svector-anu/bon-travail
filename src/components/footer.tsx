@@ -30,26 +30,25 @@ export function Footer({ escrowUrl }: { escrowUrl: string | null }) {
 
   const columns: { title: string; links: FooterLink[] }[] = [
     {
-      title: 'Product',
+      title: 'For humans',
       links: [
-        { href: '/tasks', label: 'Open work' },
+        { href: '/tasks', label: 'Paid work' },
+        { href: '/you', label: 'Your earnings' },
         { href: '/receipts', label: 'Receipts' },
-        { href: '/agent', label: 'Agent' },
-        { href: '/docs', label: 'Docs' },
       ],
     },
     {
-      title: 'For engineers',
+      title: 'For teams',
       links: [
         { href: '/console', label: 'Console' },
-        { href: '/you', label: 'Your record' },
+        { href: '/agent', label: 'Aeon, the agent' },
         { href: 'https://github.com/apps/bon-travail', label: 'GitHub App', external: true },
       ],
     },
     {
-      title: 'Built on',
+      title: 'More',
       links: [
-        { href: '/agent', label: 'Aeon' },
+        { href: '/docs', label: 'Docs' },
         ...(escrowUrl ? [{ href: escrowUrl, label: 'Escrow on Arc', external: true }] : []),
       ],
     },
@@ -74,7 +73,7 @@ export function Footer({ escrowUrl }: { escrowUrl: string | null }) {
           <Link href="/" aria-label="bon travail, home">
             <BonTravailWordmark />
           </Link>
-          <p>Work, verified. Failing tests become paid fixes, and every payout leaves a receipt.</p>
+          <p>Work, verified. Agents find what's broken, and humans get paid to fix it.</p>
         </div>
 
         <nav className="foot-columns" aria-label="Footer">

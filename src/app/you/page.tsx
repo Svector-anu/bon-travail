@@ -8,7 +8,7 @@ import { TASK_STATUS } from '@/lib/format'
 import { contributorLedger } from '@/server/queries'
 
 export const dynamic = 'force-dynamic'
-export const metadata: Metadata = { title: 'Your work' }
+export const metadata: Metadata = { title: 'Your earnings' }
 
 /** A contributor needs no account: their GitHub login (or payout wallet) is the key to their record. */
 export default async function YouPage({ searchParams }: { searchParams: Promise<{ who?: string }> }) {
@@ -19,9 +19,9 @@ export default async function YouPage({ searchParams }: { searchParams: Promise<
     <Reveal>
       <div className="page-head">
         <div>
-          <span className="label">Contributors</span>
-          <h1>your work, on record.</h1>
-          <p>Look yourself up by GitHub login or payout wallet. No account needed.</p>
+          <span className="label">Humans</span>
+          <h1>your earnings.</h1>
+          <p>Look yourself up by GitHub name or wallet. No sign-up needed.</p>
         </div>
       </div>
 
@@ -52,12 +52,12 @@ export default async function YouPage({ searchParams }: { searchParams: Promise<
             </div>
             <div>
               <strong className="tnum">{ledger.entries.length}</strong>
-              <span>{ledger.entries.length === 1 ? 'package claimed' : 'packages claimed'}</span>
+              <span>{ledger.entries.length === 1 ? 'job taken' : 'jobs taken'}</span>
             </div>
           </div>
           {ledger.entries.length === 0 ? (
             <div className="empty">
-              Nothing on record for {ledger.kind === 'login' ? `@${ledger.query}` : ledger.query} yet. Work an engineer opens to you appears on{' '}
+              Nothing on record for {ledger.kind === 'login' ? `@${ledger.query}` : ledger.query} yet. Work saved for you shows up on{' '}
               <Link href="/tasks">the work page</Link>.
             </div>
           ) : (

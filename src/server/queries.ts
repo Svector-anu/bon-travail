@@ -310,7 +310,7 @@ export async function agentPipeline(): Promise<AgentPipeline> {
       { key: 'observing', label: 'Observing', count: count((f) => f.status === 'watching') },
       { key: 'investigating', label: 'Investigating', count: count((f) => f.status === 'candidate' || f.status === 'recurred') },
       { key: 'awaiting', label: 'Awaiting approval', count: count((f) => f.status === 'investigated') },
-      { key: 'open', label: 'Open to people', count: count((f) => f.status === 'externalized' && ['DRAFT', 'FUNDED', 'OPEN'].includes(taskState(f) ?? '')) },
+      { key: 'open', label: 'Open to humans', count: count((f) => f.status === 'externalized' && ['DRAFT', 'FUNDED', 'OPEN'].includes(taskState(f) ?? '')) },
       { key: 'assigned', label: 'Being fixed', count: count((f) => f.status === 'externalized' && taskState(f) === 'CLAIMED') },
       {
         key: 'verifying',
