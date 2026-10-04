@@ -62,3 +62,18 @@ as a lead, and confirm it with a direct contract call.
    and a unique `ESCROW_NAMESPACE`.
 3. The first funding also sends a USDC approval to the escrow, capped at
    `MAX_OUTSTANDING_ESCROW_USDC`.
+
+## Launch review (Arc Studio, October 2026)
+
+Arc Studio reviewed the deployed contract from its bytecode, since the source is not verified on Arcscan. Each finding was then checked against `contracts/ProofworkEscrow.sol` and the live contract:
+
+| Finding | Verdict |
+|---|---|
+| Owner and operator are the same key | **True.** Both are `0x9082…e898`. Acceptable on testnet; before mainnet the owner (who can change the operator and pause) moves to a separate cold key or multisig. |
+| `release` takes the worker as an argument | **True, by design.** Who fixed the work is only known after the claim, so the operator names the worker at release. The server only releases to the claimant its verifier accepted. The exposure of a stolen operator key is capped by `maxReward` per task and `MAX_OUTSTANDING_ESCROW_USDC` in total. |
+| `maxReward` is fixed at 1 USDC | **True.** It is `immutable`, so production amounts need a redeploy with a new cap. |
+| Refund may go to the caller | **False.** `refund` pays the stored `funder`. |
+| Duplicate payout unknown | **Not possible.** `release` and `refund` both require `Status.Funded` and set the final status before transferring. |
+| `renounceOwnership` would succeed | **False.** Called from the owner it reverts with `RenounceDisabled()` (`0x89051165`), checked live. From anyone else it reverts with `OwnableUnauthorizedAccount`. |
+
+Before mainnet: verify the source on Arcscan, split owner from operator, and redeploy with the production cap.
