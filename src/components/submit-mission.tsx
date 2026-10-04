@@ -72,7 +72,7 @@ export function SubmitMission({ task, attempts }: { task: TaskView; attempts: At
 
   return (
     <div className="mission-body">
-      <div className="detail-top" style={{ margin: 0 }}>
+      <div className="detail-top">
         <Link className="text-link" href={`/task/${task.id}`}>
           <ArrowLeft size={14} /> Back to task
         </Link>
@@ -84,8 +84,8 @@ export function SubmitMission({ task, attempts }: { task: TaskView; attempts: At
       <AnimatePresence mode="wait">
         {view === 'form' && claim && (
           <motion.div key="form" {...stateMotion}>
-            <h1 style={{ marginTop: 22 }}>Submit your answer</h1>
-            <p className="muted" style={{ marginTop: 10 }}>
+            <h1>Submit your answer</h1>
+            <p className="muted">
               Enter the recipient address and USDC amount from the transaction.
             </p>
             <form onSubmit={onSubmit}>
@@ -126,7 +126,7 @@ export function SubmitMission({ task, attempts }: { task: TaskView; attempts: At
               <button type="submit" className="btn btn-primary btn-wide">
                 <Roll>Submit answer <ArrowRight size={16} /></Roll>
               </button>
-              <a className="text-link" href={task.tx?.explorerTxUrl} target="_blank" rel="noreferrer" style={{ justifySelf: 'center' }}>
+              <a className="text-link" href={task.tx?.explorerTxUrl} target="_blank" rel="noreferrer">
                 Open the transaction on Arcscan <ArrowRight size={13} />
               </a>
             </form>
@@ -184,7 +184,7 @@ export function SubmitMission({ task, attempts }: { task: TaskView; attempts: At
           <motion.div key="no-claim" className="verdict-state" {...stateMotion}>
             <h1>Claim this task first</h1>
             <p>You need an active claim lock to submit an answer.</p>
-            <Link className="btn btn-primary" href={`/task/${task.id}`} style={{ marginTop: 24 }}>
+            <Link className="btn btn-primary" href={`/task/${task.id}`}>
               <Roll>Go to {task.displayId} <ArrowRight size={16} /></Roll>
             </Link>
           </motion.div>

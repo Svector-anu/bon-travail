@@ -98,9 +98,9 @@ export function ClaimCta({ task, attempts }: { task: TaskView; attempts: Attempt
         <Roll>{busy ? 'Claiming...' : privy && !identity.signedIn ? 'Sign in to claim' : 'Claim this task'}
         {!busy && <ArrowRight size={16} />}</Roll>
       </button>
-      {error && <p className="form-error" style={{ marginTop: 10 }}>{error}</p>}
+      {error && <p className="form-error form-feedback">{error}</p>}
       {identity.signedIn && payout && (
-        <p className="muted" style={{ marginTop: 12, fontSize: 13, textAlign: 'center' }}>
+        <p className="muted claim-hint">
           You get a 10 minute lock. The reward goes to <span className="mono">{payout.slice(0, 6)}...{payout.slice(-4)}</span>.
         </p>
       )}
