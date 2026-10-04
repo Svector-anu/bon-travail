@@ -2864,17 +2864,97 @@ textarea.input.mono {
 
 }
 
+/* ---- landing entrance: words first, then the scene, then the details ---------- */
+
+.hero-line {
+  display: block;
+}
+
+.hero-word {
+  display: inline-block;
+  animation: hero-word 1100ms var(--ease) both;
+  animation-delay: calc(120ms + var(--i) * 70ms);
+}
+
+@keyframes hero-word {
+  from {
+    opacity: 0;
+    transform: translateY(0.38em);
+    filter: blur(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: blur(0);
+  }
+}
+
+/* The meadow lifts out of the dark once the headline has started. Only drawn when it can animate away. */
+@media (prefers-reduced-motion: no-preference) {
+  .hero.bleed::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: var(--bg);
+    pointer-events: none;
+    animation: hero-dawn 1600ms var(--ease) 450ms both;
+  }
+}
+
+@keyframes hero-dawn {
+  to {
+    opacity: 0;
+  }
+}
+
+.hero.bleed .hero-copy .label,
+.hero.bleed .hero-copy > p,
+.hero.bleed .hero-ctas,
+.shell:has(.hero.bleed) .topbar {
+  animation: hero-rise 900ms var(--ease) both;
+}
+
+.hero.bleed .hero-copy .label {
+  animation-delay: 60ms;
+}
+
+.hero.bleed .hero-copy > p {
+  animation-delay: 950ms;
+}
+
+.hero.bleed .hero-ctas {
+  animation-delay: 1100ms;
+}
+
+.shell:has(.hero.bleed) .topbar {
+  animation-delay: 1300ms;
+}
+
+@keyframes hero-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* ---- how it works: one pinned section, scrolled through step by step ---------- */
 
 .loop {
   position: relative;
-  height: calc(var(--loop-steps) * 85svh + 100svh);
+  /* About half a screen of scrolling per step: enough to see each form settle, short enough not to drag. */
+  height: calc(var(--loop-steps) * 50svh + 100svh);
 }
 
 .loop-pin {
   position: sticky;
   top: 0;
-  height: 100svh;
+  /* Leaves a strip at the bottom where the footer's rounded edge appears at the last step. */
+  height: calc(100svh - 64px);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto auto auto;
   justify-items: center;
@@ -2884,7 +2964,9 @@ textarea.input.mono {
 }
 
 .loop-head h2 {
-  margin-top: 12px;
+  max-width: 22ch;
+  margin: 12px auto 0;
+  text-wrap: balance;
   font-family: var(--display);
   font-weight: 400;
   font-size: clamp(30px, 3.4vw, 46px);
@@ -2967,7 +3049,7 @@ textarea.input.mono {
 
 @media (max-width: 720px) {
   .loop {
-    height: calc(var(--loop-steps) * 70svh + 100svh);
+    height: calc(var(--loop-steps) * 45svh + 100svh);
   }
 
   .loop-pin {

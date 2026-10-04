@@ -8,11 +8,11 @@ import type { LoopScene } from './loop-scene'
 import { Roll } from './roll'
 
 const STEPS = [
-  { label: 'aeon finds', copy: 'Aeon watches your CI. When the same test fails twice, it becomes a finding with the log and the commits that broke it.' },
-  { label: 'you decide', copy: 'You read the evidence and set the scope, the reward and who may claim it. Aeon cannot approve work or pay anyone.' },
-  { label: 'people fix', copy: 'An engineer you approved opens a pull request inside that scope. Your tests and workflows stay off limits.' },
-  { label: 'tests verify', copy: 'Your own test suite decides: the job that was failing has to pass on the merged commit.' },
-  { label: 'proof pays', copy: 'USDC leaves escrow on Arc for the wallet you approved, and a sealed receipt keeps every step.' },
+  { label: 'aeon finds', copy: 'Aeon watches your CI. One red run is noise. The same one twice is work.' },
+  { label: 'you decide', copy: 'You set the scope, the reward and who may claim it. Aeon suggests, never approves.' },
+  { label: 'people fix', copy: 'Someone you trust opens a pull request inside that scope. Your tests stay off limits.' },
+  { label: 'tests verify', copy: 'Your own tests decide. Not a person, not the agent.' },
+  { label: 'proof pays', copy: 'USDC leaves escrow for the wallet you approved. The receipt keeps every step.' },
 ] as const
 
 const LAST = STEPS.length - 1
@@ -90,7 +90,7 @@ export function HowItWorks() {
       <div className="loop-pin">
         <header className="loop-head">
           <span className="label">How it works</span>
-          <h2 id="loop-title">From a failing test to a paid fix.</h2>
+          <h2 id="loop-title">Here, a failing test stops nagging and starts paying.</h2>
         </header>
 
         <div className="loop-stage" aria-hidden>
@@ -111,7 +111,7 @@ export function HowItWorks() {
         </p>
         <Link className="btn btn-glass loop-more" href="/docs">
           <Roll>
-            The details are in the docs <ArrowRight size={15} />
+            The details live in the docs <ArrowRight size={15} />
           </Roll>
         </Link>
       </div>
