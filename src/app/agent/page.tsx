@@ -1,7 +1,6 @@
 import { ArrowRight, Lock, Users } from 'lucide-react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { ActivityTimeline } from '@/components/activity-timeline'
 import { AgentJourney, type JourneyStop } from '@/components/agent-journey'
 import { AutoRefresh } from '@/components/auto-refresh'
 import { Ago } from '@/components/clock'
@@ -33,21 +32,22 @@ const SOURCE = { aeon: 'Aeon', 'local-loop': 'local loop', manual: 'manual run',
 
 const stage = (pipeline: AgentPipeline, key: string) => pipeline.stages.find((s) => s.key === key)?.count ?? 0
 
-/** The loop, stop by stop, with how much work is standing at each one right now. */
+/** The loop in three moments, with how much work stands at each one right now. */
 function journey(pipeline: AgentPipeline): JourneyStop[] {
   return [
-    { key: 'observing', count: stage(pipeline, 'observing'), title: 'Watching', copy: 'Aeon reads every workflow run on the repositories you connect. One red run is noise.' },
-    { key: 'investigating', count: stage(pipeline, 'investigating'), title: 'Investigating', copy: 'The same step failed twice. Aeon reruns it, narrows the commits and finds the one that broke it.' },
-    { key: 'awaiting', count: stage(pipeline, 'awaiting'), title: 'Waiting on you', copy: 'The evidence is ready. You keep it internal, or set a reward and name who may take it.' },
+    {
+      key: 'investigating',
+      count: stage(pipeline, 'observing') + stage(pipeline, 'investigating') + stage(pipeline, 'awaiting'),
+      title: 'Aeon finds it',
+      copy: 'When the same test breaks twice, Aeon works out why.',
+    },
     {
       key: 'humans',
-      count: stage(pipeline, 'open') + stage(pipeline, 'assigned'),
-      title: 'With a human',
-      copy: 'Someone you approved fixes it inside the scope you wrote. The money is already set aside.',
+      count: stage(pipeline, 'open') + stage(pipeline, 'assigned') + stage(pipeline, 'verifying'),
+      title: 'A human fixes it',
+      copy: 'You choose who, and the money is set aside first.',
     },
-    { key: 'verifying', count: stage(pipeline, 'verifying'), title: 'Verifying', copy: 'Your own GitHub Actions decide. Not the person, not the agent.' },
-    { key: 'paid', count: stage(pipeline, 'paid'), title: 'Paid', copy: 'USDC leaves escrow on Arc for the approved wallet, and a sealed receipt keeps every step.' },
-    { key: 'watching', count: stage(pipeline, 'watching'), title: 'Watching again', copy: 'Aeon keeps an eye on the fix. If the same step fails again, the loop starts over.' },
+    { key: 'paid', count: stage(pipeline, 'paid'), title: 'Your tests pay them', copy: 'The moment the fix works, they are paid in USDC.' },
   ]
 }
 
@@ -58,20 +58,20 @@ function publicNow(pipeline: AgentPipeline): { title: string; detail: string; hr
   if (deciding > 0)
     return {
       title: deciding === 1 ? 'Repeated failure detected' : `${deciding} repeated failures detected`,
-      detail: 'Waiting on the engineering team to keep it internal or hand it to a human.',
+      detail: 'Your team decides whether a human should fix it.',
       href: '/console',
       cta: 'Review in the console',
     }
   if (withHumans > 0)
     return {
       title: withHumans === 1 ? 'A fix is with a human' : `${withHumans} fixes are with humans`,
-      detail: 'Aeon re-checks the tests and settles the moment they pass.',
+      detail: 'They are paid the moment the fix works.',
       href: '/tasks',
       cta: 'See the work',
     }
   return {
     title: 'Nothing is failing repeatedly',
-    detail: `${pipeline.runsObserved} runs read. Aeon flags a failure the second time the same step breaks.`,
+    detail: 'Aeon speaks up when the same test breaks twice.',
     href: '/receipts',
     cta: 'See what it has settled',
   }
@@ -79,8 +79,7 @@ function publicNow(pipeline: AgentPipeline): { title: string; detail: string; hr
 
 export default async function AgentPage() {
   const owner = await isOwnerSession().catch(() => false)
-  const [{ status, runs }, pipeline, snapshot] = await Promise.all([agentActivity(30, {}, owner ? 'owner' : 'public'), agentPipeline(), owner ? consoleSnapshot() : null])
-  const visible = runs.filter((r) => r.action !== 'source_task' || r.result !== 'skipped')
+  const [{ status }, pipeline, snapshot] = await Promise.all([agentActivity(1, {}, owner ? 'owner' : 'public'), agentPipeline(), owner ? consoleSnapshot() : null])
   // The engineer sees the actual failure and can decide from here; everyone else sees counts.
   const candidate = snapshot?.needsDecision[0] ?? null
   const now = publicNow(pipeline)
@@ -92,7 +91,7 @@ export default async function AgentPage() {
         <div className="agent-hero-copy">
           <span className="label">Agent</span>
           <h1>{HEADLINE[status.health]}</h1>
-          <p>Watching your code, finding what breaks, and getting it ready for a human to fix.</p>
+          <p>It watches your code and finds what keeps breaking.</p>
           <ul className="agent-status">
             <li>
               <span className={`presence-dot ${status.health}`} aria-hidden />
@@ -155,26 +154,11 @@ export default async function AgentPage() {
       <section className="journey-section" aria-labelledby="journey-title">
         <header className="journey-head">
           <span className="label">The loop</span>
-          <h2 id="journey-title">From a red run to a paid fix</h2>
-          <p>
-            Watching <span className="tnum">{pipeline.reposWatched}</span> {pipeline.reposWatched === 1 ? 'repository' : 'repositories'} ·{' '}
-            <span className="tnum">{pipeline.runsObserved}</span> runs read
-          </p>
+          <h2 id="journey-title">From broken code to a paid fix</h2>
         </header>
         <AgentJourney stops={journey(pipeline)} />
       </section>
 
-      <section className="agent-log">
-        <span className="label">Everything it did</span>
-        <div className="panel" style={{ padding: '6px 0', marginTop: 14 }}>
-          <ActivityTimeline runs={visible} />
-        </div>
-      </section>
-
-      <p className="label" style={{ marginTop: 22 }}>
-        {status.simulatedPayments ? 'Simulated payouts' : 'Arc Testnet escrow payouts'} · scheduled by Aeon · expected every{' '}
-        {Math.round(status.expectedIntervalMs / 60000)} min
-      </p>
     </Reveal>
   )
 }
