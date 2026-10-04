@@ -13,6 +13,8 @@ interface Props {
   bisectMethod: string | null
   regression: RegressionWindow | null
   firstBadSha: string | null
+  /** Whether Aeon will still pick this finding up; once the engineer has decided, it never will. */
+  awaitingAeon: boolean
 }
 
 const TABS = [
@@ -89,7 +91,11 @@ export function CandidateEvidence(props: Props) {
               {props.bisectMethod && <p className="cand-note">{props.bisectMethod}</p>}
             </>
           ) : (
-            <p className="muted">Aeon has not reproduced this yet. It runs the failing step in its own runner on its next pass.</p>
+            <p className="muted">
+              {props.awaitingAeon
+                ? 'Aeon has not reproduced this yet. It runs the failing step in its own runner on its next pass.'
+                : 'Aeon did not reproduce this one: it was decided before Aeon’s pass.'}
+            </p>
           ))}
 
         {tab === 'cause' &&

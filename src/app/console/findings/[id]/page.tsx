@@ -178,6 +178,7 @@ export default async function FindingPage({ params }: { params: Promise<{ id: st
         bisectMethod={inv?.bisectMethod ?? null}
         regression={finding.regression}
         firstBadSha={inv?.firstBadSha ?? null}
+        awaitingAeon={INVESTIGABLE.includes(finding.status)}
       />
 
       <p className="cand-judge">
