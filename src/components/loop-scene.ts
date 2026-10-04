@@ -1,8 +1,9 @@
 import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, Group, PerspectiveCamera, Points, Scene, ShaderMaterial, WebGLRenderer } from 'three'
 import { buildLoopShapes, LOOP_SHAPE_COUNT } from './loop-shapes'
 
-const STEP_COLORS = ['#c9d2ff', '#dfe5ff', '#e9ecf5', '#7fe0a8', '#a9b8ff']
-const FAILURE_COLOR = '#ff7a6b'
+/** Golden hour: warm light that gathers into amber at the payout; checks turn the brand's green, the failure terracotta. */
+const STEP_COLORS = ['#efe2cf', '#f5d8b0', '#f2ece3', '#9ad8a0', '#e8a557']
+const FAILURE_COLOR = '#e0795f'
 /** How far the camera looks down on each form: the board of checks reads best from above. */
 const TILT = [0.18, 0.12, 0.08, 0.82, 0.42]
 

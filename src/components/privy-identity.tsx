@@ -44,7 +44,7 @@ export function PrivyIdentityProvider({ appId, children }: { appId: string; chil
         loginMethods: ['email', 'google', 'twitter', 'wallet'],
         appearance: {
           theme: 'light',
-          accentColor: '#d4416a',
+          accentColor: '#e8a557',
           logo: '/mascots/seedling.png',
           landingHeader: 'Sign in to bon travail',
           loginMessage: 'Earn USDC for answers the chain can check.',
