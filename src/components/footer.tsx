@@ -1,10 +1,11 @@
 'use client'
 
-import { ArrowUpRight } from 'lucide-react'
-import { motion, useReducedMotion, useScroll, useTransform } from 'motion/react'
+import { ArrowRight, ArrowUpRight } from 'lucide-react'
+import { useReducedMotion, useScroll, useTransform } from 'motion/react'
 import Link from 'next/link'
 import { useRef, useSyncExternalStore } from 'react'
 import { FooterVideo } from './footer-video'
+import { Roll } from './roll'
 import { BonTravailWordmark } from './wordmark'
 
 interface FooterLink {
@@ -27,7 +28,8 @@ export function Footer({ escrowUrl }: { escrowUrl: string | null }) {
   // Scroll-linked styles switch on after mount, so the server render and no-JS visitors see the scene at rest.
   const hydrated = useSyncExternalStore(subscribeNothing, () => true, () => false)
   const { scrollYProgress } = useScroll({ target: sceneRef, offset: ['start end', 'end end'] })
-  const sceneScale = useTransform(scrollYProgress, [0, 1], [0.96, 1])
+  // The scene settles from a slight zoom as it arrives; the frame itself never moves.
+  const videoScale = useTransform(scrollYProgress, [0, 1], [1.06, 1])
 
   const columns: { title: string; links: FooterLink[] }[] = [
     {
@@ -61,10 +63,15 @@ export function Footer({ escrowUrl }: { escrowUrl: string | null }) {
       <div className="foot-info">
         <div className="foot-brand">
           <Link href="/" aria-label="bon travail, home">
-            <BonTravailWordmark />
+            <BonTravailWordmark variant="serif" />
           </Link>
           <span className="label">Agents pay humans</span>
           <p className="foot-statement">Agents find broken code and pay humans to fix it.</p>
+          <Link className="btn btn-glass foot-cta" href="/docs">
+            <Roll>
+              See docs <ArrowRight size={15} aria-hidden />
+            </Roll>
+          </Link>
         </div>
 
         <nav className="foot-columns" aria-label="Footer">
@@ -94,9 +101,9 @@ export function Footer({ escrowUrl }: { escrowUrl: string | null }) {
         </div>
       </div>
 
-      <motion.div ref={sceneRef} className="foot-scene" style={hydrated && !reduce ? { scale: sceneScale } : undefined}>
-        <FooterVideo />
-      </motion.div>
+      <div ref={sceneRef} className="foot-scene">
+        <FooterVideo scale={hydrated && !reduce ? videoScale : undefined} />
+      </div>
     </footer>
   )
 }

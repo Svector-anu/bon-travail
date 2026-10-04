@@ -264,7 +264,6 @@ img {
 .wordmark {
   display: block;
   width: auto;
-  aspect-ratio: 500.15 / 79.34;
   overflow: visible;
 }
 
@@ -2412,8 +2411,12 @@ textarea.input.mono {
 }
 
 .foot-brand .wordmark {
-  height: 26px;
+  height: 38px;
   color: var(--text);
+}
+
+.foot-cta {
+  margin-top: 10px;
 }
 
 .foot-statement {
@@ -2472,25 +2475,73 @@ textarea.input.mono {
   color: var(--dim);
 }
 
-/* The final scene: the Macintosh video at its own 16:9, nothing laid over it. */
+/* The final scene: the Macintosh video edge to edge at its own 16:9, nothing laid over it.
+   Its sky fades up out of the night, so the information above and the world below read as one view. */
 .foot-scene {
   position: relative;
-  width: min(1440px, calc(100% - 48px));
+  width: min(100%, 1680px);
   aspect-ratio: 16 / 9;
-  margin: 0 auto 24px;
+  margin: 0 auto;
   overflow: hidden;
-  border-radius: 28px;
-  background: #2f6fd3;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06);
-  transform-origin: 50% 100%;
+  isolation: isolate;
+}
+
+.foot-scene::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(180deg, var(--bg) 0%, rgba(14, 12, 10, 0.55) 9%, rgba(14, 12, 10, 0) 26%);
+  pointer-events: none;
 }
 
 .foot-video {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
+  will-change: transform;
   object-fit: cover;
   object-position: 50% 50%;
+}
+
+.foot-sound {
+  position: absolute;
+  left: 24px;
+  bottom: 24px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 14px 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(14, 12, 10, 0.58);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: var(--text);
+  font-size: 12.5px;
+  transition: background 200ms var(--ease), border-color 200ms var(--ease);
+}
+
+.foot-sound:hover,
+.foot-sound:focus-visible {
+  border-color: rgba(255, 255, 255, 0.32);
+  background: rgba(14, 12, 10, 0.6);
+}
+
+/* Wider than the film: let its sides dissolve into the page instead of ending on a hard edge. */
+@media (min-width: 1700px) {
+  .foot-scene {
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 7%, #000 93%, transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0, #000 7%, #000 93%, transparent 100%);
+  }
+
+  .foot-sound {
+    left: calc(7% + 16px);
+  }
 }
 
 @media (max-width: 900px) {
@@ -2511,7 +2562,7 @@ textarea.input.mono {
   }
 
   .foot-brand .wordmark {
-    height: 22px;
+    height: 30px;
   }
 
   .foot-columns {
@@ -2519,12 +2570,17 @@ textarea.input.mono {
     gap: 32px 16px;
   }
 
-  /* Phones get a taller crop of the centre: the sides go, the whole Macintosh stays. */
+  /* Phones get a taller crop of the centre: the sides go, the whole Macintosh stays.
+     The space below keeps the floating engineers pill off the film. */
   .foot-scene {
-    width: calc(100% - 32px);
+    width: 100%;
     aspect-ratio: 4 / 5;
-    margin-bottom: 88px;
-    border-radius: 22px;
+    margin-bottom: 84px;
+  }
+
+  .foot-sound {
+    left: 16px;
+    bottom: 16px;
   }
 }
 
