@@ -2942,6 +2942,10 @@ textarea.input.mono {
   display: block;
 }
 
+.hero-title {
+  text-wrap: balance;
+}
+
 .hero-word {
   display: inline-block;
   animation: hero-word 1100ms var(--ease) both;
@@ -3120,18 +3124,29 @@ textarea.input.mono {
 }
 
 .loop-caption {
-  max-width: 540px;
-  min-height: 3.1em;
+  max-width: 580px;
+  min-height: 4.65em;
   color: var(--ink-muted);
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.55;
   animation: loop-caption-in 600ms var(--ease) both;
 }
 
-.loop .loop-more {
-  border-color: transparent;
-  background: var(--ink);
-  color: var(--paper);
+.loop-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: rgba(23, 19, 15, 0.25);
+  text-underline-offset: 4px;
+  transition: text-decoration-color 200ms var(--ease);
+}
+
+.loop-more:hover {
+  text-decoration-color: var(--ink);
 }
 
 @keyframes loop-caption-in {
@@ -3174,8 +3189,8 @@ textarea.input.mono {
   }
 
   .loop-caption {
-    min-height: 4.65em;
-    font-size: 14px;
+    min-height: 6.2em;
+    font-size: 15px;
   }
 }
 

@@ -1,13 +1,13 @@
 import { ArrowRight, Play } from 'lucide-react'
 import Link from 'next/link'
 import { HeroVideo } from '@/components/hero-video'
-import { HowItWorks } from '@/components/how-it-works'
+import { WhatChanges } from '@/components/what-changes'
 import { Roll } from '@/components/roll'
 import { openWork } from '@/server/queries'
 
 export const dynamic = 'force-dynamic'
 
-const HEADLINE = ['Your agents find', 'the work. People', 'fix it. Proof pays.']
+const HEADLINE = ['Agents find broken tests and pay people to fix them.']
 
 /** Each word with its place in the whole headline, so the entrance can stagger across lines. */
 const HEADLINE_LINES = HEADLINE.map((line, row) => {
@@ -34,7 +34,7 @@ function Headline() {
   )
 }
 
-/** Three parts and no more: the promise, how the loop works, and the footer. Everything else lives in /docs. */
+/** Three parts and no more: the promise, what changes, and the footer. Everything else lives in /docs. */
 export default async function HomePage() {
   const current = await openWork()
 
@@ -47,19 +47,19 @@ export default async function HomePage() {
         <div className="hero-copy">
           <span className="label">Agents pay humans</span>
           <Headline />
-          <p>Aeon notices the test that keeps failing and works out why. You choose who fixes it. When your tests pass, they are paid. No invoices, no chasing.</p>
+          <p>You decide who can take the work and what it pays, and the money is released only after your own tests pass.</p>
           <div className="hero-ctas">
             <Link className="btn btn-primary" href={current ? `/task/${current.id}` : '/tasks'}>
               <Roll>See open work <ArrowRight size={16} /></Roll>
             </Link>
             <Link className="btn btn-glass" href="#how">
-              <Roll><Play size={14} /> How it works</Roll>
+              <Roll><Play size={14} /> Learn more</Roll>
             </Link>
           </div>
         </div>
       </section>
 
-      <HowItWorks />
+      <WhatChanges />
     </>
   )
 }

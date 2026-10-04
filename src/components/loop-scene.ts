@@ -1,17 +1,15 @@
 import { BufferAttribute, BufferGeometry, Color, Group, PerspectiveCamera, Points, Scene, ShaderMaterial, WebGLRenderer } from 'three'
 import { buildLoopShapes, LOOP_SHAPE_COUNT } from './loop-shapes'
 
-/** Ink on paper that warms into amber at the payout; checks turn green, the failure terracotta. */
-const STEP_COLORS = ['#3b3027', '#5b4331', '#2a231c', '#2f8a52', '#c47a22']
+/** Ink on paper that warms into copper at the payout; the failure is terracotta. */
+const STEP_COLORS = ['#3b3027', '#2a231c', '#c47a22']
 const FAILURE_COLOR = '#c4532f'
-/** How far the camera looks down on each form: the board of checks reads best from above. */
-const TILT = [0.18, 0.12, 0.08, 0.82, 0.42]
+/** How far the camera looks down on each form. */
+const TILT = [0.18, 0.08, 0.42]
 
 const vertexShader = /* glsl */ `
   attribute vec3 p1;
   attribute vec3 p2;
-  attribute vec3 p3;
-  attribute vec3 p4;
   attribute float aSeed;
   attribute float aFailure;
   uniform float uMorph;
@@ -26,9 +24,7 @@ const vertexShader = /* glsl */ `
   vec3 shape(int i) {
     if (i == 0) return position;
     if (i == 1) return p1;
-    if (i == 2) return p2;
-    if (i == 3) return p3;
-    return p4;
+    return p2;
   }
 
   void main() {

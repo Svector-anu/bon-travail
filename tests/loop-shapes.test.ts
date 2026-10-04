@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildLoopShapes, LOOP_SHAPE_COUNT } from '@/components/loop-shapes'
 
-describe('how-it-works point cloud', () => {
+describe('home page point cloud', () => {
   it('gives every form the same points, all finite and in frame', () => {
     // #given a cloud the size the mobile scene draws
     const shapes = buildLoopShapes(5200)
@@ -23,7 +23,7 @@ describe('how-it-works point cloud', () => {
     const b = buildLoopShapes(300)
 
     // #then they match point for point
-    expect(Array.from(a.positions[2]!)).toEqual(Array.from(b.positions[2]!))
+    expect(Array.from(a.positions[1]!)).toEqual(Array.from(b.positions[1]!))
     expect(Array.from(a.seeds)).toEqual(Array.from(b.seeds))
   })
 

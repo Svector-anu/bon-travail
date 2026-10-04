@@ -5,14 +5,20 @@ import { useMotionValueEvent, useReducedMotion, useScroll } from 'motion/react'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import type { LoopScene } from './loop-scene'
-import { Roll } from './roll'
 
 const STEPS = [
-  { label: 'aeon finds', copy: 'Aeon watches your CI. One red run is noise. The same one twice is work.' },
-  { label: 'you decide', copy: 'You set the scope, the reward and who may claim it. Aeon suggests, never approves.' },
-  { label: 'people fix', copy: 'Someone you trust opens a pull request inside that scope. Your tests stay off limits.' },
-  { label: 'tests verify', copy: 'Your own tests decide. Not a person, not the agent.' },
-  { label: 'proof pays', copy: 'USDC leaves escrow for the wallet you approved. The receipt keeps every step.' },
+  {
+    label: 'noticed',
+    copy: 'The test your team keeps re-running finally gets looked at, with the failing log and the commit that broke it already attached.',
+  },
+  {
+    label: 'fixed',
+    copy: 'Someone you trust picks it up and fixes it inside the limits you set, so nobody on your team has to drop what they are doing.',
+  },
+  {
+    label: 'paid',
+    copy: 'The moment your tests pass, they are paid in USDC from escrow, and both of you keep a receipt that shows exactly why.',
+  },
 ] as const
 
 const LAST = STEPS.length - 1
@@ -27,13 +33,12 @@ function morphAt(progress: number): number {
 }
 
 /**
- * The one explanation on the home page: the section pins, and scrolling walks
- * the loop. A point cloud changes form at each step (a loose cloud with one
- * failing knot, the evidence as a sphere, a branch merging back, a board of
- * checks, a ring), the step row grows the current step, and one line says
- * what happens. Without WebGL the steps and words still work on their own.
+ * The middle of the home page: what changes for a team once agents can pay
+ * people. The section pins and scrolling moves through three moments, each
+ * with its own form in the point cloud (a failure noticed, a branch merged
+ * back, a ring for the payment). Without WebGL the words carry it alone.
  */
-export function HowItWorks() {
+export function WhatChanges() {
   const sectionRef = useRef<HTMLElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const sceneRef = useRef<LoopScene | null>(null)
@@ -89,8 +94,8 @@ export function HowItWorks() {
     <section ref={sectionRef} className="loop" id="how" aria-labelledby="loop-title" style={{ '--loop-steps': STEPS.length } as React.CSSProperties}>
       <div className="loop-pin">
         <header className="loop-head">
-          <span className="label">How it works</span>
-          <h2 id="loop-title">Here, a failing test stops nagging and starts paying.</h2>
+          <span className="label">Agents pay humans</span>
+          <h2 id="loop-title">What changes when your agents can pay people</h2>
         </header>
 
         <div className="loop-stage" aria-hidden>
@@ -109,10 +114,8 @@ export function HowItWorks() {
         <p key={active} className="loop-caption" aria-live="polite">
           {STEPS[active]!.copy}
         </p>
-        <Link className="btn btn-glass loop-more" href="/docs">
-          <Roll>
-            The details live in the docs <ArrowRight size={15} />
-          </Roll>
+        <Link className="loop-more" href="/docs">
+          See docs <ArrowRight size={14} aria-hidden />
         </Link>
       </div>
     </section>

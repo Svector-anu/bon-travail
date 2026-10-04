@@ -1,10 +1,11 @@
 /**
- * The five forms of the "how it works" point cloud, one per step of the loop.
+ * The three forms of the home page's point cloud: a failure noticed, a fix
+ * made, a payment sealed.
  * Every form has the same number of points in the same order, so the scene can
  * morph between any two of them by blending positions on the GPU.
  */
 
-export const LOOP_SHAPE_COUNT = 5
+export const LOOP_SHAPE_COUNT = 3
 
 export interface LoopShapes {
   count: number
@@ -30,7 +31,7 @@ function mulberry32(seed: number): () => number {
 
 const FAILURE_SHARE = 0.06
 
-/** Aeon finds: a loose cloud of CI runs, with one tight knot of the same failure. */
+/** Noticed: a loose cloud of CI runs, with one tight knot of the same failure. */
 function cloud(out: Float32Array, n: number, rand: () => number, failure: Float32Array) {
   const knot = Math.floor(n * FAILURE_SHARE)
   for (let i = 0; i < n; i++) {
@@ -48,21 +49,7 @@ function cloud(out: Float32Array, n: number, rand: () => number, failure: Float3
   }
 }
 
-/** You decide: the evidence pulled into one ordered sphere. */
-function sphere(out: Float32Array, n: number, rand: () => number) {
-  const golden = Math.PI * (3 - Math.sqrt(5))
-  for (let i = 0; i < n; i++) {
-    const y = 1 - (i / (n - 1)) * 2
-    const radius = Math.sqrt(1 - y * y)
-    const theta = golden * i
-    const r = 0.98 + (rand() - 0.5) * 0.03
-    out[i * 3] = Math.cos(theta) * radius * r
-    out[i * 3 + 1] = y * r
-    out[i * 3 + 2] = Math.sin(theta) * radius * r
-  }
-}
-
-/** People fix: a branch leaves main, carries commits, and merges back. */
+/** Fixed: a branch leaves main, carries commits, and merges back. */
 function branch(out: Float32Array, n: number, rand: () => number) {
   const tube = () => (rand() - 0.5) * 0.06
   const commits = [-1.25, -0.62, 0, 0.62, 1.25]
@@ -90,36 +77,18 @@ function branch(out: Float32Array, n: number, rand: () => number) {
       x = c + r * Math.sin(phi) * Math.cos(theta)
       y = (onBranch && t > 0 && t < 1 ? 0.62 * Math.sin(Math.PI * t) : 0) + r * Math.cos(phi)
       z = (onBranch && t > 0 && t < 1 ? 0.34 * Math.sin(Math.PI * t) : 0) + r * Math.sin(phi) * Math.sin(theta)
-      out[i * 3] = x
+      out[i * 3] = x * 0.85
       out[i * 3 + 1] = y - 0.2
       out[i * 3 + 2] = z
       continue
     }
-    out[i * 3] = x + tube()
+    out[i * 3] = (x + tube()) * 0.85
     out[i * 3 + 1] = y + tube() - 0.2
     out[i * 3 + 2] = z + tube()
   }
 }
 
-/** Tests verify: a matrix of checks, laid flat like a board the camera tilts over. */
-function grid(out: Float32Array, n: number, rand: () => number) {
-  const cols = 9
-  const rows = 6
-  const width = 2.6
-  const depth = 1.7
-  for (let i = 0; i < n; i++) {
-    const alongRow = rand() < 0.5
-    const line = Math.floor(rand() * (alongRow ? rows : cols))
-    const t = rand()
-    const x = alongRow ? -width / 2 + t * width : -width / 2 + (line / (cols - 1)) * width
-    const z = alongRow ? -depth / 2 + (line / (rows - 1)) * depth : -depth / 2 + t * depth
-    out[i * 3] = x
-    out[i * 3 + 1] = (rand() - 0.5) * 0.02
-    out[i * 3 + 2] = z
-  }
-}
-
-/** Proof pays: a ring, the coin and the seal. */
+/** Paid: a ring, the coin and the seal. */
 function ring(out: Float32Array, n: number, rand: () => number) {
   const major = 0.82
   const minor = 0.26
@@ -138,10 +107,8 @@ export function buildLoopShapes(count: number, seed = 7): LoopShapes {
   const positions = Array.from({ length: LOOP_SHAPE_COUNT }, () => new Float32Array(count * 3))
   const failure = new Float32Array(count)
   cloud(positions[0]!, count, rand, failure)
-  sphere(positions[1]!, count, rand)
-  branch(positions[2]!, count, rand)
-  grid(positions[3]!, count, rand)
-  ring(positions[4]!, count, rand)
+  branch(positions[1]!, count, rand)
+  ring(positions[2]!, count, rand)
   const seeds = new Float32Array(count)
   for (let i = 0; i < count; i++) seeds[i] = rand()
   return { count, positions, seeds, failure }
