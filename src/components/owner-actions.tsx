@@ -100,7 +100,7 @@ export function WatchPicker({ repos }: { repos: { slug: string; private: boolean
         const res = await fetch(`/api/owner/repos/workflows?repo=${encodeURIComponent(repo)}`)
         const data = (await res.json()) as { workflows?: { name: string; path: string }[]; message?: string }
         if (!res.ok || !data.workflows) throw new Error(data.message ?? 'Could not read workflows')
-        if (data.workflows.length === 0) throw new Error(`${repo} has no active GitHub Actions workflow`)
+        if (data.workflows.length === 0) throw new Error(`${repo} has no GitHub Actions yet. bon travail watches CI runs, so add a workflow (for example one that runs your tests), then watch it.`)
         if (data.workflows.length === 1) return postJson('/api/owner/repos', { repo, workflow: data.workflows[0]!.path })
         setChoices(data.workflows)
         setWorkflow(data.workflows[0]!.path)

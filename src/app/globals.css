@@ -701,7 +701,6 @@ button.text-link:disabled {
   isolation: isolate;
 }
 
-
 .hero {
   min-height: 680px;
   display: grid;
@@ -1799,29 +1798,6 @@ button.text-link:disabled {
   padding: 8px 0;
 }
 
-/* ---- receipts: recurrence ------------------------------------------------------ */
-
-.recurrence {
-  margin-top: 18px;
-  border-style: dashed;
-  display: grid;
-  gap: 6px;
-}
-
-.recurrence .label {
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-}
-
-.recurrence p {
-  margin: 0;
-  font-size: 15px;
-}
-
-.recurrence.back {
-  border-color: rgba(224, 121, 95, 0.45);
-}
 
 /* ---- console ------------------------------------------------------------------- */
 
@@ -2574,8 +2550,6 @@ textarea.input.mono {
   -webkit-mask-image: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.14) 9%, rgba(0, 0, 0, 0.6) 18%, #000 31%);
   mask-image: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.14) 9%, rgba(0, 0, 0, 0.6) 18%, #000 31%);
 }
-
-
 
 .foot-video {
   position: absolute;
@@ -3484,6 +3458,143 @@ textarea.input.mono {
   }
 }
 
+/* ---- the externalize steps -------------------------------------------------- */
+
+.steps {
+  display: flex;
+  gap: 22px;
+  margin: 0 0 22px;
+  padding: 0;
+  list-style: none;
+  color: var(--dim);
+  font-size: 13px;
+}
+
+.steps li[aria-current='step'] {
+  color: var(--text);
+}
+
+.steps li.done {
+  color: var(--muted);
+}
+
+.steps .tnum {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-right: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  font-size: 12px;
+}
+
+.steps li[aria-current='step'] .tnum {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.step-body {
+  display: grid;
+  gap: 18px;
+}
+
+.input.big {
+  max-width: 220px;
+  height: 56px;
+  font-size: 24px;
+}
+
+.field-label {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.chip-btn,
+.who-card {
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--muted);
+  transition: border-color 200ms var(--ease), color 200ms var(--ease);
+}
+
+.chip-btn {
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 14px;
+}
+
+.chip-btn[aria-pressed='true'],
+.who-card[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.who {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.who-card {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  padding: 18px;
+  border-radius: 16px;
+  text-align: left;
+}
+
+.who-card strong {
+  color: var(--text);
+  font-weight: 500;
+  font-size: 16px;
+}
+
+.who-card span {
+  font-size: 13px;
+}
+
+.step-note {
+  color: var(--dim);
+  font-size: 13px;
+}
+
+.step-summary {
+  max-width: 52ch;
+  font-family: var(--display);
+  font-size: clamp(19px, 1.8vw, 23px);
+  line-height: 1.45;
+}
+
+.step-summary strong {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.terms {
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.terms summary {
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.terms[open] {
+  display: grid;
+  gap: 14px;
+}
+
 /* ---- agent journey: a line that fills like syrup as you scroll ------------------ */
 
 .journey-section {
@@ -3906,6 +4017,34 @@ textarea.input.mono {
   color: var(--refund);
 }
 
+.cand-why {
+  margin-top: 14px;
+}
+
+.cand-why summary {
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.cand-judge {
+  margin-top: 40px;
+  padding: 22px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.cand-judge .label {
+  margin-right: 10px;
+}
+
+.cand-judge strong {
+  color: var(--text);
+  font-weight: 500;
+}
+
 .cand-accept {
   display: grid;
   gap: 14px;
@@ -4214,7 +4353,6 @@ textarea.input.mono {
 .hero.bleed .hero-copy > p {
   text-shadow: 0 2px 24px rgba(24, 14, 6, 0.35);
 }
-
 
 @media (max-width: 720px) {
   .hero.bleed {

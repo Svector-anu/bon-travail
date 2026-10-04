@@ -1,18 +1,18 @@
-import { ArrowLeft, ArrowUpRight, Check, Eye, X } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, Check, X } from 'lucide-react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { shortAddress } from '@/domain/address'
-import type { ReceiptView, RecurrenceWatch, TimelineEntry } from '@/domain/views'
+import type { ReceiptView, TimelineEntry } from '@/domain/views'
 import { AutoRefresh } from '@/components/auto-refresh'
 import { BonTravail } from '@/components/bon-travail'
-import { Ago, LocalTime } from '@/components/clock'
+import { LocalTime } from '@/components/clock'
 import { CopyButton } from '@/components/copy-button'
 import { EvidenceFailure, EvidenceInvestigation } from '@/components/evidence'
 import { Reveal } from '@/components/reveal'
-import { FINDING_STATUS, TASK_STATUS } from '@/lib/format'
+import { TASK_STATUS, whoMayTake } from '@/lib/format'
 import { getApp } from '@/server/container'
-import { getReceiptView, recurrenceWatch } from '@/server/queries'
+import { getReceiptView } from '@/server/queries'
 import { Roll } from '@/components/roll'
 
 export const dynamic = 'force-dynamic'
@@ -94,48 +94,6 @@ function TxLink({ hash, url, simulated = false }: { hash: string | null; url: st
   )
 }
 
-function Recurrence({ watch }: { watch: RecurrenceWatch }) {
-  const status = FINDING_STATUS[watch.status]
-  const back = watch.status === 'recurred'
-  return (
-    <section className={`panel recurrence ${back ? 'back' : ''}`}>
-      <div className="panel-title">
-        <span className="label">
-          <Eye size={13} aria-hidden /> Recurrence watch · live, not part of the seal
-        </span>
-        <span className={`chip ${status.tone}`}>{status.label}</span>
-      </div>
-      <p>
-        {back ? (
-          <>
-            The failure came back
-            {watch.lastRecurrenceAt ? (
-              <>
-                {' '}
-                <Ago ts={watch.lastRecurrenceAt} />
-              </>
-            ) : null}
-            . Aeon reopened {watch.findingDisplayId} for the engineering team.
-          </>
-        ) : watch.status === 'resolved' ? (
-          <>
-            Green since <span className="mono">{watch.resolvedSha?.slice(0, 7)}</span>:{' '}
-            <span className="tnum">{watch.greenRunsSinceFix}</span> passing {watch.greenRunsSinceFix === 1 ? 'run' : 'runs'} on the default branch
-            {watch.recurrenceCount > 0 ? `, after ${watch.recurrenceCount} earlier ${watch.recurrenceCount === 1 ? 'recurrence' : 'recurrences'}` : ', no recurrence'}.
-          </>
-        ) : (
-          <>Waiting for the first green run on the default branch.</>
-        )}
-      </p>
-      {watch.lastPolledAt && (
-        <small className="muted">
-          Last checked <Ago ts={watch.lastPolledAt} />
-        </small>
-      )}
-    </section>
-  )
-}
-
 function ProofSection({ index, label, children }: { index: string; label: string; children: React.ReactNode }) {
   return (
     <section className="proof-section">
@@ -148,7 +106,7 @@ function ProofSection({ index, label, children }: { index: string; label: string
   )
 }
 
-function WorkReceipt({ receipt, watch, url }: { receipt: ReceiptView; watch: RecurrenceWatch | null; url: string }) {
+function WorkReceipt({ receipt, url }: { receipt: ReceiptView; url: string }) {
   const { task } = receipt
   const ci = task.ci!
   const paid = receipt.outcome === 'PAID'
@@ -251,7 +209,7 @@ function WorkReceipt({ receipt, watch, url }: { receipt: ReceiptView; watch: Rec
                 against {ci.repo}.
               </p>
             ) : (
-              <p className="evidence-lead">Open to {ci.contributors.map((c) => `@${c}`).join(', ')}. Nobody delivered a passing fix before the deadline.</p>
+              <p className="evidence-lead">Open to {whoMayTake(ci)}. Nobody delivered a passing fix before the deadline.</p>
             )}
             <p className="proof-quote">{ci.acceptance}</p>
             <p className="muted scope">{ci.scope}</p>
@@ -332,7 +290,6 @@ function WorkReceipt({ receipt, watch, url }: { receipt: ReceiptView; watch: Rec
         <Steps receipt={receipt} steps={refunded ? REFUND_STEPS : WORK_STEPS} />
       </section>
 
-      {watch && <Recurrence watch={watch} />}
 
       <Seal receipt={receipt} simulated={simulated} url={url} />
     </>
@@ -500,12 +457,11 @@ export default async function ReceiptPage({ params }: Props) {
   const receipt = await getReceiptView(id)
   if (!receipt) notFound()
   const url = `${(await getApp()).config.publicBaseUrl}/receipt/${id}`
-  const watch = receipt.task.ci ? await recurrenceWatch(id) : null
   const status = TASK_STATUS[receipt.outcome]
 
   return (
     <Reveal className="receipt">
-      {(!receipt.final || watch) && <AutoRefresh everyMs={receipt.final ? 30_000 : 8000} />}
+      {!receipt.final && <AutoRefresh everyMs={8000} />}
       <div className="receipt-head">
         <Link className="text-link" href="/receipts">
           <ArrowLeft size={14} /> Back to receipts
@@ -515,7 +471,7 @@ export default async function ReceiptPage({ params }: Props) {
           <span className={`chip ${status.tone}`}>{status.label}</span>
         </div>
       </div>
-      {receipt.task.ci ? <WorkReceipt receipt={receipt} watch={watch} url={url} /> : <RailReceipt receipt={receipt} url={url} />}
+      {receipt.task.ci ? <WorkReceipt receipt={receipt} url={url} /> : <RailReceipt receipt={receipt} url={url} />}
     </Reveal>
   )
 }

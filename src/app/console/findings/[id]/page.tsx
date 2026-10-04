@@ -11,7 +11,7 @@ import { CandidateEvidence } from '@/components/candidate-evidence'
 import { ActionButton } from '@/components/owner-actions'
 import { Reveal } from '@/components/reveal'
 import { candidateLabel, preparation } from '@/lib/candidate'
-import { FINDING_STATUS, TASK_STATUS } from '@/lib/format'
+import { FINDING_STATUS, TASK_STATUS, whoMayTake } from '@/lib/format'
 import { isOwnerSession } from '@/server/owner-session'
 import { getFindingDetail } from '@/server/queries'
 import { Roll } from '@/components/roll'
@@ -128,7 +128,10 @@ export default async function FindingPage({ params }: { params: Promise<{ id: st
           {inv ? (
             <>
               <p className="cand-statement">{inv.summary}</p>
-              <p className="cand-cause">{inv.rootCause}</p>
+              <details className="cand-why">
+                <summary>Why</summary>
+                <p className="cand-cause">{inv.rootCause}</p>
+              </details>
               <p className="cand-meta">
                 {inv.firstBadSha && (
                   <span>
@@ -177,15 +180,10 @@ export default async function FindingPage({ params }: { params: Promise<{ id: st
         firstBadSha={inv?.firstBadSha ?? null}
       />
 
-      <section className="cand-accept">
-        <span className="label">How a fix is judged</span>
-        <blockquote>{proposal.acceptance}</blockquote>
-        <p>
-          By GitHub Actions on your repository: <strong>{finding.workflowName} › {finding.jobName}</strong> on {finding.defaultBranch}. The person
-          fixing it cannot change the workflow, its tests or this condition.
-          {!inv && ' Aeon will propose a sharper condition once it has reproduced the failure; you can edit it before approving.'}
-        </p>
-      </section>
+      <p className="cand-judge">
+        <span className="label">Judged by</span> your GitHub Actions: <strong>{finding.workflowName} › {finding.jobName}</strong> on{' '}
+        {finding.defaultBranch}. Nobody fixing it can change the tests.
+      </p>
 
       {task ? (
         <section className="panel in-flight-panel">
@@ -194,7 +192,7 @@ export default async function FindingPage({ params }: { params: Promise<{ id: st
             <span className={`chip ${TASK_STATUS[task.state].tone}`}>{TASK_STATUS[task.state].label}</span>
           </div>
           <p>
-            {task.reward} USDC · open to {task.ci?.contributors.map((c) => `@${c}`).join(', ')}
+            {task.reward} USDC · open to {task.ci ? whoMayTake(task.ci) : ''}
             {task.claimantHandle &&
               (task.state === 'PAID'
                 ? ` · paid to @${task.claimantHandle}`
