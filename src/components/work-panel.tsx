@@ -173,7 +173,7 @@ export function WorkPanel({ task, attempts, claimedPrUrl, waitingFor, lastError 
           {body}
         </motion.div>
       </AnimatePresence>
-      {error && <p className="form-error" style={{ marginTop: 10 }}>{error}</p>}
+      {error && <p className="form-error form-feedback">{error}</p>}
     </div>
   )
 }
