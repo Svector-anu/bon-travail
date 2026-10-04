@@ -19,6 +19,7 @@ export interface GhRepo {
   name: string
   defaultBranch: string
   private: boolean
+  fork: boolean
   htmlUrl: string
 }
 
@@ -191,6 +192,7 @@ export class RestGitHubClient implements GitHubClient {
       name: s(repo.name, name),
       defaultBranch: s(repo.default_branch, 'main'),
       private: repo.private === true,
+      fork: repo.fork === true,
       htmlUrl: s(repo.html_url),
     }
   }

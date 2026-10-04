@@ -2,6 +2,7 @@ import { getApp } from '@/server/container'
 import { DomainError } from '@/server/errors'
 import { REPO_SLUG } from '@/server/github/client'
 import { handle, json, requireOwnerRequest } from '@/server/http'
+import { noWorkflowsMessage } from '@/server/services/work-service'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,6 +15,10 @@ export async function GET(request: Request) {
     const { github } = await getApp()
     if (!github) throw new DomainError('UNAVAILABLE', 'GitHub is not connected in this deployment')
     const workflows = (await github.listWorkflows(match[1]!, match[2]!)).filter((w) => w.state === 'active')
+    if (workflows.length === 0) {
+      const repo = await github.getRepo(match[1]!, match[2]!)
+      throw new DomainError('BAD_REQUEST', noWorkflowsMessage(`${repo.owner}/${repo.name}`, repo.fork))
+    }
     return json({ workflows: workflows.map((w) => ({ name: w.name, path: w.path })) })
   })
 }

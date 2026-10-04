@@ -47,6 +47,8 @@ export class FakeGitHub implements GitHubClient {
   pulls = new Map<number, GhPull>()
   pullFiles = new Map<number, string[]>()
   compareCommits: GhCompare['commits'] = []
+  fork = false
+  workflows: GhWorkflow[] = [{ id: WORKFLOW_ID, name: 'Examples', path: WORKFLOW_PATH, state: 'active' }]
 
   private check() {
     if (this.down) throw new GitHubUnavailableError('github down')
@@ -123,12 +125,12 @@ export class FakeGitHub implements GitHubClient {
   async getRepo(owner: string, name: string): Promise<GhRepo> {
     this.check()
     if (owner !== OWNER || name !== NAME) throw new GitHubNotFoundError(`${owner}/${name}`)
-    return { owner, name, defaultBranch: 'main', private: false, htmlUrl: `https://github.com/${owner}/${name}` }
+    return { owner, name, defaultBranch: 'main', private: false, fork: this.fork, htmlUrl: `https://github.com/${owner}/${name}` }
   }
 
   async listWorkflows(): Promise<GhWorkflow[]> {
     this.check()
-    return [{ id: WORKFLOW_ID, name: 'Examples', path: WORKFLOW_PATH, state: 'active' }]
+    return this.workflows
   }
 
   async listRuns(_owner: string, _name: string, workflow: string | number, query: RunQuery): Promise<GhRun[]> {

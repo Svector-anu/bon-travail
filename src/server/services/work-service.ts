@@ -17,6 +17,16 @@ import type { Observer, ObserveReport } from './observer'
 import type { TaskService } from './task-service'
 import { displayId, findingDisplayIdOf as findingDisplayId, type ReceiptContext } from './views'
 
+/**
+ * Why there is nothing to watch. A fork usually has workflows already, but
+ * GitHub keeps them off until its owner turns them on, so it gets its own advice.
+ */
+export function noWorkflowsMessage(slug: string, fork: boolean): string {
+  return fork
+    ? `${slug} is a fork, and GitHub keeps a fork's workflows off until you turn them on. Open its Actions tab, enable workflows, then watch it.`
+    : `${slug} has no GitHub Actions yet. bon travail watches CI runs, so add a workflow (for example one that runs your tests), then watch it.`
+}
+
 export interface WorkSettings {
   maxRewardMicro: bigint
   /** The agent's own payer address and the escrow contract: neither can be a contributor wallet. */
@@ -137,7 +147,7 @@ export class WorkService {
       throw error
     }
     const workflows = (await gh.listWorkflows(found.owner, found.name)).filter((w) => w.state === 'active')
-    if (workflows.length === 0) throw new DomainError('BAD_REQUEST', `${found.owner}/${found.name} has no GitHub Actions yet. bon travail watches CI runs, so add a workflow (for example one that runs your tests), then watch it.`)
+    if (workflows.length === 0) throw new DomainError('BAD_REQUEST', noWorkflowsMessage(`${found.owner}/${found.name}`, found.fork))
     const workflow = workflowPath ? workflows.find((w) => w.path === workflowPath.trim()) : workflows.length === 1 ? workflows[0] : undefined
     if (!workflow) {
       throw new DomainError('BAD_REQUEST', `Pick a workflow to watch: ${workflows.map((w) => w.path).join(', ')}`)

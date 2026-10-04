@@ -510,3 +510,27 @@ describe('open work', () => {
     await expect(ctx.app.work.claimWithPullRequest(ctx.task.id, pr.htmlUrl)).rejects.toMatchObject({ code: 'FORBIDDEN' })
   })
 })
+
+describe('watching a repository without runnable workflows', () => {
+  it('tells the engineer to turn on a fork’s workflows', async () => {
+    // #given a fork whose workflows GitHub has not enabled yet
+    const github = new FakeGitHub()
+    github.fork = true
+    github.workflows = []
+    const app = await makeApp({ github, env: { TARGET_OPEN_TASKS: '0' } })
+
+    // #when the engineer tries to watch it
+    // #then they are pointed at the fork's Actions tab, not told to write a workflow
+    await expect(app.work.connectRepo(REPO, undefined, 'owner')).rejects.toThrow(/is a fork.*Open its Actions tab/)
+  })
+
+  it('asks for a workflow when the repository has none', async () => {
+    // #given a repository with no GitHub Actions at all
+    const github = new FakeGitHub()
+    github.workflows = []
+    const app = await makeApp({ github, env: { TARGET_OPEN_TASKS: '0' } })
+
+    // #then the engineer is told to add one
+    await expect(app.work.connectRepo(REPO, undefined, 'owner')).rejects.toThrow(/has no GitHub Actions yet/)
+  })
+})
