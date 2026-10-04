@@ -2395,6 +2395,8 @@ textarea.input.mono {
 }
 
 .foot-info {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
   gap: 56px 64px;
@@ -2479,21 +2481,19 @@ textarea.input.mono {
    Its sky fades up out of the night, so the information above and the world below read as one view. */
 .foot-scene {
   position: relative;
-  width: min(100%, 1680px);
+  z-index: 0;
+  width: 100%;
   aspect-ratio: 16 / 9;
-  margin: 0 auto;
+  /* Tucks up under the metadata row: the film's sky rises out of the dark the text sits on. */
+  margin-top: calc(-1 * clamp(64px, 8vw, 150px));
   overflow: hidden;
   isolation: isolate;
+  /* The film itself fades in from transparent, so there is no edge to see, only sky rising out of the dark. */
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.14) 9%, rgba(0, 0, 0, 0.6) 18%, #000 31%);
+  mask-image: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.14) 9%, rgba(0, 0, 0, 0.6) 18%, #000 31%);
 }
 
-.foot-scene::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  background: linear-gradient(180deg, var(--bg) 0%, rgba(14, 12, 10, 0.55) 9%, rgba(14, 12, 10, 0) 26%);
-  pointer-events: none;
-}
+
 
 .foot-video {
   position: absolute;
@@ -2532,18 +2532,6 @@ textarea.input.mono {
   background: rgba(14, 12, 10, 0.6);
 }
 
-/* Wider than the film: let its sides dissolve into the page instead of ending on a hard edge. */
-@media (min-width: 1700px) {
-  .foot-scene {
-    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 7%, #000 93%, transparent 100%);
-    mask-image: linear-gradient(90deg, transparent 0, #000 7%, #000 93%, transparent 100%);
-  }
-
-  .foot-sound {
-    left: calc(7% + 16px);
-  }
-}
-
 @media (max-width: 900px) {
   .foot-info {
     grid-template-columns: minmax(0, 1fr);
@@ -2570,11 +2558,11 @@ textarea.input.mono {
     gap: 32px 16px;
   }
 
-  /* Phones get a taller crop of the centre: the sides go, the whole Macintosh stays.
+  /* Phones get a square crop of the centre: the sides go, the whole Macintosh stays with sky around it.
      The space below keeps the floating engineers pill off the film. */
   .foot-scene {
     width: 100%;
-    aspect-ratio: 4 / 5;
+    aspect-ratio: 1 / 1;
     margin-bottom: 84px;
   }
 
