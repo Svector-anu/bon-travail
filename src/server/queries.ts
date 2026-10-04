@@ -84,6 +84,13 @@ export async function agentActivity(limit = 40, filter: { taskId?: string; findi
 
 const LIVE_STATES = ['OPEN', 'CLAIMED', 'SUBMITTED', 'VERIFYING', 'ACCEPTED', 'REJECTED'] as const
 
+/** The escrow contract on the Arc explorer, for the footer; null when payouts are not escrowed. */
+export async function escrowExplorerUrl(): Promise<string | null> {
+  const app = await getApp()
+  const address = app.config.paymentProvider === 'arc-escrow' ? app.config.arcEscrowAddress : undefined
+  return address ? `${app.chain.explorerUrl}/address/${address}` : null
+}
+
 /** The work package the home page points to: the first one open to contributors, else the newest in flight. */
 export async function openWork(): Promise<TaskView | null> {
   const app = await getApp()

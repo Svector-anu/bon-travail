@@ -7,6 +7,7 @@ import { Header } from '@/components/header'
 import { Providers } from '@/components/providers'
 import { SmoothScroll } from '@/components/smooth-scroll'
 import { isOwnerSession } from '@/server/owner-session'
+import { escrowExplorerUrl } from '@/server/queries'
 
 /** Open Runde (Inter with rounded terminals, SIL OFL): one clear family for the brand, statements and body. */
 const sans = localFont({
@@ -27,7 +28,7 @@ export const metadata: Metadata = {
 }
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
-  const owner = await isOwnerSession().catch(() => false)
+  const [owner, escrowUrl] = await Promise.all([isOwnerSession().catch(() => false), escrowExplorerUrl().catch(() => null)])
   return (
     <html lang="en" className={sans.variable}>
       <body>
@@ -36,7 +37,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           <div className="shell">
             <Header owner={owner} />
             <main className="main">{children}</main>
-            <Footer />
+            <Footer escrowUrl={escrowUrl} />
           </div>
         </Providers>
       </body>

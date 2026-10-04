@@ -1,85 +1,110 @@
 'use client'
 
+import { ArrowUpRight } from 'lucide-react'
 import { motion, useReducedMotion, useScroll, useTransform } from 'motion/react'
 import Link from 'next/link'
 import { useRef, useSyncExternalStore } from 'react'
 import { BonTravailWordmark } from './wordmark'
 
-const LINKS = [
-  { href: '/tasks', label: 'work' },
-  { href: '/receipts', label: 'receipts' },
-  { href: '/agent', label: 'agent' },
-  { href: '/docs', label: 'docs' },
-  { href: 'https://github.com/apps/bon-travail', label: 'github', external: true },
-] as const
+interface FooterLink {
+  href: string
+  label: string
+  external?: boolean
+}
 
 const subscribeNothing = () => () => {}
 
-/** The resting scene: what the server renders, what no-JS and reduced-motion visitors see. */
-const STILL = { opacity: 1, y: 0, scale: 1 }
-
 /**
- * The last scene of every page: the monolith at sunset, with the product's
- * one-line promise set over the sky. As it scrolls into view the landscape
- * settles a few percent and the words arrive after it; metadata comes last.
- * The image carries no text, so everything stays crisp, selectable and clickable.
+ * Every page ends the same way: one closing line over the monolith at sunset,
+ * then a small, ordinary footer with the places worth going next. The scene
+ * has a rounded top so its edge shows at the bottom of the screen before you
+ * reach it, a hint that the page goes on.
  */
-export function Footer() {
-  const ref = useRef<HTMLElement>(null)
+export function Footer({ escrowUrl }: { escrowUrl: string | null }) {
+  const sceneRef = useRef<HTMLElement>(null)
   const reduce = useReducedMotion()
-  // Scroll motion switches on after mount: the server and the first render show the
-  // resting scene, so nothing is ever stuck hidden. The footer starts below the fold,
-  // so the switch is never visible.
+  // Parallax switches on after mount, so the server render and no-JS visitors get the still scene.
   const hydrated = useSyncExternalStore(subscribeNothing, () => true, () => false)
-  const live = hydrated && !reduce
-  const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end end'] })
-  const imageY = useTransform(scrollYProgress, [0, 1], ['-7%', '0%'])
-  const imageScale = useTransform(scrollYProgress, [0, 1], [1.06, 1])
-  const copyOpacity = useTransform(scrollYProgress, [0.35, 0.75], [0, 1])
-  const copyY = useTransform(scrollYProgress, [0.35, 0.8], [28, 0])
-  const metaOpacity = useTransform(scrollYProgress, [0.7, 0.98], [0, 1])
+  const { scrollYProgress } = useScroll({ target: sceneRef, offset: ['start end', 'end end'] })
+  const imageY = useTransform(scrollYProgress, [0, 1], ['-10%', '0%'])
+
+  const columns: { title: string; links: FooterLink[] }[] = [
+    {
+      title: 'Product',
+      links: [
+        { href: '/tasks', label: 'Open work' },
+        { href: '/receipts', label: 'Receipts' },
+        { href: '/agent', label: 'Agent' },
+        { href: '/docs', label: 'Docs' },
+      ],
+    },
+    {
+      title: 'For engineers',
+      links: [
+        { href: '/console', label: 'Console' },
+        { href: '/you', label: 'Your record' },
+        { href: 'https://github.com/apps/bon-travail', label: 'GitHub App', external: true },
+      ],
+    },
+    {
+      title: 'Built on',
+      links: [
+        { href: '/agent', label: 'Aeon' },
+        ...(escrowUrl ? [{ href: escrowUrl, label: 'Escrow on Arc', external: true }] : []),
+      ],
+    },
+  ]
 
   return (
-    <footer ref={ref} className="scene-footer">
-      <motion.div className="scene-media" style={live ? { y: imageY, scale: imageScale } : STILL} aria-hidden>
-        <picture>
-          <source media="(max-width: 720px)" srcSet="/scenes/footer-scene-sm.jpg" />
-          <img src="/scenes/footer-scene.jpg" alt="" loading="lazy" decoding="async" />
-        </picture>
-      </motion.div>
-      <div className="scene-shade" aria-hidden />
-
-      <motion.div className="scene-copy" style={live ? { opacity: copyOpacity, y: copyY } : STILL}>
-        <Link href="/" className="scene-brand">
-          <BonTravailWordmark />
-        </Link>
-        <p className="scene-statement">
+    <footer className="site-foot">
+      <section ref={sceneRef} className="foot-scene" aria-label="Closing">
+        <motion.div className="foot-scene-media" style={hydrated && !reduce ? { y: imageY } : undefined} aria-hidden>
+          <picture>
+            <source media="(max-width: 720px)" srcSet="/scenes/footer-scene-sm.jpg" />
+            <img src="/scenes/footer-scene.jpg" alt="" loading="lazy" decoding="async" />
+          </picture>
+        </motion.div>
+        <p className="foot-statement">
           <span>machines find the work.</span> <span>humans finish it.</span>
         </p>
-        <nav className="scene-links" aria-label="Footer">
-          {LINKS.map((link) =>
-            'external' in link ? (
-              <a key={link.href} href={link.href} target="_blank" rel="noreferrer">
-                {link.label}
-              </a>
-            ) : (
-              <Link key={link.href} href={link.href}>
-                {link.label}
-              </Link>
-            ),
-          )}
-        </nav>
-        <p className="scene-flow" aria-label="Agents, then humans, then proof">
-          agents <span aria-hidden>→</span> humans <span aria-hidden>→</span> proof
-        </p>
-      </motion.div>
+      </section>
 
-      <motion.div className="scene-meta" style={live ? { opacity: metaOpacity } : { opacity: 1 }}>
-        <span>built with aeon</span>
-        <span>settled on arc</span>
-        <span>work, verified.</span>
-        <span className="scene-copyright">© 2026 bon travail</span>
-      </motion.div>
+      <div className="foot-panel">
+        <div className="foot-brand">
+          <Link href="/" aria-label="bon travail, home">
+            <BonTravailWordmark />
+          </Link>
+          <p>Work, verified. Failing tests become paid fixes, and every payout leaves a receipt.</p>
+        </div>
+
+        <nav className="foot-columns" aria-label="Footer">
+          {columns.map((column) => (
+            <div key={column.title}>
+              <span className="label">{column.title}</span>
+              <ul>
+                {column.links.map((link) => (
+                  <li key={link.label}>
+                    {link.external ? (
+                      <a href={link.href} target="_blank" rel="noreferrer">
+                        {link.label} <ArrowUpRight size={12} aria-hidden />
+                      </a>
+                    ) : (
+                      <Link href={link.href}>{link.label}</Link>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </nav>
+
+        <div className="foot-legal">
+          <span>© 2026 bon travail</span>
+          <span className="foot-flow" aria-label="Agents, then humans, then proof">
+            agents <span aria-hidden>→</span> humans <span aria-hidden>→</span> proof
+          </span>
+        </div>
+      </div>
     </footer>
   )
 }
