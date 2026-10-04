@@ -403,11 +403,4 @@ export class WatchStore extends Repository {
       detail: fromJson<Record<string, unknown>>(str(row, 'detail_json')),
     }))
   }
-
-  async countFindings(): Promise<Record<FindingStatus, number>> {
-    const rows = await this.all('SELECT status, COUNT(*) AS n FROM findings GROUP BY status')
-    const counts = {} as Record<FindingStatus, number>
-    for (const row of rows) counts[str(row, 'status') as FindingStatus] = num(row, 'n')
-    return counts
-  }
 }

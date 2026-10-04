@@ -30,21 +30,6 @@ export interface TaskDetail {
   work: WorkProgress | null
 }
 
-export interface ReceiptSummary {
-  taskId: string
-  displayId: string
-  kind: TaskKind
-  title: string
-  outcome: string
-  reward: string
-  worker: string | null
-  workerHandle: string | null
-  settledAt: number
-  postedAt: number
-  deadlineAt: number
-  simulated: boolean
-}
-
 export interface ActivitySnapshot {
   status: AgentStatusView
   runs: AgentRunView[]
@@ -92,27 +77,6 @@ export async function getReceiptView(taskId: string): Promise<ReceiptView | null
   return (await app.store.getTask(taskId)) ? app.tasks.getReceipt(taskId) : null
 }
 
-export async function recentReceipts(limit = 6): Promise<ReceiptSummary[]> {
-  const app = await getApp()
-  return (await app.store.listReceipts(limit)).map((r) => {
-    const body = JSON.parse(r.bodyJson) as Omit<ReceiptView, 'digest' | 'final'>
-    return {
-      taskId: r.taskId,
-      displayId: body.task.displayId,
-      kind: body.task.kind,
-      title: body.task.title,
-      outcome: r.outcome,
-      reward: body.task.reward,
-      worker: body.worker,
-      workerHandle: body.workerHandle ?? null,
-      settledAt: r.createdAt,
-      postedAt: body.task.createdAt,
-      deadlineAt: body.task.deadlineAt,
-      simulated: body.payout?.simulated ?? body.funding?.simulated ?? false,
-    }
-  })
-}
-
 export async function agentActivity(limit = 40, filter: { taskId?: string; findingId?: string } = {}): Promise<ActivitySnapshot> {
   const { agent, store } = await getApp()
   return { status: await agent.status(), runs: await store.listRuns(limit, filter) }
@@ -120,33 +84,11 @@ export async function agentActivity(limit = 40, filter: { taskId?: string; findi
 
 const LIVE_STATES = ['OPEN', 'CLAIMED', 'SUBMITTED', 'VERIFYING', 'ACCEPTED', 'REJECTED'] as const
 
-export interface HomeSnapshot {
-  live: TaskView[]
-  paidTotal: string
-  paidCount: number
-  refundedCount: number
-  simulatedPayments: boolean
-  reposWatched: number
-  findingsOpen: number
-  recurrences: number
-}
-
-export async function homeSnapshot(): Promise<HomeSnapshot> {
+/** The work package the home page points to: the first one open to contributors, else the newest in flight. */
+export async function openWork(): Promise<TaskView | null> {
   const app = await getApp()
-  const totals = await app.store.settlementTotals()
-  const counts = await app.watch.countFindings()
-  const repos = await app.watch.listRepos(true)
-  const findings = await app.watch.listFindings({ limit: 500 })
-  return {
-    live: await toViews(app, await app.store.listTasks({ states: LIVE_STATES, limit: 10, kinds: [TASK_KIND_CI_FIX] })),
-    paidTotal: formatUsdc(totals.paidMicro),
-    paidCount: totals.paidCount,
-    refundedCount: totals.refundedCount,
-    simulatedPayments: app.payments.simulated,
-    reposWatched: repos.length,
-    findingsOpen: NEEDS_DECISION.reduce((sum, status) => sum + (counts[status] ?? 0), 0),
-    recurrences: findings.reduce((sum, f) => sum + f.recurrenceCount, 0),
-  }
+  const live = await toViews(app, await app.store.listTasks({ states: LIVE_STATES, limit: 10, kinds: [TASK_KIND_CI_FIX] }))
+  return live.find((t) => t.state === 'OPEN') ?? live[0] ?? null
 }
 
 export interface ConsoleSnapshot {
@@ -336,16 +278,6 @@ export async function workerSummary(addressInput: string): Promise<WorkerSummary
 }
 
 /** The most recent paid work package's sealed receipt: the home page tells its story. */
-export async function featuredReceipt(): Promise<ReceiptView | null> {
-  const app = await getApp()
-  for (const stored of await app.store.listReceipts(20)) {
-    if (stored.outcome !== 'PAID') continue
-    const body = JSON.parse(stored.bodyJson) as Omit<ReceiptView, 'digest' | 'final'>
-    if (body.task.kind === TASK_KIND_CI_FIX) return { ...body, final: true, digest: stored.digest }
-  }
-  return null
-}
-
 /** Where each piece of work stands right now, counted from real findings and tasks. Public: counts only. */
 export interface AgentPipeline {
   reposWatched: number
