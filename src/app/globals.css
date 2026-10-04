@@ -28,13 +28,13 @@
   --claimed: #8aa6d6;
   --radius: 22px;
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
-  --font: var(--font-sans), 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  --display: var(--font);
-  --serif: var(--font-serif), 'Cormorant Garamond', Georgia, serif;
+  --font: var(--font-sans), 'Inter', 'Helvetica Neue', Arial, sans-serif;
+  --serif: var(--font-serif), 'Instrument Serif', Georgia, serif;
+  --display: var(--serif);
   /* Critically damped spring (stiffness 100, damping 20): fast start, long soft settle. */
   --spring: linear(0, 0.045 4.2%, 0.144 8.3%, 0.264 12.5%, 0.385 16.7%, 0.496 20.8%, 0.594 25%, 0.677 29.2%, 0.745 33.3%, 0.801 37.5%, 0.845 41.7%, 0.881 45.8%, 0.908 50%, 0.93 54.2%, 0.947 58.3%, 0.96 62.5%, 0.969 66.7%, 0.977 70.8%, 0.983 75%, 0.987 79.2%, 0.99 83.3%, 0.993 87.5%, 0.995 91.7%, 0.996 95.8%, 1);
   --spring-time: 800ms;
-  --mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  --mono: var(--font);
   color-scheme: dark;
 }
 
@@ -96,6 +96,7 @@ img {
 
 .mono {
   font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: 0.92em;
   letter-spacing: 0.01em;
   word-break: break-all;
@@ -2005,6 +2006,7 @@ textarea.input {
 
 textarea.input.mono {
   font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: 13px;
 }
 

@@ -1,7 +1,6 @@
 import './globals.css'
 import type { Metadata } from 'next'
-import { Cormorant_Garamond } from 'next/font/google'
-import localFont from 'next/font/local'
+import { Inter, Instrument_Serif } from 'next/font/google'
 import type { ReactNode } from 'react'
 import { Footer } from '@/components/footer'
 import { Header } from '@/components/header'
@@ -10,19 +9,9 @@ import { SmoothScroll } from '@/components/smooth-scroll'
 import { isOwnerSession } from '@/server/owner-session'
 import { escrowExplorerUrl } from '@/server/queries'
 
-/** Open Runde (Inter with rounded terminals, SIL OFL): one clear family for the brand, statements and body. */
-const sans = localFont({
-  src: [
-    { path: './fonts/OpenRunde-Regular.woff2', weight: '400', style: 'normal' },
-    { path: './fonts/OpenRunde-Medium.woff2', weight: '500', style: 'normal' },
-    { path: './fonts/OpenRunde-Semibold.woff2', weight: '600', style: 'normal' },
-  ],
-  variable: '--font-sans',
-  display: 'swap',
-})
-
-/** The editorial serif, the same cut as the footer wordmark, kept to a few large headlines. */
-const serif = Cormorant_Garamond({ subsets: ['latin'], weight: '500', variable: '--font-serif', display: 'swap' })
+/** Two faces, one role each: Instrument Serif for every title and big number, Inter for everything else. */
+const sans = Inter({ subsets: ['latin'], variable: '--font-sans', display: 'swap' })
+const serif = Instrument_Serif({ subsets: ['latin'], weight: '400', variable: '--font-serif', display: 'swap' })
 
 export const metadata: Metadata = {
   title: { default: 'bon travail · agents find broken code and pay humans to fix it', template: '%s · bon travail' },

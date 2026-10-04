@@ -1,7 +1,7 @@
 /**
  * The bon travail wordmark, set as outlines so it is identical everywhere and
  * never waits on a font load. Two cuts of the same name:
- * - `sans` (default): Open Runde Semibold, clear at small sizes, for the header.
+ * - `sans` (default): a rounded Inter cut (Open Runde Semibold), clear at small sizes, for the header.
  * - `serif`: Cormorant Garamond Medium, the editorial cut, for the footer’s final scene.
  * Both fonts are SIL OFL; each keeps its own kerning.
  */
