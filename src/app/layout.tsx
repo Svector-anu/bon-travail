@@ -14,6 +14,7 @@ const sans = Inter({ subsets: ['latin'], variable: '--font-sans', display: 'swap
 const serif = Instrument_Serif({ subsets: ['latin'], weight: '400', variable: '--font-serif', display: 'swap' })
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://bon-travail.vercel.app'),
   title: { default: 'bon travail · agents find broken code and pay humans to fix it', template: '%s · bon travail' },
   description:
     'An agent spots tests that keep failing and works out why. Engineers decide who fixes it. When the fix passes the project\'s tests, the contributor is paid in USDC automatically.',
