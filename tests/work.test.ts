@@ -456,3 +456,57 @@ describe('public endpoint throttle', () => {
     await expect(throttle(app, 'claim:task_001')).resolves.toBeUndefined()
   })
 })
+
+describe('open work', () => {
+  it('lets anyone on GitHub claim, paid to the wallet in their own PR description', async () => {
+    // #given work opened to anyone, with nobody named
+    const ctx = await openWork({}, { openToAnyone: true, contributors: [] })
+    const pr = ctx.github.addPull({ number: 9, author: 'stranger', title: 'WORK-001: fix formatting', body: 'Fixes it.\nPayout: ' + MALLORY_WALLET })
+
+    // #when the PR author claims
+    const task = await ctx.app.work.claimWithPullRequest(ctx.task.id, pr.htmlUrl)
+
+    // #then the claim is theirs, to the wallet they wrote, and it lapses after a day rather than at the deadline
+    expect(task).toMatchObject({ state: 'CLAIMED', claimantHandle: 'stranger', claimant: MALLORY_WALLET })
+    expect(task.claimExpiresAt).toBeLessThanOrEqual(T0 + 24 * HOUR)
+  })
+
+  it('asks for a payout line instead of taking a wallet from the request', async () => {
+    // #given open work and a PR with no payout line
+    const ctx = await openWork({}, { openToAnyone: true, contributors: [] })
+    const pr = ctx.github.addPull({ number: 9, author: 'stranger', title: 'WORK-001: fix formatting' })
+
+    // #then the claim is refused with what to add
+    await expect(ctx.app.work.claimWithPullRequest(ctx.task.id, pr.htmlUrl)).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+  })
+
+  it('still pays a named person only to the wallet the engineer set', async () => {
+    // #given open work that also names ada with her wallet, and a PR by ada naming another wallet
+    const ctx = await openWork({}, { openToAnyone: true })
+    const pr = ctx.github.addPull({ number: 9, author: ADA, title: 'WORK-001: fix', body: 'Payout: ' + MALLORY_WALLET })
+
+    // #when she claims
+    const task = await ctx.app.work.claimWithPullRequest(ctx.task.id, pr.htmlUrl)
+
+    // #then the engineer's wallet wins
+    expect(task.claimant).toBe(ADA_WALLET)
+  })
+
+  it('lets the engineer name someone without knowing their wallet', async () => {
+    // #given ada named with no wallet, and her PR naming one
+    const ctx = await openWork({}, { contributors: [{ login: ADA }] })
+    const pr = ctx.github.addPull({ number: 9, author: ADA, title: 'WORK-001: fix', body: 'payout = ' + ADA_WALLET })
+
+    // #then she is paid to the wallet she wrote
+    expect((await ctx.app.work.claimWithPullRequest(ctx.task.id, pr.htmlUrl)).claimant).toBe(ADA_WALLET)
+  })
+
+  it('keeps named-only work closed to everyone else', async () => {
+    // #given the default: only ada may claim
+    const ctx = await openWork()
+    const pr = ctx.github.addPull({ number: 9, author: 'stranger', title: 'WORK-001: fix', body: 'Payout: ' + MALLORY_WALLET })
+
+    // #then a stranger is refused
+    await expect(ctx.app.work.claimWithPullRequest(ctx.task.id, pr.htmlUrl)).rejects.toMatchObject({ code: 'FORBIDDEN' })
+  })
+})

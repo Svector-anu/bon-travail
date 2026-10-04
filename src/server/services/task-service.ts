@@ -7,7 +7,6 @@ import {
   TASK_KIND_TX_FACT_CHECK,
   type Address,
   type CiFixSubmission,
-  type Contributor,
   type Hex,
   type TaskRecord,
 } from '@/domain/types'
@@ -73,6 +72,9 @@ function requireState(task: TaskRecord, allowed: readonly TaskState[], action: s
     throw new DomainError('CONFLICT', `Cannot ${action} ${task.id}: task is ${task.state}`)
   }
 }
+
+/** How long an open (anyone-may-claim) work package stays held for one person. */
+const OPEN_CLAIM_MS = 24 * 60 * 60 * 1000
 
 const CLEAR_CLAIM = { claimant: null, claimantHandle: null, claimId: null, claimExpiresAt: null }
 
@@ -311,7 +313,7 @@ export class TaskService {
    * The claim lasts until the deadline; the payout wallet is the one the
    * engineer approved, never one the claimant supplies.
    */
-  async claimWork(taskId: string, contributor: Contributor, pr: CiFixSubmission): Promise<TaskRecord> {
+  async claimWork(taskId: string, contributor: { login: string; wallet: Address }, pr: CiFixSubmission): Promise<TaskRecord> {
     const now = this.clock.now()
     return this.store.transaction(async () => {
       const task = await this.store.lockTask(taskId)
@@ -320,18 +322,24 @@ export class TaskService {
       if (task.state === 'CLAIMED') throw new DomainError('CONFLICT', `${taskId} is already claimed by @${task.claimantHandle}`)
       requireState(task, ['OPEN'], 'claim')
       if (now >= task.deadlineAt) throw new DomainError('GONE', `${taskId} has passed its deadline`)
-      const approved = task.spec.contributors.find((c) => c.login.toLowerCase() === contributor.login.toLowerCase())
-      if (!approved || approved.wallet !== contributor.wallet) {
+      const named = task.spec.contributors.find((c) => c.login.toLowerCase() === contributor.login.toLowerCase())
+      if (!named && !task.spec.openToAnyone) {
         throw new DomainError('FORBIDDEN', `@${contributor.login} is not on the approved list for ${taskId}`)
       }
+      // A wallet the engineer set is the only one that wallet's login can be paid to.
+      if (named?.wallet && named.wallet !== contributor.wallet) {
+        throw new DomainError('FORBIDDEN', `@${contributor.login} can only be paid to the wallet the engineer approved`)
+      }
+      const login = named?.login ?? contributor.login
       return this.openClaim(task, {
-        worker: approved.wallet,
-        handle: approved.login,
-        identity: `github:${approved.login.toLowerCase()}`,
+        worker: contributor.wallet,
+        handle: login,
+        identity: `github:${login.toLowerCase()}`,
         claimTokenHash: hashToken(randomBytes(24).toString('hex')),
-        claimExpiresAt: task.deadlineAt,
+        // An open claim lasts a day, so nobody can sit on work they will not finish; a named one runs to the deadline.
+        claimExpiresAt: named ? task.deadlineAt : Math.min(task.deadlineAt, now + OPEN_CLAIM_MS),
         singleSubmission: false,
-        actor: `contributor:${approved.login}`,
+        actor: `contributor:${login}`,
         detail: { prUrl: pr.prUrl },
       })
     })

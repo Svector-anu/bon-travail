@@ -10,7 +10,7 @@ import { CopyButton } from '@/components/copy-button'
 import { Evidence } from '@/components/evidence'
 import { Reveal } from '@/components/reveal'
 import { WorkPanel } from '@/components/work-panel'
-import { TASK_STATUS } from '@/lib/format'
+import { TASK_STATUS, whoMayTake } from '@/lib/format'
 import { getReceiptView, getTaskDetail, type WorkProgress } from '@/server/queries'
 
 export const dynamic = 'force-dynamic'
@@ -136,7 +136,7 @@ async function WorkPackage({ task, attempts, work }: { task: TaskView; attempts:
               </span>
               <div>
                 <span>Approved</span>
-                <strong>{ci.contributors.map((c) => `@${c}`).join(', ')}</strong>
+                <strong>{whoMayTake(ci)}</strong>
               </div>
             </div>
           </div>

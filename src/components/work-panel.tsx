@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, type FormEvent } from 'react'
 import type { AttemptView, TaskView } from '@/domain/views'
+import { whoMayTake } from '@/lib/format'
 import { Roll } from './roll'
 
 interface Props {
@@ -91,8 +92,9 @@ export function WorkPanel({ task, attempts, claimedPrUrl, waitingFor, lastError 
           {busy !== 'claim' && <GitPullRequest size={16} />}</Roll>
         </button>
         <p className="work-hint">
-          Open a draft PR against <span className="mono">{ci.baseBranch}</span> that mentions <strong>{task.displayId}</strong>. Only{' '}
-          {ci.contributors.map((c) => `@${c}`).join(', ')} can claim it.
+          Open a PR against <span className="mono">{ci.baseBranch}</span> that mentions <strong>{task.displayId}</strong> and has a line{' '}
+          <span className="mono">Payout: 0x…</span> with your wallet.{' '}
+          {ci.openToAnyone ? 'Anyone on GitHub can take it; a claim holds for a day.' : `Only ${whoMayTake(ci)} can claim it.`}
         </p>
       </form>
     )

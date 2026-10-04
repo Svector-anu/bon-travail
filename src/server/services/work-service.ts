@@ -8,7 +8,7 @@ import {
   type RepoRecord,
 } from '@/domain/findings'
 import { formatUsdc, parseUsdc } from '@/domain/money'
-import { TASK_KIND_CI_FIX, type CiFixSpec, type CiFixSubmission, type Contributor, type TaskRecord } from '@/domain/types'
+import { TASK_KIND_CI_FIX, type Address, type CiFixSpec, type CiFixSubmission, type Contributor, type TaskRecord } from '@/domain/types'
 import type { Clock } from '../clock'
 import { DomainError } from '../errors'
 import { GITHUB_LOGIN, GitHubNotFoundError, parsePullUrl, REPO_SLUG, type GitHubClient } from '../github/client'
@@ -27,7 +27,9 @@ export interface WorkSettings {
 export interface ExternalizeInput {
   reward: string
   deadlineHours: number
-  contributors: { login: string; wallet: string }[]
+  contributors: { login: string; wallet?: string }[]
+  /** Anyone on GitHub may take it; the named contributors are then optional. */
+  openToAnyone?: boolean
   acceptance: string
   scope: string
   protectedPaths: string[]
@@ -38,6 +40,8 @@ const MIN_DEADLINE_HOURS = 1
 const MAX_DEADLINE_HOURS = 30 * 24
 const MAX_CONTRIBUTORS = 10
 const DEFAULT_PROTECTED = '.github/'
+/** "Payout: 0x…" in a PR description names the author's wallet. */
+const PAYOUT_LINE = /^\s*payout\s*[:=]\s*(0x[0-9a-fA-F]{40})\b/im
 
 function text(value: unknown, field: string, max: number, min = 1): string {
   if (typeof value !== 'string') throw new DomainError('BAD_REQUEST', `${field} must be text`)
@@ -133,7 +137,7 @@ export class WorkService {
       throw error
     }
     const workflows = (await gh.listWorkflows(found.owner, found.name)).filter((w) => w.state === 'active')
-    if (workflows.length === 0) throw new DomainError('BAD_REQUEST', `${found.owner}/${found.name} has no active GitHub Actions workflow`)
+    if (workflows.length === 0) throw new DomainError('BAD_REQUEST', `${found.owner}/${found.name} has no GitHub Actions yet. bon travail watches CI runs, so add a workflow (for example one that runs your tests), then watch it.`)
     const workflow = workflowPath ? workflows.find((w) => w.path === workflowPath.trim()) : workflows.length === 1 ? workflows[0] : undefined
     if (!workflow) {
       throw new DomainError('BAD_REQUEST', `Pick a workflow to watch: ${workflows.map((w) => w.path).join(', ')}`)
@@ -232,6 +236,7 @@ export class WorkService {
       protectedPaths: input.protectedPaths,
       requireMerge: input.requireMerge,
       contributors: input.contributors,
+      openToAnyone: input.openToAnyone,
       approvedBy: actor,
     }
     const task = await this.tasks.createWorkTask(
@@ -251,7 +256,12 @@ export class WorkService {
       actor,
       to: 'externalized',
       event: 'externalized',
-      detail: { taskId: task.id, reward: formatUsdc(input.rewardMicro), contributors: input.contributors.map((c) => c.login) },
+      detail: {
+        taskId: task.id,
+        reward: formatUsdc(input.rewardMicro),
+        contributors: input.contributors.map((c) => c.login),
+        openToAnyone: input.openToAnyone,
+      },
       patch: { taskId: task.id, decidedBy: actor, decidedAt: now },
     })
     const funded = await this.tasks.fundTask(task.id, actor)
@@ -268,24 +278,20 @@ export class WorkService {
     if (!Number.isFinite(deadlineHours) || deadlineHours < MIN_DEADLINE_HOURS || deadlineHours > MAX_DEADLINE_HOURS) {
       throw new DomainError('BAD_REQUEST', `Deadline must be between ${MIN_DEADLINE_HOURS} hour and ${MAX_DEADLINE_HOURS / 24} days`)
     }
-    if (!Array.isArray(raw.contributors) || raw.contributors.length === 0 || raw.contributors.length > MAX_CONTRIBUTORS) {
-      throw new DomainError('BAD_REQUEST', `Approve between 1 and ${MAX_CONTRIBUTORS} contributors`)
+    const openToAnyone = raw.openToAnyone === true
+    const listed = Array.isArray(raw.contributors) ? raw.contributors : []
+    if ((!openToAnyone && listed.length === 0) || listed.length > MAX_CONTRIBUTORS) {
+      throw new DomainError('BAD_REQUEST', openToAnyone ? `Name at most ${MAX_CONTRIBUTORS} people` : `Open it to anyone, or name between 1 and ${MAX_CONTRIBUTORS} people`)
     }
     const seen = new Set<string>()
-    const contributors: Contributor[] = raw.contributors.map((c, i) => {
+    const contributors: Contributor[] = listed.map((c, i) => {
       const login = text(c?.login, `contributors[${i}].login`, 39).replace(/^@/, '')
       if (!GITHUB_LOGIN.test(login)) throw new DomainError('BAD_REQUEST', `"${login}" is not a GitHub login`)
       if (seen.has(login.toLowerCase())) throw new DomainError('BAD_REQUEST', `@${login} is listed twice`)
       seen.add(login.toLowerCase())
-      const wallet = checkAddress(String(c?.wallet ?? ''))
-      if (!wallet.ok) throw new DomainError('BAD_REQUEST', `Wallet for @${login} ${wallet.reason}`)
-      if (this.settings.operatorAddress && wallet.address.toLowerCase() === this.settings.operatorAddress.toLowerCase()) {
-        throw new DomainError('BAD_REQUEST', 'The agent treasury cannot be a contributor wallet')
-      }
-      if (this.settings.escrowAddress && wallet.address.toLowerCase() === this.settings.escrowAddress.toLowerCase()) {
-        throw new DomainError('BAD_REQUEST', 'The escrow contract cannot be a contributor wallet')
-      }
-      return { login, wallet: wallet.address }
+      const rawWallet = String(c?.wallet ?? '').trim()
+      if (!rawWallet) return { login, wallet: null }
+      return { login, wallet: this.payoutWallet(rawWallet, `Wallet for @${login}`) }
     })
     const protectedPaths = [
       ...new Set([
@@ -300,11 +306,31 @@ export class WorkService {
       rewardMicro,
       deadlineHours,
       contributors,
+      openToAnyone,
       acceptance: text(raw.acceptance, 'Acceptance condition', 1500),
       scope: text(raw.scope, 'Scope', 4000),
       protectedPaths,
       requireMerge: raw.requireMerge !== false,
     }
+  }
+
+  private walletFromPullBody(body: string): Address {
+    const line = PAYOUT_LINE.exec(body)
+    if (!line) throw new DomainError('BAD_REQUEST', 'Add a line "Payout: 0x…" with your wallet to the PR description, then claim again')
+    return this.payoutWallet(line[1]!, 'The payout wallet in the PR description')
+  }
+
+  /** A wallet a reward may be paid to: well formed, and never the treasury or the escrow itself. */
+  private payoutWallet(raw: string, label: string): Address {
+    const wallet = checkAddress(raw)
+    if (!wallet.ok) throw new DomainError('BAD_REQUEST', `${label} ${wallet.reason}`)
+    if (this.settings.operatorAddress && wallet.address.toLowerCase() === this.settings.operatorAddress.toLowerCase()) {
+      throw new DomainError('BAD_REQUEST', 'The agent treasury cannot be a payout wallet')
+    }
+    if (this.settings.escrowAddress && wallet.address.toLowerCase() === this.settings.escrowAddress.toLowerCase()) {
+      throw new DomainError('BAD_REQUEST', 'The escrow contract cannot be a payout wallet')
+    }
+    return wallet.address
   }
 
   async releaseClaim(taskId: string, actor: string): Promise<TaskRecord> {
@@ -321,15 +347,18 @@ export class WorkService {
   async claimWithPullRequest(taskId: string, prUrl: string): Promise<TaskRecord> {
     const { task, spec, pr, submission } = await this.loadPull(taskId, prUrl)
     if (pr.state !== 'open') throw new DomainError('BAD_REQUEST', `PR #${pr.number} is ${pr.merged ? 'already merged' : 'closed'}; claim with an open PR`)
-    const contributor = spec.contributors.find((c) => c.login.toLowerCase() === pr.author.toLowerCase())
-    if (!contributor) {
+    const named = spec.contributors.find((c) => c.login.toLowerCase() === pr.author.toLowerCase())
+    if (!named && !spec.openToAnyone) {
       throw new DomainError('FORBIDDEN', `@${pr.author} is not approved for ${displayId(task)}. The engineer controls who can take this work.`)
     }
     const mention = displayId(task)
     if (!`${pr.title}\n${pr.body}`.toUpperCase().includes(mention)) {
       throw new DomainError('BAD_REQUEST', `Add ${mention} to the PR title or description so the claim is tied to this work package`)
     }
-    return this.tasks.claimWork(taskId, contributor, submission)
+    // The payout comes from the engineer's list, or from the PR description, which only its author
+    // (and the repository's maintainers) can write. Never from the claim request itself.
+    const wallet = named?.wallet ?? this.walletFromPullBody(pr.body ?? '')
+    return this.tasks.claimWork(taskId, { login: pr.author, wallet }, submission)
   }
 
   /** Hands the claimed PR to the verifier. Safe for anyone to trigger: only the claimant can be paid. */

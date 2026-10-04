@@ -26,6 +26,8 @@ export interface CiTaskView {
   requireMerge: boolean
   /** Logins only. Wallets are known to the engineer and the payout ledger. */
   contributors: string[]
+  /** Anyone on GitHub may take it, not only the named logins. */
+  openToAnyone: boolean
   approvedBy: string
 }
 

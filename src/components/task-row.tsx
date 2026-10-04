@@ -1,7 +1,7 @@
 import { ArrowRight, ChevronRight, CircleDollarSign, GitBranch, Link2, Timer } from 'lucide-react'
 import Link from 'next/link'
 import type { TaskView } from '@/domain/views'
-import { TASK_STATUS } from '@/lib/format'
+import { TASK_STATUS, whoMayTake } from '@/lib/format'
 import { Ago, Countdown } from './clock'
 
 /** One scannable line of work: status, title, reward, time, where, id. */
@@ -18,7 +18,7 @@ export function TaskRow({ task, featured = false }: { task: TaskView; featured?:
       <h3>{ci ? `Fix what's breaking ${ci.repo.split('/').pop()}` : 'Read this Arc transaction'}</h3>
       {task.state === 'OPEN' && (
         <p className="desc">
-          {ci ? `Saved for ${ci.contributors.map((c) => `@${c}`).join(', ')}.` : 'Reply with the recipient address and the USDC amount.'}
+          {ci ? ci.openToAnyone ? 'Open to anyone on GitHub.' : `Saved for ${whoMayTake(ci)}.` : 'Reply with the recipient address and the USDC amount.'}
         </p>
       )}
       <div className="meta">

@@ -94,6 +94,7 @@ export function toTaskView(task: TaskRecord, attemptCount: number, ctx: ViewCont
             protectedPaths: spec.protectedPaths,
             requireMerge: spec.requireMerge,
             contributors: spec.contributors.map((c) => c.login),
+            openToAnyone: spec.openToAnyone === true,
             approvedBy: spec.approvedBy,
           }
         : null,

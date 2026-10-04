@@ -92,3 +92,9 @@ export function activityHeadline(action: string, taskId: string | null, detail: 
       return detail
   }
 }
+
+/** Who may take a work package, in words: "anyone on GitHub", or the named logins. */
+export function whoMayTake(ci: { contributors: string[]; openToAnyone: boolean }): string {
+  if (ci.openToAnyone) return 'anyone on GitHub'
+  return ci.contributors.map((c) => `@${c}`).join(', ')
+}

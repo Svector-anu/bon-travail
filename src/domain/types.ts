@@ -28,7 +28,8 @@ export interface TxFactSpec {
 /** A person the engineer approved, and the only wallet they can be paid at. */
 export interface Contributor {
   login: string
-  wallet: Address
+  /** Set by the engineer, or null: then the PR author names it in the PR description. */
+  wallet: Address | null
 }
 
 export interface RepoRef {
@@ -55,6 +56,8 @@ export interface CiFixSpec {
   /** When true the fix must be merged and pass on the base branch itself. */
   requireMerge: boolean
   contributors: Contributor[]
+  /** Any GitHub account may claim, not just the named contributors. Absent on packages made before it existed. */
+  openToAnyone?: boolean
   approvedBy: string
 }
 
