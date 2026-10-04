@@ -4,6 +4,7 @@ import { ArrowUpRight } from 'lucide-react'
 import { motion, useReducedMotion, useScroll, useTransform } from 'motion/react'
 import Link from 'next/link'
 import { useRef, useSyncExternalStore } from 'react'
+import { FooterVideo } from './footer-video'
 import { BonTravailWordmark } from './wordmark'
 
 interface FooterLink {
@@ -15,65 +16,55 @@ interface FooterLink {
 const subscribeNothing = () => () => {}
 
 /**
- * Every page ends the same way: one closing line over the monolith at sunset,
- * then a small, ordinary footer with the places worth going next. The scene
- * has a rounded top so its edge shows at the bottom of the screen before you
- * reach it, a hint that the page goes on.
+ * Every page ends on the same final scene. The information comes first and
+ * stays quiet (the wordmark, one line on what bon travail does, three short
+ * columns of links); then the Macintosh in the meadow plays underneath, with
+ * nothing laid over it, as the last thing on the page.
  */
 export function Footer({ escrowUrl }: { escrowUrl: string | null }) {
-  const sceneRef = useRef<HTMLElement>(null)
+  const sceneRef = useRef<HTMLDivElement>(null)
   const reduce = useReducedMotion()
-  // Parallax switches on after mount, so the server render and no-JS visitors get the still scene.
+  // Scroll-linked styles switch on after mount, so the server render and no-JS visitors see the scene at rest.
   const hydrated = useSyncExternalStore(subscribeNothing, () => true, () => false)
   const { scrollYProgress } = useScroll({ target: sceneRef, offset: ['start end', 'end end'] })
-  const imageY = useTransform(scrollYProgress, [0, 1], ['-10%', '0%'])
+  const sceneScale = useTransform(scrollYProgress, [0, 1], [0.96, 1])
 
   const columns: { title: string; links: FooterLink[] }[] = [
     {
-      title: 'For humans',
+      title: 'Explore',
       links: [
-        { href: '/tasks', label: 'Paid work' },
-        { href: '/you', label: 'Your earnings' },
-        { href: '/receipts', label: 'Receipts' },
+        { href: '/tasks', label: 'work' },
+        { href: '/receipts', label: 'receipts' },
+        { href: '/agent', label: 'agent' },
+        { href: '/docs', label: 'docs' },
       ],
     },
     {
-      title: 'For teams',
+      title: 'Connect',
       links: [
-        { href: '/console', label: 'Console' },
-        { href: '/agent', label: 'Aeon, the agent' },
-        { href: 'https://github.com/apps/bon-travail', label: 'GitHub App', external: true },
+        { href: 'https://github.com/apps/bon-travail', label: 'github', external: true },
+        { href: '/console', label: 'console' },
+        { href: '/you', label: 'your earnings' },
       ],
     },
     {
-      title: 'More',
+      title: 'Proof',
       links: [
-        { href: '/docs', label: 'Docs' },
-        ...(escrowUrl ? [{ href: escrowUrl, label: 'Escrow on Arc', external: true }] : []),
+        { href: 'https://github.com/aeonfun/aeon', label: 'built with aeon', external: true },
+        ...(escrowUrl ? [{ href: escrowUrl, label: 'settled on arc', external: true }] : []),
       ],
     },
   ]
 
   return (
     <footer className="site-foot">
-      <section ref={sceneRef} className="foot-scene" aria-label="Closing">
-        <motion.div className="foot-scene-media" style={hydrated && !reduce ? { y: imageY } : undefined} aria-hidden>
-          <picture>
-            <source media="(max-width: 720px)" srcSet="/scenes/footer-scene-sm.jpg" />
-            <img src="/scenes/footer-scene.jpg" alt="" loading="lazy" decoding="async" />
-          </picture>
-        </motion.div>
-        <p className="foot-statement">
-          <span>machines find the work.</span> <span>humans finish it.</span>
-        </p>
-      </section>
-
-      <div className="foot-panel">
+      <div className="foot-info">
         <div className="foot-brand">
           <Link href="/" aria-label="bon travail, home">
             <BonTravailWordmark />
           </Link>
-          <p>Work, verified. Agents find what's broken, and humans get paid to fix it.</p>
+          <span className="label">Agents pay humans</span>
+          <p className="foot-statement">Agents find broken code and pay humans to fix it.</p>
         </div>
 
         <nav className="foot-columns" aria-label="Footer">
@@ -97,13 +88,15 @@ export function Footer({ escrowUrl }: { escrowUrl: string | null }) {
           ))}
         </nav>
 
-        <div className="foot-legal">
+        <div className="foot-meta">
           <span>© 2026 bon travail</span>
-          <span className="foot-flow" aria-label="Agents, then humans, then proof">
-            agents <span aria-hidden>→</span> humans <span aria-hidden>→</span> proof
-          </span>
+          <span className="label">Verified by your tests · Settled in USDC</span>
         </div>
       </div>
+
+      <motion.div ref={sceneRef} className="foot-scene" style={hydrated && !reduce ? { scale: sceneScale } : undefined}>
+        <FooterVideo />
+      </motion.div>
     </footer>
   )
 }
