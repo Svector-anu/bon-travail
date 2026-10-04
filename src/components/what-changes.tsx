@@ -1,27 +1,35 @@
 'use client'
 
 import { ArrowRight } from 'lucide-react'
-import { useMotionValueEvent, useReducedMotion, useScroll } from 'motion/react'
+import { motion, useMotionValueEvent, useReducedMotion, useScroll, useTransform } from 'motion/react'
 import Link from 'next/link'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { LoopScene } from './loop-scene'
 
 const STEPS = [
   {
     label: 'noticed',
-    copy: 'The test your team keeps re-running finally gets looked at, with the failing log and the commit that broke it already attached.',
+    copy: 'The bug your team keeps ignoring finally gets noticed, along with exactly where it broke.',
   },
   {
     label: 'fixed',
-    copy: 'Someone you trust picks it up and fixes it inside the limits you set, so nobody on your team has to drop what they are doing.',
+    copy: 'A human you trust fixes it, so your team can stay on the work that matters.',
   },
   {
     label: 'paid',
-    copy: 'The moment your tests pass, they are paid in USDC from escrow, and both of you keep a receipt that shows exactly why.',
+    copy: 'When the fix works, they get paid on the spot, and you both keep a receipt.',
   },
 ] as const
 
 const LAST = STEPS.length - 1
+
+const subscribeNothing = () => () => {}
+
+/** The paper starts as a smaller screen in the dark and widens to fill the view, like a cinema screen opening. */
+const screenAt = (open: number) => {
+  const closed = 1 - open
+  return `inset(${(7 * closed).toFixed(2)}vh ${(18 * closed).toFixed(2)}vw 0 ${(18 * closed).toFixed(2)}vw round ${(32 + 16 * closed).toFixed(1)}px)`
+}
 
 /** Scroll progress through the pinned section → which form the cloud holds; it rests on each step before moving on. */
 function morphAt(progress: number): number {
@@ -34,7 +42,7 @@ function morphAt(progress: number): number {
 
 /**
  * The middle of the home page: what changes for a team once agents can pay
- * people. The section pins and scrolling moves through three moments, each
+ * humans. The section pins and scrolling moves through three moments, each
  * with its own form in the point cloud (a failure noticed, a branch merged
  * back, a ring for the payment). Without WebGL the words carry it alone.
  */
@@ -47,6 +55,13 @@ export function WhatChanges() {
   const [webgl, setWebgl] = useState(true)
   const reduce = useReducedMotion() ?? false
   const { scrollYProgress } = useScroll({ target: sectionRef, offset: ['start start', 'end end'] })
+  // How far the screen has opened: closed as it enters from below, fully open when it reaches the top.
+  const { scrollYProgress: entering } = useScroll({ target: sectionRef, offset: ['start end', 'start start'] })
+  const clipPath = useTransform(entering, screenAt)
+  const contentScale = useTransform(entering, [0, 1], [0.9, 1])
+  // Scroll-linked styles switch on after mount, so the server render and no-JS visitors see the open screen.
+  const hydrated = useSyncExternalStore(subscribeNothing, () => true, () => false)
+  const cinematic = hydrated && !reduce
 
   useMotionValueEvent(scrollYProgress, 'change', (progress) => {
     const morph = morphAt(progress)
@@ -91,11 +106,17 @@ export function WhatChanges() {
   }
 
   return (
-    <section ref={sectionRef} className="loop" id="how" aria-labelledby="loop-title" style={{ '--loop-steps': STEPS.length } as React.CSSProperties}>
-      <div className="loop-pin">
+    <motion.section
+      ref={sectionRef}
+      className="loop"
+      id="how"
+      aria-labelledby="loop-title"
+      style={{ '--loop-steps': STEPS.length, ...(cinematic ? { clipPath } : {}) } as React.CSSProperties}
+    >
+      <motion.div className="loop-pin" style={cinematic ? { scale: contentScale } : undefined}>
         <header className="loop-head">
           <span className="label">Agents pay humans</span>
-          <h2 id="loop-title">What changes when your agents can pay people</h2>
+          <h2 id="loop-title">What changes when your agents can pay humans</h2>
         </header>
 
         <div className="loop-stage" aria-hidden>
@@ -117,7 +138,7 @@ export function WhatChanges() {
         <Link className="loop-more" href="/docs">
           See docs <ArrowRight size={14} aria-hidden />
         </Link>
-      </div>
-    </section>
+      </motion.div>
+    </motion.section>
   )
 }
