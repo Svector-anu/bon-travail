@@ -53,7 +53,7 @@ export default async function HomePage() {
               <Roll>Find paid work <ArrowRight size={16} /></Roll>
             </Link>
             <Link className="btn btn-glass" href="#how">
-              <Roll><Play size={14} /> Learn more</Roll>
+              <Roll><Play size={14} /> What changes</Roll>
             </Link>
           </div>
         </div>
