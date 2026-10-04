@@ -198,10 +198,12 @@ export async function getFindingDetail(findingId: string): Promise<FindingDetail
   const taskIds = [...new Set(events.map((e) => e.detail.taskId).filter((id): id is string => typeof id === 'string'))]
   const tasks = (await Promise.all(taskIds.map((id) => app.store.getTask(id)))).filter((t): t is TaskRecord => t !== null)
   const views = await toViews(app, tasks)
+  // A settled package belongs to an earlier episode: once the failure comes back, the engineer decides again.
+  const current = views.find((t) => t.id === finding.taskId && !isTerminal(t.state)) ?? null
   return {
     finding: toFindingView(finding, repo, runs, events),
-    task: views.find((t) => t.id === finding.taskId) ?? null,
-    pastTasks: views.filter((t) => t.id !== finding.taskId),
+    task: current,
+    pastTasks: views.filter((t) => t.id !== current?.id),
     maxReward: formatUsdc(app.config.maxRewardMicro),
     simulatedPayments: app.payments.simulated,
   }
