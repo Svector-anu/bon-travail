@@ -195,7 +195,12 @@ export default async function FindingPage({ params }: { params: Promise<{ id: st
           </div>
           <p>
             {task.reward} USDC · open to {task.ci?.contributors.map((c) => `@${c}`).join(', ')}
-            {task.claimantHandle && ` · @${task.claimantHandle} is on it`}
+            {task.claimantHandle &&
+              (task.state === 'PAID'
+                ? ` · paid to @${task.claimantHandle}`
+                : task.state === 'REFUNDED' || task.state === 'EXPIRED'
+                  ? ` · @${task.claimantHandle} did not finish; refunded`
+                  : ` · @${task.claimantHandle} is on it`)}
           </p>
           <div className="decision-actions">
             <Link className="btn btn-glass" href={`/task/${task.id}`}>
