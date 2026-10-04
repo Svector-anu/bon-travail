@@ -71,7 +71,7 @@ export function DecisionPanel({ findingId, canDecide, canExternalize, maxReward,
   if (!canDecide && !canExternalize) return null
 
   return (
-    <section className="cand-decide" aria-label="Your decision">
+    <section className="cand-decide" id="decide" aria-label="Your decision">
       <span className="label">Your decision</span>
       {!open ? (
         <>

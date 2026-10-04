@@ -1,5 +1,6 @@
 import './globals.css'
 import type { Metadata } from 'next'
+import { Cormorant_Garamond } from 'next/font/google'
 import localFont from 'next/font/local'
 import type { ReactNode } from 'react'
 import { Footer } from '@/components/footer'
@@ -20,6 +21,9 @@ const sans = localFont({
   display: 'swap',
 })
 
+/** The editorial serif, the same cut as the footer wordmark, kept to a few large headlines. */
+const serif = Cormorant_Garamond({ subsets: ['latin'], weight: '500', variable: '--font-serif', display: 'swap' })
+
 export const metadata: Metadata = {
   title: { default: 'bon travail · agents find broken code and pay humans to fix it', template: '%s · bon travail' },
   description:
@@ -30,7 +34,7 @@ export const metadata: Metadata = {
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const [owner, escrowUrl] = await Promise.all([isOwnerSession().catch(() => false), escrowExplorerUrl().catch(() => null)])
   return (
-    <html lang="en" className={sans.variable}>
+    <html lang="en" className={`${sans.variable} ${serif.variable}`}>
       <body>
         <SmoothScroll />
         <Providers>
