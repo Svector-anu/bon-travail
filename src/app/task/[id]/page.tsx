@@ -1,4 +1,4 @@
-import { ArrowLeft, CircleDollarSign, GitBranch, Link2, ShieldCheck, Timer, Users } from 'lucide-react'
+import { ArrowLeft, GitBranch } from 'lucide-react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -10,7 +10,7 @@ import { CopyButton } from '@/components/copy-button'
 import { EvidenceFailure } from '@/components/evidence'
 import { Reveal } from '@/components/reveal'
 import { WorkPanel } from '@/components/work-panel'
-import { TASK_STATUS, whoMayTake } from '@/lib/format'
+import { TASK_STATUS, whoMayTake, workTitle } from '@/lib/format'
 import { getReceiptView, getTaskDetail, type WorkProgress } from '@/server/queries'
 
 export const dynamic = 'force-dynamic'
@@ -26,9 +26,6 @@ function TimeFact({ task }: { task: TaskView }) {
   const settled = task.state === 'PAID' || task.state === 'REFUNDED'
   return (
     <div className="fact">
-      <span className="well">
-        <Timer size={20} />
-      </span>
       <div>
         <span>{settled ? 'Settled' : 'Time left'}</span>
         <strong className="tnum">
@@ -58,9 +55,6 @@ function RailTest({ task, attempts }: { task: TaskView; attempts: AttemptView[] 
   const tx = task.tx!
   return (
     <section className="bleed stage">
-      <div className="stage-media" aria-hidden>
-        <img src="/scenes/task-stage.jpg" alt="" />
-      </div>
       <div className="detail stage-body">
         <Head task={task} />
         <h1>Read this Arc transaction</h1>
@@ -73,9 +67,6 @@ function RailTest({ task, attempts }: { task: TaskView; attempts: AttemptView[] 
         </div>
         <div className="facts">
           <div className="fact">
-            <span className="well">
-              <CircleDollarSign size={20} />
-            </span>
             <div>
               <span>Reward</span>
               <strong>{task.reward} USDC</strong>
@@ -83,9 +74,6 @@ function RailTest({ task, attempts }: { task: TaskView; attempts: AttemptView[] 
           </div>
           <TimeFact task={task} />
           <div className="fact">
-            <span className="well">
-              <Link2 size={20} />
-            </span>
             <div>
               <span>Chain</span>
               <strong>{task.chain}</strong>
@@ -104,12 +92,9 @@ async function WorkPackage({ task, attempts, work }: { task: TaskView; attempts:
   return (
     <>
       <section className="bleed stage">
-        <div className="stage-media" aria-hidden>
-          <img src="/scenes/task-stage.jpg" alt="" />
-        </div>
         <div className="detail stage-body work-body">
           <Head task={task} />
-          <h1>{task.title}</h1>
+          <h1>{workTitle(ci)}</h1>
           <p className="work-where">
             <GitBranch size={14} aria-hidden />
             <a href={ci.repoUrl} target="_blank" rel="noreferrer">
@@ -121,9 +106,6 @@ async function WorkPackage({ task, attempts, work }: { task: TaskView; attempts:
 
           <div className="facts">
             <div className="fact">
-              <span className="well">
-                <CircleDollarSign size={20} />
-              </span>
               <div>
                 <span>Reward</span>
                 <strong>{task.reward} USDC</strong>
@@ -131,9 +113,6 @@ async function WorkPackage({ task, attempts, work }: { task: TaskView; attempts:
             </div>
             <TimeFact task={task} />
             <div className="fact">
-              <span className="well">
-                <Users size={20} />
-              </span>
               <div>
                 <span>Approved</span>
                 <strong>{whoMayTake(ci)}</strong>
@@ -142,20 +121,17 @@ async function WorkPackage({ task, attempts, work }: { task: TaskView; attempts:
           </div>
 
           <div className="acceptance">
-            <span className="label">
-              <ShieldCheck size={13} aria-hidden /> Acceptance condition
-            </span>
+            <span className="label">Done when</span>
             <p>{ci.acceptance}</p>
             <small>
-              Checked automatically: the project&apos;s &ldquo;{ci.jobName}&rdquo; tests must pass
-              {ci.requireMerge ? ` on ${ci.baseBranch} after the fix is merged` : ' on the PR head'}. The PR may not change{' '}
+              Your project&apos;s own tests check it. Leave{' '}
               {ci.protectedPaths.map((p, i) => (
                 <span key={p}>
                   {i > 0 && ', '}
                   <span className="mono">{p}</span>
                 </span>
-              ))}
-              .
+              ))}{' '}
+              as they are.
             </small>
           </div>
 

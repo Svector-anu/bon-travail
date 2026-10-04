@@ -7,7 +7,6 @@ so typography, links and motion stay in HTML.
 | File | Source | Used on | Why |
 |---|---|---|---|
 | `proofwork-meadow.mp4`, `-sm.mp4`, `.jpg` | supplied 8 s clip, ping-pong 16 s loop; first frame as poster | Home hero | The world the product lives in |
-| `task-stage.jpg` | monolith at sunset, 2172 x 724 | Work package page, under the claim | The work waits in the same landscape |
 | `monolith-close.jpg` | crop of the same scene, 560 x 724 | Agent page, home chapter "aeon investigates", submit screen | Aeon looks closely at one thing |
 | `glass-ring.jpg` | supplied render, 900 x 826 | Paid receipts, home chapter "proofwork pays" | The proof object of a payout |
 | `monolith-refund.jpg` | supplied render, 900 x 756 | Refunded receipts | The same stone, money returned |
