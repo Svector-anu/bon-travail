@@ -8,9 +8,8 @@ import { AutoRefresh } from '@/components/auto-refresh'
 import { BonTravail } from '@/components/bon-travail'
 import { LocalTime } from '@/components/clock'
 import { CopyButton } from '@/components/copy-button'
-import { EvidenceFailure, EvidenceInvestigation } from '@/components/evidence'
 import { Reveal } from '@/components/reveal'
-import { TASK_STATUS, whoMayTake } from '@/lib/format'
+import { TASK_STATUS } from '@/lib/format'
 import { getApp } from '@/server/container'
 import { getReceiptView } from '@/server/queries'
 import { Roll } from '@/components/roll'
@@ -84,26 +83,76 @@ function Seal({ receipt, simulated, url }: { receipt: ReceiptView; simulated: bo
   )
 }
 
-function TxLink({ hash, url, simulated = false }: { hash: string | null; url: string | null; simulated?: boolean }) {
-  if (!hash) return <span className="muted">{simulated ? 'Reserved in the ledger (simulated)' : '--'}</span>
-  if (!url) return <span className="mono">{shortAddress(hash)} (simulated)</span>
-  return (
-    <a className="mono" href={url} target="_blank" rel="noreferrer">
-      {shortAddress(hash)} <ArrowUpRight size={13} />
-    </a>
-  )
+interface StoryLine {
+  word: string
+  text: string
+  href: string | null
+  where: string
+  at: number | null
+  tone?: 'final' | 'refund'
 }
 
-function ProofSection({ index, label, children }: { index: string; label: string; children: React.ReactNode }) {
-  return (
-    <section className="proof-section">
-      <header>
-        <span className="proof-index">{index}</span>
-        <span className="label">{label}</span>
-      </header>
-      <div className="proof-body">{children}</div>
-    </section>
-  )
+/** The whole receipt in five plain lines: what broke, what Aeon found, who fixed it, what proved it, where the money went. */
+function storyLines(
+  receipt: ReceiptView,
+  ctx: {
+    paid: boolean
+    refunded: boolean
+    who: string | null
+    ev: { prUrl: string; prNumber: number; verifiedSha: string | null; jobUrl: string | null } | null
+    settlement: { amount: string; explorerTxUrl: string | null } | null
+  },
+): StoryLine[] {
+  const { task, finding, investigation } = receipt
+  const ci = task.ci!
+  const short = (sha: string | null | undefined) => (sha ? sha.slice(0, 7) : '')
+  const firstBad = investigation?.firstBadSha ?? finding?.regression?.firstRedSha ?? finding?.firstFailedSha ?? null
+  const lines: StoryLine[] = [
+    {
+      word: 'Broke',
+      text: `"${finding?.stepName ?? ci.jobName}" started failing${firstBad ? ` at ${short(firstBad)}` : ''}.`,
+      href: finding?.lastFailedRunUrl ?? null,
+      where: 'the run',
+      at: finding?.firstFailedAt ?? null,
+    },
+    {
+      word: 'Found',
+      text: investigation ? (investigation.firstBadSha ? `Aeon traced it to one commit, ${short(investigation.firstBadSha)}.` : 'Aeon reproduced it.') : 'GitHub recorded the failing step.',
+      href: investigation?.runUrl ?? null,
+      where: "Aeon's run",
+      at: null,
+    },
+  ]
+  if (ctx.ev && ctx.who) {
+    lines.push({ word: 'Fixed', text: `${ctx.who} fixed it in pull request #${ctx.ev.prNumber}.`, href: ctx.ev.prUrl, where: 'GitHub', at: lastAt(receipt.timeline, 'submitted') })
+    lines.push({
+      word: 'Proved',
+      text: `Your tests passed on ${ci.baseBranch}${ctx.ev.verifiedSha ? ` at ${short(ctx.ev.verifiedSha)}` : ''}.`,
+      href: ctx.ev.jobUrl,
+      where: 'the check',
+      at: firstAt(receipt.timeline, 'accepted'),
+    })
+  }
+  if (ctx.paid) {
+    lines.push({
+      word: 'Paid',
+      text: `${ctx.settlement?.amount ?? task.reward} USDC to ${ctx.who ?? 'the contributor'}.`,
+      href: ctx.settlement?.explorerTxUrl ?? null,
+      where: 'Arcscan',
+      at: firstAt(receipt.timeline, 'paid'),
+      tone: 'final',
+    })
+  } else if (ctx.refunded) {
+    lines.push({
+      word: 'Refunded',
+      text: `Nobody finished in time; ${ctx.settlement?.amount ?? task.reward} USDC went back to the team.`,
+      href: ctx.settlement?.explorerTxUrl ?? null,
+      where: 'Arcscan',
+      at: firstAt(receipt.timeline, 'refunded'),
+      tone: 'refund',
+    })
+  }
+  return lines
 }
 
 function WorkReceipt({ receipt, url }: { receipt: ReceiptView; url: string }) {
@@ -187,109 +236,22 @@ function WorkReceipt({ receipt, url }: { receipt: ReceiptView; url: string }) {
         </section>
       </div>
 
-      <div className="proof">
-        {receipt.finding && (
-          <ProofSection index="01" label="What failed">
-            <EvidenceFailure facts={receipt.finding} />
-          </ProofSection>
-        )}
-
-        <ProofSection index="02" label="What Aeon found">
-          <EvidenceInvestigation investigation={receipt.investigation} />
-        </ProofSection>
-
-        <ProofSection index="03" label={paid ? 'What the human did' : 'What was asked'}>
-          <div className="proof-panel">
-            {who && ev ? (
-              <p className="evidence-lead">
-                {who} opened{' '}
-                <a href={ev.prUrl} target="_blank" rel="noreferrer">
-                  pull request #{ev.prNumber} <ArrowUpRight size={13} />
-                </a>{' '}
-                against {ci.repo}.
-              </p>
-            ) : (
-              <p className="evidence-lead">Open to {whoMayTake(ci)}. Nobody delivered a passing fix before the deadline.</p>
-            )}
-            <p className="proof-quote">{ci.acceptance}</p>
-            <p className="muted scope">{ci.scope}</p>
-          </div>
-        </ProofSection>
-
-        {v && ev && (
-          <ProofSection index="04" label="How it was verified">
-            <div className="proof-panel">
-              <p className="evidence-lead">
-                {v.valid ? <Check size={16} className="ok-mark" /> : <X size={16} className="no-mark" />} {v.reason}
-              </p>
-              <dl className="ledger compact">
-                <dt>Author</dt>
-                <dd>@{ev.author}</dd>
-                <dt>Merged</dt>
-                <dd>{ev.merged ? 'Yes' : 'No'}</dd>
-                {ev.verifiedSha && (
-                  <>
-                    <dt>Commit</dt>
-                    <dd className="mono">{ev.verifiedSha.slice(0, 12)}</dd>
-                  </>
-                )}
-                <dt>Protected paths</dt>
-                <dd>{ev.protectedTouched.length === 0 ? `Untouched (${ev.filesChecked} files checked)` : ev.protectedTouched.join(', ')}</dd>
-                <dt>Acceptance job</dt>
-                <dd>
-                  {ev.jobUrl ? (
-                    <a href={ev.jobUrl} target="_blank" rel="noreferrer">
-                      {ev.jobName}: {ev.jobConclusion ?? 'pending'} <ArrowUpRight size={13} />
-                    </a>
-                  ) : (
-                    `${ev.jobName ?? ci.jobName}: ${ev.jobConclusion ?? 'pending'}`
-                  )}
-                </dd>
-              </dl>
-            </div>
-          </ProofSection>
-        )}
-
-        <ProofSection index={v && ev ? '05' : '04'} label={refunded ? 'Where the money went' : 'Who got paid · what settled it'}>
-          <div className="proof-panel">
-            <dl className="ledger compact">
-              {paid && who && (
-                <>
-                  <dt>Paid to</dt>
-                  <dd>
-                    {who}
-                    {receipt.worker && <span className="mono muted"> · {shortAddress(receipt.worker)}</span>}
-                  </dd>
-                </>
+      <ol className="rstory" aria-label="What happened">
+        {storyLines(receipt, { paid, refunded, who, ev, settlement }).map((line) => (
+          <li key={line.word} className={line.tone}>
+            <span className="rstory-word">{line.word}</span>
+            <p>
+              {line.text}{' '}
+              {line.href && (
+                <a href={line.href} target="_blank" rel="noreferrer" aria-label={`${line.word}: open on ${line.where}`}>
+                  {line.where} <ArrowUpRight size={13} aria-hidden />
+                </a>
               )}
-              {refunded && (
-                <>
-                  <dt>Returned to</dt>
-                  <dd>The team&apos;s treasury</dd>
-                </>
-              )}
-              <dt>Escrowed</dt>
-              <dd>
-                <TxLink hash={receipt.funding?.txHash ?? null} url={receipt.funding?.explorerTxUrl ?? null} simulated={receipt.funding?.simulated} />
-              </dd>
-              <dt>{refunded ? 'Refund' : 'Payout'}</dt>
-              <dd>
-                <TxLink hash={settlement?.txHash ?? null} url={settlement?.explorerTxUrl ?? null} />
-              </dd>
-              <dt>Rail</dt>
-              <dd>{simulated ? 'Simulated ledger' : 'ProofworkEscrow on Arc Testnet'}</dd>
-            </dl>
-          </div>
-        </ProofSection>
-      </div>
-
-      <section className="panel verification">
-        <div className="panel-title">
-          <span className="label">Timeline</span>
-        </div>
-        <Steps receipt={receipt} steps={refunded ? REFUND_STEPS : WORK_STEPS} />
-      </section>
-
+            </p>
+            {line.at ? <LocalTime ts={line.at} /> : <span />}
+          </li>
+        ))}
+      </ol>
 
       <Seal receipt={receipt} simulated={simulated} url={url} />
     </>
