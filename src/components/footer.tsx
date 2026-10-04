@@ -107,7 +107,6 @@ export function Footer({ escrowUrl }: { escrowUrl: string | null }) {
 
         <div className="foot-meta">
           <span>© 2026 bon travail</span>
-          <span className="label">Verified by your tests · Settled in USDC</span>
         </div>
       </div>
 

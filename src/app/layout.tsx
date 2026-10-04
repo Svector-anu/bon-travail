@@ -17,7 +17,6 @@ export const metadata: Metadata = {
   title: { default: 'bon travail · agents find broken code and pay humans to fix it', template: '%s · bon travail' },
   description:
     'An agent spots tests that keep failing and works out why. Engineers decide who fixes it. When the fix passes the project\'s tests, the contributor is paid in USDC automatically.',
-  icons: { icon: '/mascots/seedling.png' },
 }
 
 export default async function RootLayout({ children }: { children: ReactNode }) {

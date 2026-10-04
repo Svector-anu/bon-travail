@@ -2334,10 +2334,6 @@ textarea.input.mono {
   font-size: 12px;
 }
 
-.foot-meta .label {
-  color: var(--dim);
-}
-
 /* The final scene: the Macintosh video edge to edge at its own 16:9, nothing laid over it.
    Its sky fades up out of the night, so the information above and the world below read as one view. */
 .foot-scene {

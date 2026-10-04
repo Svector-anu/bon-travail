@@ -45,7 +45,7 @@ export function PrivyIdentityProvider({ appId, children }: { appId: string; chil
         appearance: {
           theme: 'light',
           accentColor: '#e8a557',
-          logo: '/mascots/seedling.png',
+          logo: '/brand/mark.svg',
           landingHeader: 'Sign in to bon travail',
           loginMessage: 'Earn USDC for answers the chain can check.',
           walletChainType: 'ethereum-only',
