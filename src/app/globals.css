@@ -3307,9 +3307,11 @@ textarea.input.mono {
   display: grid;
   grid-template-rows: 1fr auto;
   width: 100vw;
-  min-height: max(620px, 88svh);
-  /* No picture: a low warm light at the horizon, the same dusk as the rest of the site. */
-  background: radial-gradient(55% 45% at 74% 52%, rgba(232, 165, 87, 0.1), transparent 72%);
+  min-height: max(560px, 78svh);
+  /* On paper, like the middle of the home page: ink type on cream, rounded into the dark below. */
+  border-radius: 0 0 32px 32px;
+  background: var(--paper);
+  color: var(--ink);
   margin: -88px 0 0 calc(50% - 50vw);
   padding-top: 88px;
   overflow: hidden;
@@ -3593,6 +3595,51 @@ textarea.input.mono {
 .terms[open] {
   display: grid;
   gap: 14px;
+}
+
+.agent-hero .label,
+.agent-hero .agent-now-meta {
+  color: var(--ink-muted);
+}
+
+.agent-hero-copy > p {
+  color: rgba(23, 19, 15, 0.72);
+}
+
+.agent-hero .agent-status {
+  color: var(--ink-muted);
+}
+
+.agent-hero .agent-status strong {
+  color: var(--ink);
+}
+
+.agent-hero .agent-status li {
+  border-left-color: rgba(23, 19, 15, 0.16);
+}
+
+.agent-hero .agent-now {
+  border-top-color: rgba(23, 19, 15, 0.12);
+}
+
+.agent-hero .agent-choice {
+  border-color: rgba(23, 19, 15, 0.2);
+  background: transparent;
+  color: var(--ink);
+}
+
+.agent-hero .agent-choice:hover {
+  border-color: var(--ink);
+}
+
+.agent-hero .agent-choice.light {
+  border-color: transparent;
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.agent-hero .presence-dot {
+  box-shadow: 0 0 0 5px rgba(23, 19, 15, 0.06);
 }
 
 /* ---- agent journey: a line that fills like syrup as you scroll ------------------ */

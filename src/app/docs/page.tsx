@@ -45,7 +45,6 @@ const SECTIONS = [
     title: 'agents recommend. humans decide. the chain settles.',
     body: [
       'Engineers approve every work package because handing work outside the team is a judgment about scope, secrets and trust that belongs to the humans who own the code.',
-      'Aeon cannot approve work, choose who is paid, set an amount or release funds. Its only write is attaching an investigation. A model that could move money could be talked into it by a hostile log, commit message or pull request; a model that can only describe things cannot.',
       'The project’s own tests are the judge because they already define what “working” means for that code, and they run outside both the contributor’s and the agent’s control.',
       'Rewards sit in an escrow contract on Arc: a payout can only go to the approved wallet, a task can never be both paid and refunded, and every payment is idempotent, so a retry never pays twice.',
     ],

@@ -7,7 +7,7 @@ import { AutoRefresh } from '@/components/auto-refresh'
 import { ClaimCta } from '@/components/claim-cta'
 import { Countdown, LocalTime } from '@/components/clock'
 import { CopyButton } from '@/components/copy-button'
-import { Evidence } from '@/components/evidence'
+import { EvidenceFailure } from '@/components/evidence'
 import { Reveal } from '@/components/reveal'
 import { WorkPanel } from '@/components/work-panel'
 import { TASK_STATUS, whoMayTake } from '@/lib/format'
@@ -172,12 +172,11 @@ async function WorkPackage({ task, attempts, work }: { task: TaskView; attempts:
       <section className="work-section">
         <span className="label">Scope</span>
         <p className="scope">{ci.scope}</p>
-        <p className="muted work-owner">A team posted this and set the reward. Aeon gathered what broke below; it didn't pick the price or who can take it.</p>
       </section>
 
       {live?.finding && (
         <section className="work-section">
-          <Evidence facts={live.finding} investigation={live.investigation} />
+          <EvidenceFailure facts={live.finding} />
         </section>
       )}
     </>
