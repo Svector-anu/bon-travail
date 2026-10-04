@@ -1,4 +1,5 @@
 import { handle, json } from '@/server/http'
+import { isOwnerSession } from '@/server/owner-session'
 import { agentActivity } from '@/server/queries'
 
 export const dynamic = 'force-dynamic'
@@ -11,7 +12,7 @@ export async function GET(request: Request) {
       await agentActivity(limit, {
         taskId: url.searchParams.get('task') ?? undefined,
         findingId: url.searchParams.get('finding') ?? undefined,
-      }),
+      }, (await isOwnerSession().catch(() => false)) ? 'owner' : 'public'),
     )
   })
 }

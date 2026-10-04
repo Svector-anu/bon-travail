@@ -14,6 +14,7 @@ import type {
   RepoView,
   TaskView,
 } from '@/domain/views'
+import { publicRun } from '@/lib/public-activity'
 import { getApp, type App } from './container'
 import { displayId, findingDisplayIdOf, toAttemptView, toFindingSummary, toFindingView, toRepoView, toTaskView } from './services/views'
 
@@ -77,9 +78,28 @@ export async function getReceiptView(taskId: string): Promise<ReceiptView | null
   return (await app.store.getTask(taskId)) ? app.tasks.getReceipt(taskId) : null
 }
 
-export async function agentActivity(limit = 40, filter: { taskId?: string; findingId?: string } = {}): Promise<ActivitySnapshot> {
+/**
+ * The agent's run log. Work packages are public once a team posts them, but a
+ * run about a repository or a failure the team has not decided on stays
+ * private: the public sees what kind of thing happened and no names.
+ */
+export async function agentActivity(
+  limit = 40,
+  filter: { taskId?: string; findingId?: string } = {},
+  audience: 'owner' | 'public' = 'public',
+): Promise<ActivitySnapshot> {
   const { agent, store } = await getApp()
-  return { status: await agent.status(), runs: await store.listRuns(limit, filter) }
+  if (audience === 'public' && filter.findingId) return { status: redactStatus(await agent.status()), runs: [] }
+  const [status, runs] = await Promise.all([agent.status(), store.listRuns(limit, filter)])
+  if (audience === 'owner') return { status, runs }
+  return {
+    status: redactStatus(status),
+    runs: runs.map(publicRun),
+  }
+}
+
+function redactStatus(status: AgentStatusView): AgentStatusView {
+  return { ...status, lastTickSummary: null }
 }
 
 const LIVE_STATES = ['OPEN', 'CLAIMED', 'SUBMITTED', 'VERIFYING', 'ACCEPTED', 'REJECTED'] as const

@@ -60,7 +60,7 @@ function publicNow(pipeline: AgentPipeline): { title: string; detail: string; hr
 
 export default async function AgentPage() {
   const owner = await isOwnerSession().catch(() => false)
-  const [{ status, runs }, pipeline, snapshot] = await Promise.all([agentActivity(30), agentPipeline(), owner ? consoleSnapshot() : null])
+  const [{ status, runs }, pipeline, snapshot] = await Promise.all([agentActivity(30, {}, owner ? 'owner' : 'public'), agentPipeline(), owner ? consoleSnapshot() : null])
   const visible = runs.filter((r) => r.action !== 'source_task' || r.result !== 'skipped')
   // The engineer sees the actual failure and can decide from here; everyone else sees counts.
   const candidate = snapshot?.needsDecision[0] ?? null
