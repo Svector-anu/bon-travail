@@ -9,7 +9,7 @@ import { BonTravail } from '@/components/bon-travail'
 import { LocalTime } from '@/components/clock'
 import { CopyButton } from '@/components/copy-button'
 import { Reveal } from '@/components/reveal'
-import { TASK_STATUS } from '@/lib/format'
+import { TASK_STATUS, workTitle } from '@/lib/format'
 import { getApp } from '@/server/container'
 import { getReceiptView } from '@/server/queries'
 import { Roll } from '@/components/roll'
@@ -191,7 +191,7 @@ function WorkReceipt({ receipt, url }: { receipt: ReceiptView; url: string }) {
         <section className="panel">
           <dl className="ledger">
             <dt>Work</dt>
-            <dd>{task.title}</dd>
+            <dd>{workTitle(ci)}</dd>
             <dt>Repository</dt>
             <dd>
               <a href={ci.repoUrl} target="_blank" rel="noreferrer">
