@@ -18,8 +18,8 @@ const NAV = [
  * One small dark pill at the top centre: the serif wordmark and a menu button. The menu
  * drips out of it: a drop swells under the pill, falls, and spreads into the
  * bar of links (an SVG goo filter merges the shapes; the text sits above it,
- * unfiltered). The engineers' door stays visible on its
- * own, since contributors need no account and only the engineer signs in.
+ * unfiltered). The teams' door stays visible on its own, since humans who
+ * fix code need no account and only the team's engineers sign in.
  */
 export function Header({ owner }: { owner: boolean }) {
   const pathname = usePathname()
@@ -110,7 +110,7 @@ export function Header({ owner }: { owner: boolean }) {
       <Link href="/console" className="pill-btn nav-cta" aria-current={pathname.startsWith('/console') ? 'page' : undefined}>
         <Roll>
           {owner ? <LayoutPanelTop size={15} aria-hidden /> : <LogIn size={15} aria-hidden />}
-          {owner ? 'console' : 'engineers'}
+          {owner ? 'console' : 'for teams'}
         </Roll>
       </Link>
     </header>

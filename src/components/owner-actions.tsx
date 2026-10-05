@@ -45,32 +45,37 @@ const SIGN_IN_ERRORS: Record<string, string> = {
 export function OwnerLogin({ error, login, enabled }: { error: string | null; login: string | null; enabled: boolean }) {
   const message = error ? SIGN_IN_ERRORS[error] ?? 'Sign-in failed. Try again.' : null
   return (
-    <div className="panel console-login">
-      <span className="label">Engineer console</span>
-      <h1>Sign in to decide what leaves the team.</h1>
-      <p className="muted">
-        Connect your repositories, read what our agent found, and choose what to hand out and to whom. Contributors never need an
-        account; this is only for the team that owns the code.
-      </p>
-      {enabled ? (
-        <a className="btn btn-primary btn-wide" href="/api/auth/github/start">
-          <Roll><GithubMark /> Sign in with GitHub</Roll>
-        </a>
-      ) : (
-        <p className="notice-line">Sign in with GitHub is not set up in this deployment yet.</p>
-      )}
-      {message && (
-        <p className="form-error">
-          {error === 'not_owner' && login ? `@${login} ` : ''}
-          {message}
+    <div className="console-login-wrap">
+      <div className="panel console-login">
+        <span className="label">For teams</span>
+        <h1>Sign in to decide what leaves the team.</h1>
+        <p className="muted">
+          Connect your repositories, read what our agent found, and choose what to hand out and to whom. This is only for the team
+          that owns the code.
         </p>
-      )}
-      {error === 'not_owner' && (
-        <p className="notice-line">
-          Here to fix code and get paid? You don&apos;t need to sign in. <Link href="/tasks">Find paid work</Link>, and claim it with a
-          pull request.
-        </p>
-      )}
+        {enabled ? (
+          <a className="btn btn-primary btn-wide" href="/api/auth/github/start">
+            <Roll><GithubMark /> Sign in with GitHub</Roll>
+          </a>
+        ) : (
+          <p className="notice-line">Sign in with GitHub is not set up in this deployment yet.</p>
+        )}
+        {message && (
+          <p className="form-error">
+            {error === 'not_owner' && login ? `@${login} ` : ''}
+            {message}
+          </p>
+        )}
+      </div>
+
+      <div className="panel console-humans">
+        <span className="label">For humans</span>
+        <h2>Here to fix code and get paid? No account needed.</h2>
+        <p className="muted">Paid fixes show up on the work page. You claim one by opening a pull request, and you are paid when it works.</p>
+        <Link className="btn btn-glass btn-wide" href="/tasks">
+          <Roll>Find paid work</Roll>
+        </Link>
+      </div>
     </div>
   )
 }

@@ -1645,11 +1645,40 @@ button.text-link:disabled {
 
 /* ---- console ------------------------------------------------------------------- */
 
-.console-login {
-  max-width: 520px;
-  margin: 72px auto 0;
+.console-login-wrap {
   display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
   gap: 16px;
+  max-width: 960px;
+  margin: 72px auto 0;
+}
+
+.console-login,
+.console-humans {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+}
+
+.console-humans h2 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: var(--title-sm);
+  font-weight: 400;
+  line-height: var(--leading-display);
+  text-wrap: balance;
+}
+
+.console-humans p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+@media (max-width: 760px) {
+  .console-login-wrap {
+    grid-template-columns: minmax(0, 1fr);
+    margin-top: 40px;
+  }
 }
 
 .console-login h1 {
