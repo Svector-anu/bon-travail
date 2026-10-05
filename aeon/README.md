@@ -13,30 +13,33 @@ The deterministic work (detecting repeats, verifying with GitHub Actions, moving
 
 ## Install into an Aeon instance
 
-From the root of your Aeon instance repo:
+The `aeon/` folder is an Aeon skill pack (`skills-pack.json`) with two skills, `proofwork-loop` and `proofwork-investigate`. Running Aeon yourself is optional: bontravail.xyz already runs it for every connected repository.
 
-```bash
-for s in proofwork-loop proofwork-investigate; do
-  mkdir -p skills/$s && cp /path/to/proofwork/aeon/skills/$s/SKILL.md skills/$s/SKILL.md
-done
-cp /path/to/proofwork/aeon/scripts/proofwork-investigate.mjs scripts/
+1. **Get an Aeon instance.** The fastest way is [Aeon Connect](https://www.aeon.fun/connect): sign in with GitHub, it forks Aeon into your account and stores your model key as a repo secret. A fork you set up by hand works the same.
+2. **Install the pack** from a checkout of your instance:
 
-# Same value as AGENT_API_TOKEN on the Proofwork server
-gh secret set PROOFWORK_AGENT_TOKEN -R <your-aeon-repo>   # paste on stdin
-```
+   ```bash
+   bin/install-skill-pack Svector-anu/bon-travail --path aeon
+   ```
 
-Add `PROOFWORK_AGENT_TOKEN` to the workflow's secret allowlist if your instance keeps one, then add the entries to `aeon.yml` (quoted schedules):
+3. **Add the agent token** the skills use to talk to bon travail. For bontravail.xyz, ask at hello@bontravail.xyz; for your own deployment it is the server's `AGENT_API_TOKEN`:
 
-```yaml
-  proofwork-loop: { enabled: true, schedule: "*/10 * * * *", var: "https://your-proofwork-host" }
-  proofwork-investigate: { enabled: true, schedule: "17 * * * *", var: "https://your-proofwork-host" }
-```
+   ```bash
+   gh secret set PROOFWORK_AGENT_TOKEN -R <your-aeon-repo>   # paste on stdin
+   ```
+
+4. **Enable the skills** in `aeon.yml` (quoted schedules):
+
+   ```yaml
+     proofwork-loop: { enabled: true, schedule: "*/10 * * * *", var: "https://bontravail.xyz" }
+     proofwork-investigate: { enabled: true, schedule: "17 * * * *", var: "https://bontravail.xyz" }
+   ```
 
 Run each once by hand before relying on the schedule:
 
 ```bash
-gh workflow run aeon.yml -R <your-aeon-repo> -f skill=proofwork-loop -f harness=claude -f var=https://your-proofwork-host
-gh workflow run aeon.yml -R <your-aeon-repo> -f skill=proofwork-investigate -f harness=claude -f var=https://your-proofwork-host
+gh workflow run aeon.yml -R <your-aeon-repo> -f skill=proofwork-loop -f var=https://bontravail.xyz
+gh workflow run aeon.yml -R <your-aeon-repo> -f skill=proofwork-investigate -f var=https://bontravail.xyz
 ```
 
 GitHub delivers cron ticks late and sometimes skips them; that is fine. Submissions are verified the moment a contributor asks, and the tick is the safety net. Set `AGENT_EXPECTED_INTERVAL_SECONDS` to match the schedule (600 for `*/10`) so the agent page reports "Offline" only when Aeon really stopped.

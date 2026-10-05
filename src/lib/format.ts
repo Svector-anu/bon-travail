@@ -94,9 +94,9 @@ export function activityHeadline(action: string, taskId: string | null, detail: 
 }
 
 /** Who may take a work package, in words: "anyone on GitHub", or the named logins. */
-/** A work package's title for people: what it fixes, not the workflow path it came from. */
-export function workTitle(ci: { repo: string }): string {
-  return `Fix what's breaking ${ci.repo.split('/').pop()}`
+/** A work package's title for people: the repository and the job that fails, not the workflow path. Two packages from one repo still read apart. */
+export function workTitle(ci: { repo: string; jobName: string }): string {
+  return `Fix what's breaking ${ci.repo.split('/').pop()}: ${ci.jobName}`
 }
 
 export function whoMayTake(ci: { contributors: string[]; openToAnyone: boolean }): string {

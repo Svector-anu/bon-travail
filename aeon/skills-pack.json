@@ -1,0 +1,28 @@
+{
+  "name": "bon travail Pack",
+  "version": "1.0",
+  "author": "Svector-anu",
+  "license": "MIT",
+  "homepage": "https://bontravail.xyz/introducing",
+  "description": "Agents find broken code and pay humans to fix it: sweep a bon travail deployment (watch CI, verify fixes, pay, refund) and investigate repeated failures. Agents describe; engineers decide and the repo's own tests judge.",
+  "skills": [
+    {
+      "slug": "proofwork-loop",
+      "path": "skills/proofwork-loop",
+      "category": "dev",
+      "schedule": "*/10 * * * *",
+      "default_enabled": false,
+      "secrets_required": ["PROOFWORK_AGENT_TOKEN"],
+      "capabilities": ["external_api", "sends_notifications"]
+    },
+    {
+      "slug": "proofwork-investigate",
+      "path": "skills/proofwork-investigate",
+      "category": "dev",
+      "schedule": "17 * * * *",
+      "default_enabled": false,
+      "secrets_required": ["PROOFWORK_AGENT_TOKEN"],
+      "capabilities": ["external_api", "sends_notifications"]
+    }
+  ]
+}

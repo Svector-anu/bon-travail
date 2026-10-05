@@ -25,7 +25,7 @@ You recommend. You do not decide. The engineer sets the reward, the deadline, wh
 1. Run exactly:
 
    ```bash
-   node scripts/proofwork-investigate.mjs prepare
+   node skills/proofwork-investigate/proofwork-investigate.mjs prepare
    ```
 
    - If it prints `PROOFWORK_INVESTIGATE_IDLE`, stop. Log one line and send no notification.
@@ -56,7 +56,7 @@ You recommend. You do not decide. The engineer sets the reward, the deadline, wh
 4. Run exactly:
 
    ```bash
-   node scripts/proofwork-investigate.mjs submit
+   node skills/proofwork-investigate/proofwork-investigate.mjs submit
    ```
 
 5. Notify once with the line it prints (it names the finding and links the engineer's console page). Use `./notify "<line>"`.

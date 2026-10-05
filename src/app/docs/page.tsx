@@ -40,6 +40,16 @@ const SECTIONS = [
     ],
   },
   {
+    id: 'own-aeon',
+    label: 'Optional: run Aeon yourself',
+    title: 'bring your own aeon.',
+    body: [
+      'This is optional. bon travail already runs Aeon for every repository you connect, and nothing here needs you to run anything.',
+      'If you would rather run the agent on your own GitHub Actions and model keys, create an Aeon instance with Aeon Connect at aeon.fun/connect, then add the bon travail Pack from your instance with bin/install-skill-pack Svector-anu/bon-travail --path aeon. It adds two skills: proofwork-loop sweeps the loop every ten minutes, and proofwork-investigate reproduces a failure and writes down why. Enable both in aeon.yml with var set to https://bontravail.xyz.',
+      'Both skills need an agent token for the bon travail they talk to. For bontravail.xyz, write to hello@bontravail.xyz and we will send one; a self-hosted bon travail uses its own AGENT_API_TOKEN. Your Aeon can investigate and describe. It cannot approve work, choose who is paid, or move money.',
+    ],
+  },
+  {
     id: 'why',
     label: 'Why it works this way',
     title: 'agents recommend. humans decide. the chain settles.',
