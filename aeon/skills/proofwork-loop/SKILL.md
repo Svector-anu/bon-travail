@@ -4,7 +4,7 @@ description: Runs one sweep of the Proofwork agent (observe watched CI, verify s
 metadata:
   title: Proofwork Loop
   mode: read-only
-  category: crypto
+  category: dev
   var: ""
   tags:
     - payments

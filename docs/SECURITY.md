@@ -18,6 +18,8 @@ The product moves money on the strength of other systems' records, so its rules 
 
 Aeon holds `AGENT_API_TOKEN`. With it, it can trigger a tick, read findings that want an investigation, and attach an investigation. The investigation parser keeps only descriptive fields; rewards, people and approval sent by an agent are dropped. A tick can verify and settle only what an engineer already approved and GitHub already decided. No agent creates work packages: the tick's automatic task creation is limited to Arc rail tests and is off unless `TARGET_OPEN_TASKS` is set.
 
+`proofwork-investigate` is the one exception to "descriptive only" on the Aeon side: it clones the repository a finding names, runs `npm ci` and the finding's step command, and bisects, all on the Aeon runner. The child process gets a stripped environment (`PATH`, `HOME`, `CI`), but that is not a sandbox, so the deployment `var` points at must be one the Aeon operator runs and trusts.
+
 The remaining agent endpoints (`/api/tasks/[id]/verify`, `/release`, `/refund`) cannot bypass the state machine: release requires an `ACCEPTED` task, refund requires an expired one.
 
 Why: an agent that could pick recipients or amounts would turn a prompt injection in a log, commit message or PR body into a payment. Keeping agents descriptive means the worst a hostile repository can do is mislead an investigation the engineer then reads.
