@@ -83,6 +83,7 @@ all variables are documented in [.env.example](.env.example). the ones that matt
 2. add the variables above as encrypted environment variables (`vercel env add name production`). never commit them.
 3. `vercel deploy --prod`. `vercel.json` registers a daily cron for `/api/cron/tick`; aeon's `proofwork-loop` is the real schedule (every 10 minutes).
 4. point aeon's `proofwork-loop` and `proofwork-investigate` `var` at the deployment url and set `proofwork_agent_token` to the deployment's `agent_api_token`.
+   only point `var` at a deployment you run. `proofwork-investigate` clones the repository the deployment names and runs its install and test commands on your aeon runner, so whoever controls that deployment can run code there.
 
 ## checks
 
