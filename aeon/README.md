@@ -15,7 +15,7 @@ The deterministic work (detecting repeats, verifying with GitHub Actions, moving
 
 The `aeon/` folder is an Aeon skill pack (`skills-pack.json`) with two skills, `proofwork-loop` and `proofwork-investigate`. Running Aeon yourself is optional: bontravail.xyz already runs it for every connected repository.
 
-1. **Get an Aeon instance.** The fastest way is [Aeon Connect](https://www.aeon.fun/connect): sign in with GitHub, it forks Aeon into your account and stores your model key as a repo secret. A fork you set up by hand works the same.
+1. **Get an Aeon instance.** Fork [Aeon](https://github.com/aeonfun/aeon) into your account and add your model key as a repo secret.
 2. **Install the pack** from a checkout of your instance:
 
    ```bash
