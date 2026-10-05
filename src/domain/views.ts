@@ -28,6 +28,8 @@ export interface CiTaskView {
   contributors: string[]
   /** Anyone on GitHub may take it, not only the named logins. */
   openToAnyone: boolean
+  /** Sent by the team after the paid fix, outside escrow; null when there is none. */
+  bonusUsdc: string | null
   approvedBy: string
 }
 

@@ -1438,6 +1438,13 @@ button.text-link:disabled {
   text-wrap: balance;
 }
 
+.reward-note {
+  margin: -6px 0 22px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
 .work-where {
   display: flex;
   flex-wrap: wrap;

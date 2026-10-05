@@ -4,6 +4,7 @@ import type { ExternalizeInput } from '@/server/services/work-service'
 import { parseInvestigation } from '@/server/services/work-service'
 import { throttle } from '@/server/throttle'
 import { VerificationPendingError } from '@/server/verification/verifier'
+import { toTaskView } from '@/server/services/views'
 import { FakeGitHub, JOB, NAME, OWNER, STEP, WORKFLOW_PATH, sha } from './fake-github'
 import { T0, makeApp } from './helpers'
 
@@ -532,5 +533,34 @@ describe('watching a repository without runnable workflows', () => {
 
     // #then the engineer is told to add one
     await expect(app.work.connectRepo(REPO, undefined, 'owner')).rejects.toThrow(/has no GitHub Actions yet/)
+  })
+})
+
+describe('a bonus from the team', () => {
+  it('is recorded beside the escrowed reward', async () => {
+    // #given a package approved with a reward and a bonus the team will send itself
+    const { app, task } = await openWork({}, { bonus: '29' })
+
+    // #then the bonus is kept on the package, apart from the escrowed reward
+    const view = toTaskView(await app.store.requireTask(task.id), 0, { explorerUrl: '' })
+    expect({ reward: view.reward, bonus: view.ci?.bonusUsdc }).toEqual({ reward: '0.75', bonus: '29.00' })
+  })
+
+  it('is left out when it is zero or blank', async () => {
+    // #given packages approved with a zero bonus and with none
+    const zero = await openWork({}, { bonus: '0' })
+    const blank = await openWork({}, { bonus: '' })
+
+    // #then neither shows a bonus
+    const bonusOf = async (ctx: typeof zero) => toTaskView(await ctx.app.store.requireTask(ctx.task.id), 0, { explorerUrl: '' }).ci?.bonusUsdc
+    expect([await bonusOf(zero), await bonusOf(blank)]).toEqual([null, null])
+  })
+
+  it('refuses a bonus that is not a USDC amount', async () => {
+    // #given a finding ready to hand out
+    const { app, finding } = await watched()
+
+    // #then a malformed bonus is refused before anything is escrowed
+    await expect(app.work.externalize(finding.id, externalizeInput({ bonus: '-5' }), 'owner')).rejects.toThrow(/Bonus must be a USDC amount/)
   })
 })

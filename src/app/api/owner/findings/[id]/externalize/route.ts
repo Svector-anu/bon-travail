@@ -16,6 +16,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       deadlineHours: Number(body.deadlineHours),
       contributors: Array.isArray(body.contributors) ? (body.contributors as ExternalizeInput['contributors']) : [],
       openToAnyone: body.openToAnyone === true,
+      bonus: body.bonus == null ? undefined : String(body.bonus),
       acceptance: String(body.acceptance ?? ''),
       scope: String(body.scope ?? ''),
       protectedPaths: Array.isArray(body.protectedPaths) ? body.protectedPaths.map(String) : [],

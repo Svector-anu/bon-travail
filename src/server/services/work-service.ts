@@ -34,12 +34,16 @@ export interface WorkSettings {
   escrowAddress?: string | null
 }
 
+const MAX_BONUS_MICRO = 10_000_000_000n
+
 export interface ExternalizeInput {
   reward: string
   deadlineHours: number
   contributors: { login: string; wallet?: string }[]
   /** Anyone on GitHub may take it; the named contributors are then optional. */
   openToAnyone?: boolean
+  /** USDC the team will send itself after the fix is paid, on top of the escrowed reward. Optional. */
+  bonus?: string
   acceptance: string
   scope: string
   protectedPaths: string[]
@@ -247,6 +251,7 @@ export class WorkService {
       requireMerge: input.requireMerge,
       contributors: input.contributors,
       openToAnyone: input.openToAnyone,
+      ...(input.bonusUsdc ? { bonusUsdc: input.bonusUsdc } : {}),
       approvedBy: actor,
     }
     const task = await this.tasks.createWorkTask(
@@ -271,6 +276,7 @@ export class WorkService {
         reward: formatUsdc(input.rewardMicro),
         contributors: input.contributors.map((c) => c.login),
         openToAnyone: input.openToAnyone,
+        bonus: input.bonusUsdc,
       },
       patch: { taskId: task.id, decidedBy: actor, decidedAt: now },
     })
@@ -288,6 +294,7 @@ export class WorkService {
     if (!Number.isFinite(deadlineHours) || deadlineHours < MIN_DEADLINE_HOURS || deadlineHours > MAX_DEADLINE_HOURS) {
       throw new DomainError('BAD_REQUEST', `Deadline must be between ${MIN_DEADLINE_HOURS} hour and ${MAX_DEADLINE_HOURS / 24} days`)
     }
+    const bonusUsdc = this.bonus(raw.bonus)
     const openToAnyone = raw.openToAnyone === true
     const listed = Array.isArray(raw.contributors) ? raw.contributors : []
     if ((!openToAnyone && listed.length === 0) || listed.length > MAX_CONTRIBUTORS) {
@@ -317,11 +324,22 @@ export class WorkService {
       deadlineHours,
       contributors,
       openToAnyone,
+      bonusUsdc,
       acceptance: text(raw.acceptance, 'Acceptance condition', 1500),
       scope: text(raw.scope, 'Scope', 4000),
       protectedPaths,
       requireMerge: raw.requireMerge !== false,
     }
+  }
+
+  /** The team's own top-up. It never touches escrow, so it is only bounded to catch typos. */
+  private bonus(raw: unknown): string | null {
+    const value = String(raw ?? '').trim()
+    if (!value) return null
+    const micro = parseUsdc(value)
+    if (micro === null || micro < 0n) throw new DomainError('BAD_REQUEST', 'Bonus must be a USDC amount')
+    if (micro > MAX_BONUS_MICRO) throw new DomainError('BAD_REQUEST', `Bonus is above ${formatUsdc(MAX_BONUS_MICRO)} USDC`)
+    return micro === 0n ? null : formatUsdc(micro)
   }
 
   private walletFromPullBody(body: string): Address {

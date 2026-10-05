@@ -58,6 +58,8 @@ export interface CiFixSpec {
   contributors: Contributor[]
   /** Any GitHub account may claim, not just the named contributors. Absent on packages made before it existed. */
   openToAnyone?: boolean
+  /** USDC the team sends itself after the fix is paid, outside escrow ("29.00"). Absent when there is none. */
+  bonusUsdc?: string
   approvedBy: string
 }
 

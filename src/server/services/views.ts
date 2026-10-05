@@ -95,6 +95,7 @@ export function toTaskView(task: TaskRecord, attemptCount: number, ctx: ViewCont
             requireMerge: spec.requireMerge,
             contributors: spec.contributors.map((c) => c.login),
             openToAnyone: spec.openToAnyone === true,
+            bonusUsdc: spec.bonusUsdc ?? null,
             approvedBy: spec.approvedBy,
           }
         : null,

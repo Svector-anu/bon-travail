@@ -108,7 +108,9 @@ async function WorkPackage({ task, attempts, work }: { task: TaskView; attempts:
             <div className="fact">
               <div>
                 <span>Reward</span>
-                <strong>{task.reward} USDC</strong>
+                <strong>
+                  {task.reward} USDC{ci.bonusUsdc ? ` + ${ci.bonusUsdc} bonus` : ''}
+                </strong>
               </div>
             </div>
             <TimeFact task={task} />
@@ -119,6 +121,10 @@ async function WorkPackage({ task, attempts, work }: { task: TaskView; attempts:
               </div>
             </div>
           </div>
+          <p className="reward-note">
+            {task.reward} USDC is held in escrow and paid the moment your fix works.
+            {ci.bonusUsdc ? ` The ${ci.bonusUsdc} USDC bonus is sent by the team afterwards, outside escrow.` : ''} Paid on Arc testnet.
+          </p>
 
           <div className="acceptance">
             <span className="label">Done when</span>

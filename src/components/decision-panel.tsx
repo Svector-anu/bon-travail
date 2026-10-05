@@ -42,6 +42,7 @@ export function DecisionPanel({ findingId, canDecide, canExternalize, maxReward,
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState(0)
   const [reward, setReward] = useState('')
+  const [bonus, setBonus] = useState('')
   const [hours, setHours] = useState('48')
   const [anyone, setAnyone] = useState(true)
   const [rows, setRows] = useState<Row[]>([{ login: '', wallet: '' }])
@@ -65,6 +66,7 @@ export function DecisionPanel({ findingId, canDecide, canExternalize, maxReward,
       () =>
         postJson(`/api/owner/findings/${findingId}/externalize`, {
           reward: reward.trim(),
+          bonus: bonus.trim() || undefined,
           deadlineHours: Number(hours),
           openToAnyone: anyone,
           contributors: anyone
@@ -138,6 +140,11 @@ export function DecisionPanel({ findingId, canDecide, canExternalize, maxReward,
                 <input id="reward" className="input tnum big" inputMode="decimal" placeholder="0.50" autoFocus value={reward} onChange={(e) => setReward(e.target.value)} />
               </div>
               <div className="field">
+                <label htmlFor="bonus">Bonus you send yourself after it is paid (optional, USDC)</label>
+                <input id="bonus" className="input tnum" inputMode="decimal" placeholder="0" value={bonus} onChange={(e) => setBonus(e.target.value)} />
+                <small className="muted">Not held in escrow. Shown to humans as a bonus from your team.</small>
+              </div>
+              <div className="field">
                 <span className="field-label">Time to fix it</span>
                 <div className="chips">
                   {DEADLINES.map((d) => (
@@ -190,7 +197,8 @@ export function DecisionPanel({ findingId, canDecide, canExternalize, maxReward,
           {step === 2 && (
             <div className="step-body">
               <p className="step-summary">
-                <strong>{reward.trim() || '?'} USDC</strong> to {anyone ? 'anyone on GitHub' : rows.filter((r) => r.login.trim()).map((r) => `@${r.login.trim().replace(/^@/, '')}`).join(', ') || 'the people you name'} who
+                <strong>{reward.trim() || '?'} USDC</strong>
+                {bonus.trim() && Number(bonus) > 0 ? ` plus a ${bonus.trim()} USDC bonus from you` : ''} to {anyone ? 'anyone on GitHub' : rows.filter((r) => r.login.trim()).map((r) => `@${r.login.trim().replace(/^@/, '')}`).join(', ') || 'the people you name'} who
                 fixes this within {DEADLINES.find((d) => d.hours === hours)?.label ?? `${hours} hours`}. Paid when your tests pass
                 {requireMerge ? ' after you merge it' : ''}; refunded if nobody does.
               </p>

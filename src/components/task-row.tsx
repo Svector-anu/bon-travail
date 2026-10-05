@@ -23,7 +23,7 @@ export function TaskRow({ task, featured = false }: { task: TaskView; featured?:
       )}
       <div className="meta">
         <span>
-          <CircleDollarSign size={15} /> {task.reward} USDC
+          <CircleDollarSign size={15} /> {task.reward} USDC{ci?.bonusUsdc ? ` + ${ci.bonusUsdc} bonus` : ''}
         </span>
         <span>
           <Timer size={15} />
