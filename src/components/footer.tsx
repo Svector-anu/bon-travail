@@ -62,6 +62,7 @@ export function Footer({ escrowUrl }: { escrowUrl: string | null }) {
     {
       title: 'Proof',
       links: [
+        { href: '/introducing', label: 'introducing' },
         { href: 'https://github.com/aeonfun/aeon', label: 'built with aeon', external: true },
         ...(escrowUrl ? [{ href: escrowUrl, label: 'settled on arc', external: true }] : []),
       ],

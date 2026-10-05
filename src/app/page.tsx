@@ -1,4 +1,4 @@
-import { ArrowRight, Play } from 'lucide-react'
+import { ArrowRight, ChevronRight, Play } from 'lucide-react'
 import Link from 'next/link'
 import { HeroVideo } from '@/components/hero-video'
 import { WhatChanges } from '@/components/what-changes'
@@ -45,7 +45,11 @@ export default async function HomePage() {
           <HeroVideo />
         </div>
         <div className="hero-copy">
-          <span className="label">Agents pay humans</span>
+          <Link className="hero-announce" href="/introducing">
+            <span className="hero-announce-dot" aria-hidden />
+            Introducing bon travail
+            <ChevronRight size={14} aria-hidden />
+          </Link>
           <Headline />
           <p>Your agent spots what keeps breaking, you set the reward, and a human you trust fixes it. They get paid the moment it works, and not a minute before.</p>
           <div className="hero-ctas">

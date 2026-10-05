@@ -2714,6 +2714,7 @@ textarea.input.mono {
 }
 
 .hero.bleed .hero-copy .label,
+.hero.bleed .hero-announce,
 .hero.bleed .hero-copy > p,
 .hero.bleed .hero-ctas {
   animation: hero-rise 900ms var(--ease) both;
@@ -2729,7 +2730,8 @@ textarea.input.mono {
   }
 }
 
-.hero.bleed .hero-copy .label {
+.hero.bleed .hero-copy .label,
+.hero.bleed .hero-announce {
   animation-delay: 60ms;
 }
 
@@ -4331,3 +4333,251 @@ p {
     font-size: 13px;
   }
 }
+
+/* ---- introducing: a launch post with a sticky contents rail -------------------- */
+
+html:has(.card-page) {
+  scroll-behavior: smooth;
+}
+
+.card-page {
+  padding: 24px 0 var(--section-space);
+}
+
+.card-crumbs {
+  display: flex;
+  gap: 10px;
+  color: var(--dim);
+  font-size: 14px;
+}
+
+.card-crumbs a {
+  color: var(--text);
+}
+
+.card-layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 64px;
+  margin-top: 40px;
+}
+
+.card-toc ol {
+  position: sticky;
+  top: 104px;
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
+}
+
+.card-toc a {
+  color: var(--muted);
+  transition: color 200ms var(--ease);
+}
+
+.card-toc a:hover {
+  color: var(--text);
+}
+
+.card-body {
+  max-width: 720px;
+  min-width: 0;
+}
+
+.card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--dim);
+  font-size: 14px;
+}
+
+.card-body h1 {
+  margin: 28px 0 8px;
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: var(--title-xl);
+  line-height: var(--leading-display);
+}
+
+.card-lede {
+  margin: 0;
+  color: var(--muted);
+  font-size: clamp(18px, 1.6vw, 21px);
+  line-height: 1.5;
+}
+
+.card-section {
+  padding-top: 40px;
+  scroll-margin-top: 96px;
+}
+
+.card-section > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.card-section h2 {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: var(--title-md);
+  line-height: var(--leading-display);
+}
+
+.card-anchor {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  color: var(--muted);
+}
+
+.card-anchor:hover {
+  color: var(--text);
+}
+
+.card-section p,
+.card-section li {
+  font-size: 17px;
+  line-height: 1.7;
+}
+
+.card-section p {
+  margin: 18px 0 0;
+}
+
+.card-section ul {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0 0;
+  padding-left: 20px;
+}
+
+.card-section a:not(.card-anchor) {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--line-strong);
+}
+
+.card-section code {
+  font-variant-numeric: tabular-nums;
+}
+
+/* A bigger target than the digit itself, and the reference it lands on lights up. */
+.card-ref a {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 4px;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+  text-decoration: none !important;
+  scroll-margin-top: 160px;
+}
+
+.card-ref a:hover {
+  background: var(--surface-strong);
+  color: var(--text);
+}
+
+.card-table {
+  margin-top: 20px;
+  overflow-x: auto;
+}
+
+.card-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+
+.card-table th,
+.card-table td {
+  padding: 12px 16px 12px 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.card-table th {
+  color: var(--dim);
+  font-weight: 500;
+}
+
+.card-refs {
+  display: grid;
+  gap: 12px;
+  margin: 18px 0 0;
+  padding-left: 20px;
+  color: var(--muted);
+}
+
+.card-refs li {
+  font-size: 15px;
+  scroll-margin-top: 96px;
+}
+
+.card-refs li:target,
+.card-refs li[data-landed] {
+  color: var(--text);
+}
+
+.card-refs li:target::marker,
+.card-refs li[data-landed]::marker {
+  color: var(--text);
+}
+
+@media (max-width: 900px) {
+  .card-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+
+  .card-toc {
+    display: none;
+  }
+}
+
+/* ---- home: the launch announcement above the headline ----------------------- */
+
+.hero-announce {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  padding: 6px 10px 6px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  background: rgba(10, 10, 10, 0.35);
+  backdrop-filter: blur(8px);
+  color: #fafafa;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 200ms var(--ease), border-color 200ms var(--ease);
+}
+
+.hero-announce:hover {
+  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.hero-announce-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #fafafa;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.15);
+}
+
