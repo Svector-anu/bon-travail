@@ -66,11 +66,21 @@ export function stepCommand(workflowYaml: string, jobName: string, stepName: str
   return null
 }
 
-function firstFailure(jobs: GhJob[]): { job: string; step: string; jobId: number } | null {
-  const job = jobs.find((j) => j.conclusion === 'failure') ?? jobs.find((j) => j.conclusion === 'timed_out')
-  if (!job) return null
-  const step = job.steps.find((s) => s.conclusion === 'failure') ?? job.steps.find((s) => s.conclusion === 'timed_out')
-  return { job: job.name, step: step?.name ?? '(job setup)', jobId: job.id }
+interface JobFailure {
+  job: string
+  step: string
+  jobId: number
+}
+
+/** Every failing job in a run, each with its first failing step, in a stable order. */
+function failures(jobs: GhJob[]): JobFailure[] {
+  return jobs
+    .filter((j) => j.conclusion === 'failure' || j.conclusion === 'timed_out')
+    .map((job) => {
+      const step = job.steps.find((s) => s.conclusion === 'failure') ?? job.steps.find((s) => s.conclusion === 'timed_out')
+      return { job: job.name, step: step?.name ?? '(job setup)', jobId: job.id }
+    })
+    .sort((a, b) => (a.job === b.job ? a.jobId - b.jobId : a.job < b.job ? -1 : 1))
 }
 
 /**
@@ -158,14 +168,23 @@ export class Observer {
 
   private async onRed(repo: RepoRecord, run: GhRun, actor: string, report: ObserveReport): Promise<void> {
     const jobs = await this.github.listJobs(repo.owner, repo.name, run.id)
-    const failure = firstFailure(jobs)
-    if (!failure) {
+    const failing = failures(jobs)
+    const primary = failing[0]
+    if (!primary) {
       await this.record(repo, run, null, null)
       return
     }
+    const primarySignature = failureSignature(repo.workflowPath, primary.job, primary.step)
+    const primaryFinding = await this.watch.findingBySignature(repo.id, primarySignature)
+    // The run is stored once; a run seen before has already been counted for every job that failed in it.
+    if (!(await this.record(repo, run, { ...primary, signature: primarySignature }, primaryFinding?.id ?? null))) return
+    // A run can fail in several jobs at once, and each one is its own finding.
+    for (const failure of failing) await this.countFailure(repo, run, failure, failure === primary, actor, report)
+  }
+
+  private async countFailure(repo: RepoRecord, run: GhRun, failure: JobFailure, primary: boolean, actor: string, report: ObserveReport): Promise<void> {
     const signature = failureSignature(repo.workflowPath, failure.job, failure.step)
     const existing = await this.watch.findingBySignature(repo.id, signature)
-    if (!(await this.record(repo, run, { ...failure, signature }, existing?.id ?? null))) return
     const now = this.clock.now()
 
     if (!existing) {
@@ -204,7 +223,7 @@ export class Observer {
         version: 0,
       }
       await this.watch.insertFinding(finding, actor, { runId: run.id, runUrl: run.htmlUrl, job: failure.job, step: failure.step })
-      await this.watch.attachRunToFinding(run.id, finding.id)
+      if (primary) await this.watch.attachRunToFinding(run.id, finding.id)
       report.detected.push(finding.id)
       if (finding.status === 'candidate') await this.gatherEvidence(repo, finding, failure.jobId, actor)
       return

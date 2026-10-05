@@ -564,3 +564,33 @@ describe('a bonus from the team', () => {
     await expect(app.work.externalize(finding.id, externalizeInput({ bonus: '-5' }), 'owner')).rejects.toThrow(/Bonus must be a USDC amount/)
   })
 })
+
+describe('a run that fails in several jobs', () => {
+  it('counts each failing job as its own finding', async () => {
+    // #given a green run, then two runs on main that each fail in two jobs
+    const github = new FakeGitHub()
+    const app = await makeApp({ github, env: { TARGET_OPEN_TASKS: '0' } })
+    github.addRun({ sha: sha('a1'), at: T0 - 4 * HOUR, conclusion: 'success' })
+    for (const [commit, at] of [['b1', T0 - 3 * HOUR], ['c1', T0 - 2 * HOUR]] as const) {
+      const run = github.addRun({ sha: sha(commit), at, conclusion: 'failure', failing: { job: 'split', step: 'Run split tests' } })
+      github.jobs.get(run.id)!.push({
+        id: run.id * 1000,
+        name: 'parse',
+        status: 'completed',
+        conclusion: 'failure',
+        htmlUrl: `${run.htmlUrl}/job/parse`,
+        steps: [{ name: 'Run parse tests', number: 1, conclusion: 'failure' }],
+      })
+    }
+
+    // #when the repository is connected and its runs are read
+    await app.work.connectRepo(REPO, undefined, 'owner')
+
+    // #then each failing job is a candidate seen twice, not only the first one listed
+    const findings = await app.watch.listFindings()
+    expect(findings.map((f) => [f.jobName, f.status, f.failureCount]).sort()).toEqual([
+      ['parse', 'candidate', 2],
+      ['split', 'candidate', 2],
+    ])
+  })
+})
