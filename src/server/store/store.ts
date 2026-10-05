@@ -241,6 +241,20 @@ export async function prepareDatabase(db: Database): Promise<void> {
   initialised.add(db)
 }
 
+function taskFilter(options: { states?: readonly TaskState[]; kinds?: readonly TaskRecord['kind'][] }): { where: string; params: unknown[] } {
+  const clauses: string[] = []
+  const params: unknown[] = []
+  if (options.states && options.states.length > 0) {
+    params.push([...options.states])
+    clauses.push(`state = ANY($${params.length})`)
+  }
+  if (options.kinds && options.kinds.length > 0) {
+    params.push([...options.kinds])
+    clauses.push(`kind = ANY($${params.length})`)
+  }
+  return { where: clauses.length ? `WHERE ${clauses.join(' AND ')}` : '', params }
+}
+
 export class Store extends Repository {
   static async open(target: string): Promise<Store> {
     const db = await openDatabase(target)
@@ -318,21 +332,20 @@ export class Store extends Repository {
   }
 
   async listTasks(
-    options: { states?: readonly TaskState[]; kinds?: readonly TaskRecord['kind'][]; limit?: number } = {},
+    options: { states?: readonly TaskState[]; kinds?: readonly TaskRecord['kind'][]; limit?: number; offset?: number } = {},
   ): Promise<TaskRecord[]> {
-    const where: string[] = []
-    const params: unknown[] = []
-    if (options.states && options.states.length > 0) {
-      params.push([...options.states])
-      where.push(`state = ANY($${params.length})`)
-    }
-    if (options.kinds && options.kinds.length > 0) {
-      params.push([...options.kinds])
-      where.push(`kind = ANY($${params.length})`)
-    }
+    const { where, params } = taskFilter(options)
     params.push(options.limit ?? 100)
-    const sql = `SELECT * FROM tasks ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY seq DESC LIMIT $${params.length}`
+    const limit = `$${params.length}`
+    params.push(Math.max(0, options.offset ?? 0))
+    const sql = `SELECT * FROM tasks ${where} ORDER BY seq DESC LIMIT ${limit} OFFSET $${params.length}`
     return (await this.all(sql, ...params)).map(rowToTask)
+  }
+
+  async countTasks(options: { states?: readonly TaskState[]; kinds?: readonly TaskRecord['kind'][] } = {}): Promise<number> {
+    const { where, params } = taskFilter(options)
+    const row = await this.get(`SELECT COUNT(*) AS n FROM tasks ${where}`, ...params)
+    return Number(row?.n ?? 0)
   }
 
   /**

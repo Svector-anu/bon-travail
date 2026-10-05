@@ -6,8 +6,7 @@ import { Footer } from '@/components/footer'
 import { Header } from '@/components/header'
 import { Providers } from '@/components/providers'
 import { SmoothScroll } from '@/components/smooth-scroll'
-import { isOwnerSession } from '@/server/owner-session'
-import { escrowExplorerUrl } from '@/server/queries'
+import { escrowExplorerUrlFromConfig } from '@/server/queries'
 
 /** Two faces, one role each: Instrument Serif for every title and big number, Inter for everything else. */
 const sans = Inter({ subsets: ['latin'], variable: '--font-sans', display: 'swap' })
@@ -20,15 +19,15 @@ export const metadata: Metadata = {
     'An agent spots tests that keep failing and works out why. Engineers decide who fixes it. When the fix passes the project\'s tests, the contributor is paid in USDC automatically.',
 }
 
-export default async function RootLayout({ children }: { children: ReactNode }) {
-  const [owner, escrowUrl] = await Promise.all([isOwnerSession().catch(() => false), escrowExplorerUrl().catch(() => null)])
+export default function RootLayout({ children }: { children: ReactNode }) {
+  const escrowUrl = escrowExplorerUrlFromConfig()
   return (
     <html lang="en" className={`${sans.variable} ${serif.variable}`}>
       <body>
         <SmoothScroll />
         <Providers>
           <div className="shell">
-            <Header owner={owner} />
+            <Header />
             <main className="main">{children}</main>
             <Footer escrowUrl={escrowUrl} />
           </div>

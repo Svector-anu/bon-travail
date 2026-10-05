@@ -1,14 +1,16 @@
 import type { Metadata } from 'next'
 import { AutoRefresh } from '@/components/auto-refresh'
 import { Reveal, RevealItem } from '@/components/reveal'
+import { Pager } from '@/components/pager'
 import { TaskRow } from '@/components/task-row'
-import { listTaskViews } from '@/server/queries'
+import { listReceiptPage } from '@/server/queries'
 
 export const dynamic = 'force-dynamic'
 export const metadata: Metadata = { title: 'Receipts' }
 
-export default async function ReceiptsPage() {
-  const settled = (await listTaskViews({ limit: 100 })).filter((t) => t.state === 'PAID' || t.state === 'REFUNDED')
+export default async function ReceiptsPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
+  const list = await listReceiptPage(Number((await searchParams).page ?? 1))
+  const settled = list.items
 
   return (
     <Reveal>
@@ -30,6 +32,7 @@ export default async function ReceiptsPage() {
           ))}
         </div>
       )}
+      <Pager page={list.page} pageSize={list.pageSize} total={list.total} href={(page) => `/receipts?page=${page}`} />
     </Reveal>
   )
 }

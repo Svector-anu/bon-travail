@@ -3,7 +3,8 @@
 import { LayoutPanelTop, LogIn } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { SIGNED_IN_HINT } from '@/lib/signed-in-hint'
 import { Roll } from './roll'
 import { BonTravailWordmark } from './wordmark'
 
@@ -21,8 +22,14 @@ const NAV = [
  * unfiltered). The teams' door stays visible on its own, since humans who
  * fix code need no account and only the team's engineers sign in.
  */
-export function Header({ owner }: { owner: boolean }) {
+const noSubscription = () => () => {}
+const readSignedIn = () => document.cookie.split('; ').includes(`${SIGNED_IN_HINT}=1`)
+const signedOutOnServer = () => false
+
+export function Header() {
   const pathname = usePathname()
+  // A display hint only; the console checks the real session on the server.
+  const owner = useSyncExternalStore(noSubscription, readSignedIn, signedOutOnServer)
   const [open, setOpen] = useState(false)
   const dockRef = useRef<HTMLDivElement>(null)
   const pillRef = useRef<HTMLDivElement>(null)

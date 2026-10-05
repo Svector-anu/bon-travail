@@ -26,6 +26,7 @@ function readCalm() {
  */
 export function FooterVideo({ scale }: { scale?: MotionValue<number> }) {
   const ref = useRef<HTMLVideoElement>(null)
+  const bubbleRef = useRef<HTMLSpanElement>(null)
   const [muted, setMuted] = useState(true)
   const wantsSound = useRef(false)
   const [playing, setPlaying] = useState(false)
@@ -101,15 +102,31 @@ export function FooterVideo({ scale }: { scale?: MotionValue<number> }) {
       >
         <source src="/scenes/footer-macintosh.mp4" type="video/mp4" />
       </motion.video>
+      {/* Pointer users can click anywhere on the scene; a bubble follows the cursor and says what a click does. */}
+      <div
+        className="foot-video-hit"
+        aria-hidden
+        onClick={toggleSound}
+        onPointerMove={(event) => {
+          const bubble = bubbleRef.current
+          if (!bubble) return
+          const box = event.currentTarget.getBoundingClientRect()
+          bubble.style.setProperty('--x', `${event.clientX - box.left}px`)
+          bubble.style.setProperty('--y', `${event.clientY - box.top}px`)
+        }}
+      >
+        <span ref={bubbleRef} className="foot-video-bubble">
+          {waiting ? 'click to play' : muted ? 'click for sound' : 'click to mute'}
+        </span>
+      </div>
       <button
         type="button"
         className="foot-sound"
         onClick={toggleSound}
         aria-pressed={waiting ? undefined : !muted}
-        aria-label={waiting ? 'Play the video with sound' : 'Sound'}
+        aria-label={waiting ? 'Play the video with sound' : muted ? 'Turn sound on' : 'Turn sound off'}
       >
-        {waiting ? <Play size={14} aria-hidden /> : muted ? <VolumeX size={14} aria-hidden /> : <Volume2 size={14} aria-hidden />}
-        <span aria-hidden>{waiting ? 'Play' : muted ? 'Sound off' : 'Sound on'}</span>
+        {waiting ? <Play size={16} aria-hidden /> : muted ? <VolumeX size={16} aria-hidden /> : <Volume2 size={16} aria-hidden />}
       </button>
     </>
   )

@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'node:crypto'
 import { getApp } from '@/server/container'
 import { OAUTH_STATE_COOKIE, loginFromCode } from '@/server/github/oauth'
+import { signedInHintCookie } from '@/lib/signed-in-hint'
 import { OWNER_COOKIE, OWNER_SESSION_MS, issueOwnerSession, readCookie } from '@/server/owner'
 
 export const dynamic = 'force-dynamic'
@@ -57,5 +58,6 @@ export async function GET(request: Request) {
   return finish('/console', [
     clearState,
     `${OWNER_COOKIE}=${session}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${OWNER_SESSION_MS / 1000}${secure}`,
+    signedInHintCookie(OWNER_SESSION_MS / 1000, secure !== ''),
   ])
 }

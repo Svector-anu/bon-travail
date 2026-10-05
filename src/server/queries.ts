@@ -1,6 +1,6 @@
 import { checkAddress } from '@/domain/address'
 import { investigationIsCurrent, NEEDS_DECISION, type FindingStatus } from '@/domain/findings'
-import { formatUsdc } from '@/domain/money'
+import { formatUsdc, parseUsdc } from '@/domain/money'
 import { isTerminal } from '@/domain/task-state'
 import { TASK_KIND_CI_FIX, type TaskKind, type TaskRecord } from '@/domain/types'
 import type {
@@ -15,6 +15,7 @@ import type {
   TaskView,
 } from '@/domain/views'
 import { publicRun } from '@/lib/public-activity'
+import { loadConfig } from './config'
 import { getApp, type App } from './container'
 import { displayId, findingDisplayIdOf, toAttemptView, toFindingSummary, toFindingView, toRepoView, toTaskView } from './services/views'
 
@@ -43,6 +44,58 @@ function viewContext(app: App) {
 async function toViews(app: App, tasks: TaskRecord[]): Promise<TaskView[]> {
   const counts = await app.store.countAttempts(tasks.map((t) => t.id))
   return tasks.map((t) => toTaskView(t, counts.get(t.id) ?? 0, viewContext(app)))
+}
+
+/** How many items a list page shows; enough to scan, few enough to load fast. */
+export const PAGE_SIZE = 12
+
+export interface ListPage<T> {
+  items: T[]
+  page: number
+  pageSize: number
+  total: number
+}
+
+const SETTLED_STATES = ['PAID', 'REFUNDED', 'EXPIRED'] as const
+const RECEIPT_STATES = ['PAID', 'REFUNDED'] as const
+
+const totalPayout = (task: TaskView): bigint => (parseUsdc(task.reward) ?? 0n) + (task.ci?.bonusUsdc ? (parseUsdc(task.ci.bonusUsdc) ?? 0n) : 0n)
+
+/**
+ * Open work in the order a human should see it: what can be claimed now
+ * first, the largest total payout first, then the soonest deadline. Work
+ * someone is already on follows.
+ */
+export function rankOpenWork(tasks: TaskView[]): TaskView[] {
+  return [...tasks].sort((a, b) => {
+    const claimable = Number(b.state === 'OPEN') - Number(a.state === 'OPEN')
+    if (claimable !== 0) return claimable
+    const pay = totalPayout(b) - totalPayout(a)
+    if (pay !== 0n) return pay > 0n ? 1 : -1
+    return a.deadlineAt - b.deadlineAt
+  })
+}
+
+const pageNumber = (page: number, total: number) => Math.min(Math.max(1, Math.floor(page) || 1), Math.max(1, Math.ceil(total / PAGE_SIZE)))
+
+export async function listWorkPage(view: 'open' | 'settled', page: number): Promise<{ list: ListPage<TaskView>; counts: { open: number; settled: number } }> {
+  const app = await getApp()
+  const [open, settled] = await Promise.all([app.store.countTasks({ states: LIVE_STATES }), app.store.countTasks({ states: SETTLED_STATES })])
+  const total = view === 'open' ? open : settled
+  const current = pageNumber(page, total)
+  const items =
+    view === 'open'
+      ? rankOpenWork(await toViews(app, await app.store.listTasks({ states: LIVE_STATES, limit: 500 }))).slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE)
+      : await toViews(app, await app.store.listTasks({ states: SETTLED_STATES, limit: PAGE_SIZE, offset: (current - 1) * PAGE_SIZE }))
+  return { list: { items, page: current, pageSize: PAGE_SIZE, total }, counts: { open, settled } }
+}
+
+export async function listReceiptPage(page: number): Promise<ListPage<TaskView>> {
+  const app = await getApp()
+  const total = await app.store.countTasks({ states: RECEIPT_STATES })
+  const current = pageNumber(page, total)
+  const items = await toViews(app, await app.store.listTasks({ states: RECEIPT_STATES, limit: PAGE_SIZE, offset: (current - 1) * PAGE_SIZE }))
+  return { items, page: current, pageSize: PAGE_SIZE, total }
 }
 
 export async function listTaskViews(options: { limit?: number; kinds?: TaskKind[] } = {}): Promise<TaskView[]> {
@@ -109,6 +162,16 @@ export async function escrowExplorerUrl(): Promise<string | null> {
   const app = await getApp()
   const address = app.config.paymentProvider === 'arc-escrow' ? app.config.arcEscrowAddress : undefined
   return address ? `${app.chain.explorerUrl}/address/${address}` : null
+}
+
+/** The same link from configuration alone, for the page shell: no database, so every page around it can be cached. */
+export function escrowExplorerUrlFromConfig(): string | null {
+  try {
+    const config = loadConfig()
+    return config.paymentProvider === 'arc-escrow' && config.arcEscrowAddress ? `${config.arcExplorerUrl}/address/${config.arcEscrowAddress}` : null
+  } catch {
+    return null
+  }
 }
 
 /** The work package the home page points to: the first one open to contributors, else the newest in flight. */

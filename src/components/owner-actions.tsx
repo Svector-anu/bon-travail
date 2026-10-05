@@ -179,7 +179,7 @@ export function SignOut() {
   return (
     <button
       type="button"
-      className="text-link"
+      className="action-pill"
       disabled={busy}
       onClick={() => void run(() => postJson('/api/owner/session', {}, 'DELETE'), () => router.push('/'))}
     >
@@ -231,7 +231,7 @@ export function CheckNow({ repoId }: { repoId: string }) {
   const { busy, error, run } = useAction()
   return (
     <span className="check-now">
-      <button type="button" className="text-link" disabled={busy} onClick={() => void run(() => postJson('/api/owner/repos/poll', { repoId }))}>
+      <button type="button" className="action-pill" disabled={busy} onClick={() => void run(() => postJson('/api/owner/repos/poll', { repoId }))}>
         <RefreshCw size={13} className={busy ? 'spin' : undefined} /> {busy ? 'Checking' : 'Check now'}
       </button>
       {error && <small className="form-error">{error}</small>}

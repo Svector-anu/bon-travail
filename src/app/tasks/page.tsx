@@ -2,18 +2,20 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { AutoRefresh } from '@/components/auto-refresh'
 import { Reveal, RevealItem } from '@/components/reveal'
+import { Pager } from '@/components/pager'
 import { TaskRow } from '@/components/task-row'
-import { listTaskViews } from '@/server/queries'
+import { listWorkPage } from '@/server/queries'
 
 export const dynamic = 'force-dynamic'
 export const metadata: Metadata = { title: 'Paid work' }
 
-const SETTLED = new Set(['PAID', 'REFUNDED', 'EXPIRED'])
-
-export default async function WorkPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
-  const view = (await searchParams).view === 'settled' ? 'settled' : 'open'
-  const tasks = (await listTaskViews({ limit: 100 })).filter((t) => (view === 'open' ? !SETTLED.has(t.state) : SETTLED.has(t.state)))
+export default async function WorkPage({ searchParams }: { searchParams: Promise<{ view?: string; page?: string }> }) {
+  const params = await searchParams
+  const view = params.view === 'settled' ? 'settled' : 'open'
+  const { list, counts } = await listWorkPage(view, Number(params.page ?? 1))
+  const tasks = list.items
   const firstOpen = tasks.find((t) => t.state === 'OPEN')?.id
+  const href = (page: number) => `/tasks?${view === 'settled' ? 'view=settled&' : ''}page=${page}`
 
   return (
     <Reveal>
@@ -28,10 +30,10 @@ export default async function WorkPage({ searchParams }: { searchParams: Promise
         </Link>
         <nav className="segmented" aria-label="Filter work">
           <Link href="/tasks" aria-current={view === 'open'}>
-            Open
+            Open <span className="tnum">{counts.open}</span>
           </Link>
           <Link href="/tasks?view=settled" aria-current={view === 'settled'}>
-            Done
+            Done <span className="tnum">{counts.settled}</span>
           </Link>
         </nav>
       </div>
@@ -51,6 +53,7 @@ export default async function WorkPage({ searchParams }: { searchParams: Promise
           ))}
         </div>
       )}
+      <Pager page={list.page} pageSize={list.pageSize} total={list.total} href={href} />
     </Reveal>
   )
 }

@@ -530,8 +530,13 @@ img {
 }
 
 .btn:disabled {
-  opacity: 0.4;
+  opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* A primary action that is not ready yet still reads as the main button. */
+.btn-primary:disabled {
+  opacity: 0.8;
 }
 
 .btn-primary {
@@ -592,6 +597,33 @@ button.text-link {
 }
 
 button.text-link:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Small actions that must be seen at a glance: sign out, check now. */
+.action-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 200ms var(--ease), border-color 200ms var(--ease);
+}
+
+.action-pill:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.action-pill:disabled {
   opacity: 0.6;
   cursor: default;
 }
@@ -2271,30 +2303,60 @@ textarea.input.mono {
   object-position: 50% 50%;
 }
 
+/* Sound, the way Apple does it: a round icon in the corner of the video. */
 .foot-sound {
   position: absolute;
-  left: 24px;
+  right: 24px;
   bottom: 24px;
-  z-index: 2;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  height: 34px;
-  padding: 0 14px 0 12px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 999px;
-  background: rgba(10, 10, 10, 0.58);
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 50%;
+  background: rgba(10, 10, 10, 0.55);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  color: var(--text);
-  font-size: 12.5px;
+  color: #fafafa;
   transition: background 200ms var(--ease), border-color 200ms var(--ease);
 }
 
 .foot-sound:hover,
 .foot-sound:focus-visible {
-  border-color: rgba(255, 255, 255, 0.32);
-  background: rgba(10, 10, 10, 0.6);
+  border-color: rgba(255, 255, 255, 0.45);
+  background: rgba(10, 10, 10, 0.7);
+}
+
+.foot-video-hit {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  cursor: pointer;
+}
+
+.foot-video-bubble {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(250, 250, 250, 0.92);
+  color: #0a0a0a;
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(calc(var(--x, 0px) + 14px), calc(var(--y, 0px) + 14px)) scale(0.9);
+  transition: opacity 180ms var(--ease), transform 120ms var(--ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .foot-video-hit:hover .foot-video-bubble {
+    opacity: 1;
+    transform: translate(calc(var(--x, 0px) + 14px), calc(var(--y, 0px) + 14px)) scale(1);
+  }
 }
 
 @media (max-width: 900px) {
@@ -4615,5 +4677,28 @@ html:has(.card-page) {
   border-radius: 50%;
   background: #fafafa;
   box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.15);
+}
+
+/* ---- lists: paging ---------------------------------------------------------- */
+
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 24px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.pager > div {
+  display: flex;
+  gap: 8px;
+}
+
+.segmented .tnum {
+  margin-left: 4px;
+  opacity: 0.6;
 }
 

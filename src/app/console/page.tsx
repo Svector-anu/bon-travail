@@ -6,9 +6,11 @@ import { AutoRefresh } from '@/components/auto-refresh'
 import { Ago } from '@/components/clock'
 import { CheckNow, ConnectRepo, GithubMark, OwnerLogin, SignOut, WatchPicker } from '@/components/owner-actions'
 import { Reveal } from '@/components/reveal'
+import { SignedInHint } from '@/components/signed-in-hint'
 import { candidateLabel } from '@/lib/candidate'
 import { FINDING_STATUS, TASK_STATUS } from '@/lib/format'
 import { getApp } from '@/server/container'
+import { OWNER_SESSION_MS } from '@/server/owner'
 import { ownerActor } from '@/server/owner-session'
 import { consoleSnapshot } from '@/server/queries'
 import { Roll } from '@/components/roll'
@@ -79,6 +81,7 @@ export default async function ConsolePage({ searchParams }: { searchParams: Prom
 
   return (
     <Reveal>
+      <SignedInHint maxAgeSeconds={OWNER_SESSION_MS / 1000} />
       <AutoRefresh everyMs={10_000} />
       <div className="page-head">
         <div>

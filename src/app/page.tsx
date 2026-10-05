@@ -5,7 +5,8 @@ import { WhatChanges } from '@/components/what-changes'
 import { Roll } from '@/components/roll'
 import { openWork } from '@/server/queries'
 
-export const dynamic = 'force-dynamic'
+/** The open work it points to changes rarely; rebuild at most every 30 seconds instead of on every visit. */
+export const revalidate = 30
 
 const HEADLINE = ['Agents find broken code and pay humans to fix it.']
 
@@ -36,7 +37,8 @@ function Headline() {
 
 /** Three parts and no more: the promise, what changes, and the footer. Everything else lives in /docs. */
 export default async function HomePage() {
-  const current = await openWork()
+  // Without a reachable backend (a build with no configuration) the hero still links to the work list.
+  const current = await openWork().catch(() => null)
 
   return (
     <>
