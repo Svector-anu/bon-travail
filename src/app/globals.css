@@ -756,7 +756,7 @@ button.text-link:disabled {
 
 .segmented a[aria-current='true'] {
   background: var(--accent);
-  color: #fff;
+  color: var(--ink);
 }
 
 /* ---- home ------------------------------------------------------------------- */
