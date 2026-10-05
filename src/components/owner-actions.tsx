@@ -1,6 +1,7 @@
 'use client'
 
 import { LogOut, RefreshCw } from 'lucide-react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { Roll } from './roll'
@@ -34,7 +35,7 @@ export function useAction() {
 }
 
 const SIGN_IN_ERRORS: Record<string, string> = {
-  not_owner: 'is not on this team\'s list of engineers. Ask an owner to add your GitHub login.',
+  not_owner: 'isn\'t set up as an engineer on a team yet. Bringing your team? Write to hello@bontravail.xyz and we\'ll add you.',
   state: 'The sign-in link expired. Try again.',
   denied: 'GitHub sign-in was cancelled.',
   github: 'GitHub did not confirm the sign-in. Try again.',
@@ -62,6 +63,12 @@ export function OwnerLogin({ error, login, enabled }: { error: string | null; lo
         <p className="form-error">
           {error === 'not_owner' && login ? `@${login} ` : ''}
           {message}
+        </p>
+      )}
+      {error === 'not_owner' && (
+        <p className="notice-line">
+          Here to fix code and get paid? You don&apos;t need to sign in. <Link href="/tasks">Find paid work</Link>, and claim it with a
+          pull request.
         </p>
       )}
     </div>
