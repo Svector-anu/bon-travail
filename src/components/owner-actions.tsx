@@ -4,6 +4,7 @@ import { LogOut, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, type FormEvent, type ReactNode } from 'react'
+import type { WorkflowSetup } from '@/server/github/workflow-setup'
 import { Roll } from './roll'
 
 export async function postJson(url: string, body: unknown = {}, method = 'POST'): Promise<Record<string, unknown>> {
@@ -93,16 +94,46 @@ export function GithubMark() {
  * Picks one of the repositories the app is installed on and starts watching
  * it. Asks which workflow when the repository has several.
  */
+function SetupNote({ slug, setup }: { slug: string; setup: WorkflowSetup }) {
+  if (setup.kind === 'enable') {
+    return (
+      <div className="watch-setup">
+        <p>
+          {slug} is a fork, and GitHub keeps a fork&apos;s workflows off until you turn them on. Turn them on in its
+          Actions tab, then come back and click Watch.
+        </p>
+        <a className="action-pill" href={setup.actionsUrl} target="_blank" rel="noreferrer">
+          Open the Actions tab
+        </a>
+      </div>
+    )
+  }
+  return (
+    <div className="watch-setup">
+      <p>
+        {slug} has no GitHub Actions yet, so there is nothing to watch. We filled in a test workflow for it ({setup.label}).
+        {setup.stack === 'unknown' && ' We could not tell how your tests run, so change the last line before you commit.'}{' '}
+        Commit it on GitHub, then come back and click Watch.
+      </p>
+      <a className="action-pill" href={setup.url} target="_blank" rel="noreferrer">
+        Add a test workflow on GitHub
+      </a>
+    </div>
+  )
+}
+
 export function WatchPicker({ repos }: { repos: { slug: string; private: boolean }[] }) {
   const { busy, error, run } = useAction()
   const [slug, setSlug] = useState('')
   const [choices, setChoices] = useState<{ name: string; path: string }[] | null>(null)
   const [workflow, setWorkflow] = useState('')
+  const [setup, setSetup] = useState<WorkflowSetup | null>(null)
   const known = repos.some((r) => r.slug.toLowerCase() === slug.trim().toLowerCase())
 
   function reset(next: string) {
     setSlug(next)
     setChoices(null)
+    setSetup(null)
   }
 
   async function start() {
@@ -110,8 +141,14 @@ export function WatchPicker({ repos }: { repos: { slug: string; private: boolean
     await run(
       async () => {
         const res = await fetch(`/api/owner/repos/workflows?repo=${encodeURIComponent(repo)}`)
-        const data = (await res.json()) as { workflows?: { name: string; path: string }[]; message?: string }
+        const data = (await res.json()) as {
+          workflows?: { name: string; path: string }[]
+          setup?: WorkflowSetup
+          message?: string
+        }
         if (!res.ok || !data.workflows) throw new Error(data.message ?? 'Could not read workflows')
+        setSetup(data.setup ?? null)
+        if (data.workflows.length === 0) return undefined
         if (data.workflows.length === 1) return postJson('/api/owner/repos', { repo, workflow: data.workflows[0]!.path })
         setChoices(data.workflows)
         setWorkflow(data.workflows[0]!.path)
@@ -169,6 +206,7 @@ export function WatchPicker({ repos }: { repos: { slug: string; private: boolean
       >
         <Roll>{busy ? 'Reading GitHub...' : 'Watch'}</Roll>
       </button>
+      {setup && <SetupNote slug={slug.trim()} setup={setup} />}
       {error && <p className="form-error">{error}</p>}
     </div>
   )

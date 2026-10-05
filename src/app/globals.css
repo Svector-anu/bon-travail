@@ -1869,6 +1869,20 @@ button.text-link:disabled {
   margin: 0;
 }
 
+.watch-setup {
+  grid-column: 1 / -1;
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+}
+
+.watch-setup p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
 .check-now {
   display: grid;
   justify-items: end;

@@ -104,6 +104,8 @@ export interface GitHubClient {
   listJobs(owner: string, name: string, runId: number): Promise<GhJob[]>
   jobLog(owner: string, name: string, jobId: number): Promise<string>
   fileAt(owner: string, name: string, path: string, ref: string): Promise<string | null>
+  /** Every file path in the tree at ref. GitHub may cut very large trees short. */
+  listPaths(owner: string, name: string, ref: string): Promise<string[]>
   compare(owner: string, name: string, base: string, head: string): Promise<GhCompare>
   getPull(owner: string, name: string, number: number): Promise<GhPull>
   listPullFiles(owner: string, name: string, number: number): Promise<string[]>
@@ -250,6 +252,13 @@ export class RestGitHubClient implements GitHubClient {
       if (error instanceof GitHubNotFoundError) return null
       throw error
     }
+  }
+
+  async listPaths(owner: string, name: string, ref: string): Promise<string[]> {
+    const body = await this.json(owner, name, `/repos/${owner}/${name}/git/trees/${encodeURIComponent(ref)}?recursive=1`)
+    return list(body.tree)
+      .filter((entry) => entry.type === 'blob')
+      .map((entry) => s(entry.path))
   }
 
   async compare(owner: string, name: string, base: string, head: string): Promise<GhCompare> {

@@ -1,12 +1,15 @@
 import { getApp } from '@/server/container'
 import { DomainError } from '@/server/errors'
 import { REPO_SLUG } from '@/server/github/client'
+import { workflowSetup } from '@/server/github/workflow-setup'
 import { handle, json, requireOwnerRequest } from '@/server/http'
-import { noWorkflowsMessage } from '@/server/services/work-service'
 
 export const dynamic = 'force-dynamic'
 
-/** The active workflows of a repository, so the engineer can pick which one to watch. */
+/**
+ * The active workflows of a repository, so the engineer can pick which one to watch.
+ * With none, the way to get one: a starter workflow for the repo's stack, or for a fork, where to switch its workflows on.
+ */
 export async function GET(request: Request) {
   return handle(async () => {
     await requireOwnerRequest(request)
@@ -15,10 +18,7 @@ export async function GET(request: Request) {
     const { github } = await getApp()
     if (!github) throw new DomainError('UNAVAILABLE', 'GitHub is not connected in this deployment')
     const workflows = (await github.listWorkflows(match[1]!, match[2]!)).filter((w) => w.state === 'active')
-    if (workflows.length === 0) {
-      const repo = await github.getRepo(match[1]!, match[2]!)
-      throw new DomainError('BAD_REQUEST', noWorkflowsMessage(`${repo.owner}/${repo.name}`, repo.fork))
-    }
+    if (workflows.length === 0) return json({ workflows: [], setup: await workflowSetup(github, match[1]!, match[2]!) })
     return json({ workflows: workflows.map((w) => ({ name: w.name, path: w.path })) })
   })
 }

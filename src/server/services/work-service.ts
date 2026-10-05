@@ -24,7 +24,7 @@ import { displayId, findingDisplayIdOf as findingDisplayId, type ReceiptContext 
 export function noWorkflowsMessage(slug: string, fork: boolean): string {
   return fork
     ? `${slug} is a fork, and GitHub keeps a fork's workflows off until you turn them on. Open its Actions tab, enable workflows, then watch it.`
-    : `${slug} has no GitHub Actions yet. bon travail watches CI runs, so add a workflow (for example one that runs your tests), then watch it.`
+    : `${slug} has no GitHub Actions yet. bon travail watches CI runs, so add a workflow that runs your tests, then watch it. The console can fill one in for you.`
 }
 
 export interface WorkSettings {

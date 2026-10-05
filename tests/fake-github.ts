@@ -48,6 +48,8 @@ export class FakeGitHub implements GitHubClient {
   pullFiles = new Map<number, string[]>()
   compareCommits: GhCompare['commits'] = []
   fork = false
+  /** Extra files at the repository root, by path. */
+  files: Record<string, string> = {}
   workflows: GhWorkflow[] = [{ id: WORKFLOW_ID, name: 'Examples', path: WORKFLOW_PATH, state: 'active' }]
 
   private check() {
@@ -159,7 +161,13 @@ export class FakeGitHub implements GitHubClient {
 
   async fileAt(_owner: string, _name: string, path: string): Promise<string | null> {
     this.check()
-    return path === WORKFLOW_PATH ? WORKFLOW_YAML : null
+    if (path === WORKFLOW_PATH) return WORKFLOW_YAML
+    return this.files[path] ?? null
+  }
+
+  async listPaths(): Promise<string[]> {
+    this.check()
+    return [WORKFLOW_PATH, ...Object.keys(this.files)]
   }
 
   async compare(_owner: string, _name: string, base: string, head: string): Promise<GhCompare> {
