@@ -17,7 +17,8 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ['@electric-sql/pglite'],
   // docs.bontravail.xyz is the docs page, with a short link per section to share.
   async rewrites() {
-    return [{ source: '/', has: [{ type: 'host', value: DOCS_HOST }], destination: '/docs' }]
+    // beforeFiles: '/' is the landing page, so the rewrite has to run before page matching.
+    return { beforeFiles: [{ source: '/', has: [{ type: 'host', value: DOCS_HOST }], destination: '/docs' }], afterFiles: [], fallback: [] }
   },
   async redirects() {
     return Object.entries(DOCS_SECTIONS).map(([path, section]) => ({
