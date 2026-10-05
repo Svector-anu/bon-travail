@@ -32,22 +32,24 @@ const SOURCE = { aeon: 'Aeon', 'local-loop': 'local loop', manual: 'manual run',
 
 const stage = (pipeline: AgentPipeline, key: string) => pipeline.stages.find((s) => s.key === key)?.count ?? 0
 
-/** The loop in three moments, with how much work stands at each one right now. */
+/** The loop in three moments: everything Aeon has found, what humans are fixing now, and everyone paid. */
 function journey(pipeline: AgentPipeline): JourneyStop[] {
   return [
     {
       key: 'investigating',
-      count: stage(pipeline, 'observing') + stage(pipeline, 'investigating') + stage(pipeline, 'awaiting'),
+      count: pipeline.found,
+      unit: 'found',
       title: 'Aeon finds it',
       copy: 'When the same test breaks twice, Aeon works out why.',
     },
     {
       key: 'humans',
       count: stage(pipeline, 'open') + stage(pipeline, 'assigned') + stage(pipeline, 'verifying'),
+      unit: 'with humans now',
       title: 'A human fixes it',
       copy: 'You choose who, and the money is set aside first.',
     },
-    { key: 'paid', count: stage(pipeline, 'paid'), title: 'Your tests pay them', copy: 'The moment the fix works, they are paid in USDC.' },
+    { key: 'paid', count: stage(pipeline, 'paid'), unit: 'paid', title: 'Your tests pay them', copy: 'The moment the fix works, they are paid in USDC.' },
   ]
 }
 

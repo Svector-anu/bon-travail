@@ -7,6 +7,8 @@ import { useEffect, useRef, useState } from 'react'
 export interface JourneyStop {
   key: string
   count: number
+  /** What the count measures: "found", "with humans now", "paid". */
+  unit: string
   title: string
   copy: string
 }
@@ -26,7 +28,7 @@ const TILT = [-8, 7, -5, 9, -7, 6, -9]
 /**
  * Aeon's loop as one line down the page. The line fills as you scroll, like
  * syrup running down, and each stop lights up when the fill reaches it. Every
- * stop carries the live count of work standing there right now.
+ * stop carries a live count.
  */
 export function AgentJourney({ stops }: { stops: JourneyStop[] }) {
   const ref = useRef<HTMLOListElement>(null)
@@ -72,7 +74,7 @@ export function AgentJourney({ stops }: { stops: JourneyStop[] }) {
           <li key={stop.key} className={`journey-stop${i % 2 ? ' right' : ''}${lit(i) ? ' lit' : ''}`}>
             <div className="journey-text">
               <span className="journey-count">
-                <span className="tnum">{stop.count}</span> now
+                <span className="tnum">{stop.count}</span> {stop.unit}
               </span>
               <h3>{stop.title}</h3>
               <p>{stop.copy}</p>

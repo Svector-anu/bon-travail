@@ -374,6 +374,8 @@ export async function workerSummary(addressInput: string): Promise<WorkerSummary
 export interface AgentPipeline {
   reposWatched: number
   runsObserved: number
+  /** Every failure Aeon has ever flagged as repeated, wherever it is now. */
+  found: number
   stages: { key: string; label: string; count: number }[]
 }
 
@@ -391,6 +393,7 @@ export async function agentPipeline(): Promise<AgentPipeline> {
   return {
     reposWatched: repos.length,
     runsObserved: Number(runs.rows[0]?.n ?? 0),
+    found: count((f) => f.status !== 'watching'),
     stages: [
       { key: 'observing', label: 'Observing', count: count((f) => f.status === 'watching') },
       { key: 'investigating', label: 'Investigating', count: count((f) => f.status === 'candidate' || f.status === 'recurred') },
