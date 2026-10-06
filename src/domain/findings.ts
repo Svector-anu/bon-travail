@@ -140,6 +140,8 @@ export interface BugDetails {
   /** sha256 of testContent: the verifier checks the merged file against it. */
   testSha256: string
   testCommand: string
+  /** Jobs of the watched workflow that run testCommand: the ones a fix must turn green. Empty means every job. */
+  jobs: string[]
   /** The commit Aeon reproduced the bug on. */
   baseSha: string
 }

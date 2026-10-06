@@ -43,7 +43,7 @@ function latest(runs: GhRun[]): GhRun | null {
  * - for a reported bug, it adds Aeon's reproducing test, unchanged
  * - the acceptance job of the watched workflow passed on the exact commit:
  *   the merge commit on the base branch when merge is required, otherwise
- *   the PR head. For a bug that is every job, since any of them may run the test
+ *   the PR head. For a bug, the jobs that run Aeon's test (every job if unknown)
  * Anything not decided yet is pending, not failed, until the grace period
  * after the deadline runs out.
  */
@@ -155,11 +155,16 @@ export class CiFixVerifier implements TaskVerifier {
     if (run.status !== 'completed') throw new VerificationPendingError(`${spec.workflowName} run #${run.runNumber} is ${run.status}`)
 
     const allJobs = await gh.listJobs(owner, name, run.id)
-    const jobs = spec.reproTest ? allJobs : acceptanceJobs(allJobs, spec.jobName)
-    evidence.jobName = spec.reproTest ? `every job in ${spec.workflowName}` : spec.jobName
+    const testJobs = spec.reproTest?.jobs ?? []
+    const jobs = spec.reproTest
+      ? testJobs.length > 0
+        ? testJobs.flatMap((job) => acceptanceJobs(allJobs, job))
+        : allJobs
+      : acceptanceJobs(allJobs, spec.jobName)
+    evidence.jobName = spec.reproTest ? (testJobs.length > 0 ? testJobs.join(', ') : `every job in ${spec.workflowName}`) : spec.jobName
     evidence.jobUrl = jobs[0]?.htmlUrl ?? null
     if (jobs.length === 0) {
-      return this.verdict(false, 'CHECKS_FAILED', `The acceptance job "${spec.jobName}" did not run on ${sha.slice(0, 7)}.`, evidence)
+      return this.verdict(false, 'CHECKS_FAILED', `The acceptance job "${evidence.jobName}" did not run on ${sha.slice(0, 7)}.`, evidence)
     }
     const failed = jobs.find((job) => job.conclusion !== 'success')
     evidence.jobConclusion = failed ? failed.conclusion : 'success'
@@ -175,7 +180,7 @@ export class CiFixVerifier implements TaskVerifier {
       return this.verdict(
         true,
         'CHECKS_PASSED',
-        `${spec.workflowName} passed with the test for bug #${spec.reproTest.issueNumber} on ${spec.requireMerge ? `${spec.baseBranch} after merging` : 'the head of'} PR #${pr.number} (${sha.slice(0, 7)}, run #${run.runNumber}). No protected path was changed.`,
+        `${testJobs.length > 0 ? testJobs.map((j) => `"${j}"`).join(', ') : spec.workflowName} passed with the test for bug #${spec.reproTest.issueNumber} on ${spec.requireMerge ? `${spec.baseBranch} after merging` : 'the head of'} PR #${pr.number} (${sha.slice(0, 7)}, run #${run.runNumber}). No protected path was changed.`,
         evidence,
       )
     }

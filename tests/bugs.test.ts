@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest'
 import type { Address } from '@/domain/types'
 import { DomainError } from '@/server/errors'
 import type { GhIssue } from '@/server/github/client'
+import { jobsRunning } from '@/server/services/observer'
 import { parseReproduction, type ExternalizeInput } from '@/server/services/work-service'
 import { reproTestDigest } from '@/server/verification/repro-test'
-import { FakeGitHub, NAME, OWNER, sha } from './fake-github'
+import { FakeGitHub, JOB, NAME, OWNER, sha } from './fake-github'
 import { T0, makeApp } from './helpers'
 
 const HOUR = 60 * 60 * 1000
@@ -133,6 +134,35 @@ describe('bug reports from issues', () => {
   })
 })
 
+describe('which jobs judge a bug fix', () => {
+  const yaml = `jobs:
+  examples:
+    steps:
+      - run: npm test
+  split:
+    name: Split tests
+    steps:
+      - run: npm run test:split
+  lint:
+    steps:
+      - run: npm run lint
+`
+
+  it('names the jobs that run the test command, using the name GitHub shows', () => {
+    expect(jobsRunning(yaml, 'npm run test:split')).toEqual(['Split tests'])
+    expect(jobsRunning(yaml, '  npm test ')).toEqual(['examples'])
+  })
+
+  it('finds none for a command the workflow does not run', () => {
+    expect(jobsRunning(yaml, 'node --test')).toEqual([])
+  })
+
+  it('records them on the reproduced bug', async () => {
+    const { finding } = await reproduced()
+    expect(finding.bug?.jobs).toEqual([JOB])
+  })
+})
+
 describe('what Aeon may send about a bug', () => {
   it('only counts a bug as reproduced when the new test fails', () => {
     // #given a test that passed
@@ -249,6 +279,18 @@ describe('paying for a bug fix', () => {
     // #then
     const attempt = (await app.tasks.getReceipt(task.id)).attempts[0]
     expect(attempt?.verification).toMatchObject({ valid: false, code: 'REPRO_TEST_MISSING' })
+  })
+
+  it('is not blocked by an unrelated job that is red', async () => {
+    // #given the test's job passes but another job in the same run fails
+    const { app, github, task } = await claimedBugWork(['src/split.js', TEST_PATH])
+    github.files[TEST_PATH] = TEST_CONTENT
+    const run = github.runs.at(-1)!
+    github.jobs.get(run.id)!.push({ id: 1, name: 'parse', status: 'completed', conclusion: 'failure', htmlUrl: `${run.htmlUrl}/job/1`, steps: [] })
+    // #when verified
+    await app.agent.onSubmission(task.id)
+    // #then paid: the bug's own job decides
+    expect((await app.store.requireTask(task.id)).state).toBe('PAID')
   })
 
   it('pays when the test is added unchanged and the workflow passes, and resolves the bug', async () => {

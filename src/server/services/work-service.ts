@@ -15,7 +15,7 @@ import { DomainError } from '../errors'
 import { reproTestDigest } from '../verification/repro-test'
 import { GITHUB_LOGIN, GitHubNotFoundError, parsePullUrl, REPO_SLUG, type GitHubClient } from '../github/client'
 import type { WatchStore } from '../store/watch-store'
-import type { Observer, ObserveReport } from './observer'
+import { jobsRunning, type Observer, type ObserveReport } from './observer'
 import type { TaskService } from './task-service'
 import { displayId, findingDisplayIdOf as findingDisplayId, type ReceiptContext } from './views'
 
@@ -308,6 +308,9 @@ export class WorkService {
     }
 
     const repo = await this.watch.requireRepo(report.repoId)
+    // The fix is judged by the jobs that run Aeon's test, so unrelated red jobs cannot block the payout.
+    const workflowYaml = await this.github?.fileAt(repo.owner, repo.name, repo.workflowPath, repro.baseSha).catch(() => null)
+    const jobs = workflowYaml ? jobsRunning(workflowYaml, repro.testCommand) : []
     const seq = await this.watch.nextFindingSeq()
     const runUrl = repro.runUrl ?? report.issueUrl
     const alreadyRed = repro.withoutTest !== 'passed'
@@ -339,7 +342,7 @@ export class WorkService {
         reproduction: [`Add ${repro.testPath}`, repro.testCommand],
         firstBadSha: null,
         bisectMethod: null,
-        proposedAcceptance: `${repo.workflowName} passes with ${repro.testPath} added unchanged.`,
+        proposedAcceptance: `${jobs.length > 0 ? jobs.map((j) => `"${j}"`).join(', ') : repo.workflowName} passes with ${repro.testPath} added unchanged.`,
         proposedScope: repro.proposedScope,
         suggestedProtectedPaths: [],
         // A suite that already failed without the test proves less about this bug.
@@ -367,6 +370,7 @@ export class WorkService {
         testContent: repro.testContent,
         testSha256: reproTestDigest(repro.testContent),
         testCommand: repro.testCommand,
+        jobs,
         baseSha: repro.baseSha,
       },
       createdAt: now,
@@ -440,6 +444,7 @@ export class WorkService {
               content: finding.bug.testContent,
               sha256: finding.bug.testSha256,
               command: finding.bug.testCommand,
+              jobs: finding.bug.jobs,
               issueNumber: finding.bug.issueNumber,
               issueTitle: finding.bug.issueTitle,
               issueUrl: finding.bug.issueUrl,

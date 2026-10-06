@@ -46,6 +46,8 @@ export interface ReproTest {
   content: string
   sha256: string
   command: string
+  /** Jobs that run the test and must pass; empty or absent means every job of the workflow. */
+  jobs?: string[]
   issueNumber: number
   issueTitle: string
   issueUrl: string

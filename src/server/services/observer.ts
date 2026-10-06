@@ -74,6 +74,21 @@ export function stepCommand(workflowYaml: string, jobName: string, stepName: str
   return null
 }
 
+/** The jobs (by the name GitHub shows) that have a step running exactly this command. */
+export function jobsRunning(workflowYaml: string, command: string): string[] {
+  let doc: unknown
+  try {
+    doc = parseYaml(workflowYaml)
+  } catch {
+    return []
+  }
+  const jobs = (doc as { jobs?: Record<string, { name?: string; steps?: { run?: string }[] }> })?.jobs
+  if (!jobs) return []
+  return Object.entries(jobs)
+    .filter(([, job]) => job.steps?.some((step) => step.run?.trim() === command.trim()))
+    .map(([id, job]) => job.name ?? id)
+}
+
 interface JobFailure {
   job: string
   step: string

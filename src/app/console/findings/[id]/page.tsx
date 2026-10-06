@@ -217,7 +217,11 @@ export default async function FindingPage({ params }: { params: Promise<{ id: st
 
       {finding.bug ? (
         <p className="cand-judge">
-          <span className="label">Judged by</span> your GitHub Actions: <strong>every job in {finding.workflowName}</strong> on{' '}
+          <span className="label">Judged by</span> your GitHub Actions:{' '}
+          <strong>
+            {finding.bug.jobs.length > 0 ? `${finding.workflowName} › ${finding.bug.jobs.join(', ')}` : `every job in ${finding.workflowName}`}
+          </strong>{' '}
+          on{' '}
           {finding.defaultBranch}, with <span className="mono">{finding.bug.testPath}</span> added unchanged. A fix that edits or skips the
           test is not paid.
         </p>
