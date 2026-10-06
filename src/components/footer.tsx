@@ -54,7 +54,7 @@ export function Footer({ escrowUrl }: { escrowUrl: string | null }) {
     {
       title: 'Connect',
       links: [
-        { href: 'https://github.com/apps/bon-travail', label: 'github', external: true },
+        { href: 'https://github.com/Svector-anu/bon-travail', label: 'github', external: true },
         { href: '/console', label: 'console' },
         { href: '/you', label: 'your earnings' },
       ],
