@@ -126,8 +126,12 @@ export function WorkPanel({ task, attempts, claimedPrUrl, waitingFor, lastError 
         )}
         <p className="work-hint">
           {ci.requireMerge
-            ? `Payout needs the fix merged into ${ci.baseBranch} and "${ci.jobName}" green there. A maintainer decides the merge.`
-            : `Payout needs "${ci.jobName}" green on the PR head.`}
+            ? ci.bug
+              ? `Payout needs the fix merged into ${ci.baseBranch} with ${ci.bug.testPath} added unchanged, and ${ci.workflowName} green there. A maintainer decides the merge.`
+              : `Payout needs the fix merged into ${ci.baseBranch} and "${ci.jobName}" green there. A maintainer decides the merge.`
+            : ci.bug
+              ? `Payout needs ${ci.bug.testPath} added unchanged and ${ci.workflowName} green on the PR head.`
+              : `Payout needs "${ci.jobName}" green on the PR head.`}
         </p>
       </div>
     )

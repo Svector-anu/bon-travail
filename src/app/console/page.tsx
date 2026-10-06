@@ -28,9 +28,17 @@ function FindingRow({ finding, extra }: { finding: FindingSummaryView; extra?: R
         {finding.jobName} › {finding.stepName}
       </strong>
       <small>
-        {finding.repo} · failed <span className="tnum">{finding.failureCount}</span>× · last <Ago ts={finding.lastFailedAt} />
-        {finding.recurrenceCount > 0 && ` · came back ${finding.recurrenceCount}×`}
-        {finding.investigated && ' · Aeon investigated'}
+        {finding.isBug ? (
+          <>
+            {finding.repo} · reported bug, reproduced by Aeon <Ago ts={finding.firstFailedAt} />
+          </>
+        ) : (
+          <>
+            {finding.repo} · failed <span className="tnum">{finding.failureCount}</span>× · last <Ago ts={finding.lastFailedAt} />
+            {finding.recurrenceCount > 0 && ` · came back ${finding.recurrenceCount}×`}
+            {finding.investigated && ' · Aeon investigated'}
+          </>
+        )}
       </small>
       {extra}
       <ArrowRight size={16} className="go" aria-hidden />
@@ -47,8 +55,16 @@ function CandidateCard({ finding }: { finding: FindingSummaryView }) {
         {finding.jobName} <span aria-hidden>›</span> {finding.stepName}
       </h3>
       <p className="cand-card-where">
-        {finding.repo} · failed <span className="tnum">{finding.failureCount}</span> in a row · first seen <Ago ts={finding.firstFailedAt} />
-        {finding.recurrenceCount > 0 && ` · came back ${finding.recurrenceCount}×`}
+        {finding.isBug ? (
+          <>
+            {finding.repo} · Aeon wrote a test that fails because of it <Ago ts={finding.firstFailedAt} />
+          </>
+        ) : (
+          <>
+            {finding.repo} · failed <span className="tnum">{finding.failureCount}</span> in a row · first seen <Ago ts={finding.firstFailedAt} />
+            {finding.recurrenceCount > 0 && ` · came back ${finding.recurrenceCount}×`}
+          </>
+        )}
       </p>
       <p className={finding.investigationSummary ? 'cand-card-found' : 'cand-card-found pending'}>
         {finding.investigationSummary ? (
@@ -175,9 +191,37 @@ export default async function ConsolePage({ searchParams }: { searchParams: Prom
           <ConnectRepo />
         )}
         <p className="muted console-note">
-          Read-only: bon travail can read workflow runs, logs and pull requests on the repositories you choose. It never writes to them.
+          Read-only: bon travail can read workflow runs, logs, issues and pull requests on the repositories you choose. It never writes to them.
+          Label an issue <span className="mono">bug</span> and Aeon turns it into a failing test you can pay a human to fix.
         </p>
       </section>
+
+      {snapshot.bugsWaiting.length > 0 && (
+        <section className="console-section">
+          <div className="panel-title">
+            <span className="label">Bugs waiting for Aeon</span>
+            <span className="label tnum">{snapshot.bugsWaiting.length}</span>
+          </div>
+          <div className="rows">
+            {snapshot.bugsWaiting.map((bug) => (
+              <a key={bug.id} href={bug.issueUrl} target="_blank" rel="noreferrer" className="finding-row">
+                <span className="status">{bug.status === 'reported' ? 'Reproducing' : 'Not reproduced'}</span>
+                <span className="id">#{bug.issueNumber}</span>
+                <strong>{bug.issueTitle}</strong>
+                <small>
+                  {bug.repo} · reported <Ago ts={bug.reportedAt} />
+                  {bug.status === 'reported'
+                    ? ' · Aeon writes a test that fails because of it on its next pass'
+                    : bug.note
+                      ? ` · Aeon: ${bug.note}`
+                      : ''}
+                </small>
+                <ArrowUpRight size={16} className="go" aria-hidden />
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
 
       {(snapshot.watching.length > 0 || snapshot.settled.length > 0) && (
         <section className="console-section">
