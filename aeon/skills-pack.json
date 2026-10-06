@@ -4,7 +4,7 @@
   "author": "Svector-anu",
   "license": "MIT",
   "homepage": "https://bontravail.xyz/introducing",
-  "description": "Agents find broken code and pay humans to fix it: sweep a bon travail deployment (watch CI, verify fixes, pay, refund) and investigate repeated failures. Agents describe; engineers decide and the repo's own tests judge.",
+  "description": "Agents find broken code and pay humans to fix it: sweep a bon travail deployment (watch CI, verify fixes, pay, refund), investigate repeated failures, and turn reported bugs into failing tests. Agents describe; engineers decide and the repo's own tests judge.",
   "skills": [
     {
       "slug": "proofwork-loop",
@@ -12,8 +12,13 @@
       "category": "dev",
       "schedule": "*/10 * * * *",
       "default_enabled": false,
-      "secrets_required": ["PROOFWORK_AGENT_TOKEN"],
-      "capabilities": ["external_api", "sends_notifications"]
+      "secrets_required": [
+        "PROOFWORK_AGENT_TOKEN"
+      ],
+      "capabilities": [
+        "external_api",
+        "sends_notifications"
+      ]
     },
     {
       "slug": "proofwork-investigate",
@@ -21,8 +26,27 @@
       "category": "dev",
       "schedule": "17 * * * *",
       "default_enabled": false,
-      "secrets_required": ["PROOFWORK_AGENT_TOKEN"],
-      "capabilities": ["external_api", "sends_notifications"]
+      "secrets_required": [
+        "PROOFWORK_AGENT_TOKEN"
+      ],
+      "capabilities": [
+        "external_api",
+        "sends_notifications"
+      ]
+    },
+    {
+      "slug": "proofwork-reproduce",
+      "path": "skills/proofwork-reproduce",
+      "category": "dev",
+      "schedule": "47 * * * *",
+      "default_enabled": false,
+      "secrets_required": [
+        "PROOFWORK_AGENT_TOKEN"
+      ],
+      "capabilities": [
+        "external_api",
+        "sends_notifications"
+      ]
     }
   ]
 }

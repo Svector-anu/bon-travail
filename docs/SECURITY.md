@@ -20,6 +20,8 @@ Aeon holds `AGENT_API_TOKEN`. With it, it can trigger a tick, read findings that
 
 `proofwork-investigate` is the one exception to "descriptive only" on the Aeon side: it clones the repository a finding names, runs `npm ci` and the finding's step command, and bisects, all on the Aeon runner. The child process gets a stripped environment (`PATH`, `HOME`, `CI`), but that is not a sandbox, so the deployment `var` points at must be one the Aeon operator runs and trusts.
 
+`proofwork-reproduce` runs code the same way and reads one more untrusted input: the text of a GitHub issue, which anyone can write. Its instructions treat the issue and the repository as data, and its script refuses a submission unless exactly one new test file changed outside `.github/`. What the model writes still cannot pay anyone: the server keeps the test as evidence, the engineer reads it before approving, and the verifier only accepts a fix that adds that exact test (compared by sha256, ignoring whitespace) and passes the whole watched workflow. Labeling an issue as a bug is a maintainer action on most repositories, so strangers cannot queue work on their own.
+
 The remaining agent endpoints (`/api/tasks/[id]/verify`, `/release`, `/refund`) cannot bypass the state machine: release requires an `ACCEPTED` task, refund requires an expired one.
 
 Why: an agent that could pick recipients or amounts would turn a prompt injection in a log, commit message or PR body into a payment. Keeping agents descriptive means the worst a hostile repository can do is mislead an investigation the engineer then reads.
@@ -40,7 +42,7 @@ Engineers sign in with GitHub through the Bon Travail GitHub App. The OAuth call
 
 ## Repository access
 
-Repositories are read through the GitHub App with read-only permissions (Actions, checks, contents, pull requests, metadata) and no webhooks. Each request uses a short-lived installation token for the installation that covers that repository, so Bon Travail can read exactly the repositories the team installed it on, and nothing it can do writes to them. The installation id GitHub sends back after installing is looked up with the app's own credentials before anything is shown.
+Repositories are read through the GitHub App with read-only permissions (Actions, checks, contents, issues, pull requests, metadata) and no webhooks. Issues are read only to find open issues labeled as bugs; an installation without that permission still watches CI. Each request uses a short-lived installation token for the installation that covers that repository, so Bon Travail can read exactly the repositories the team installed it on, and nothing it can do writes to them. The installation id GitHub sends back after installing is looked up with the app's own credentials before anything is shown.
 
 ## Fail closed
 

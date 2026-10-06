@@ -15,6 +15,15 @@ const SECTIONS = [
     ],
   },
   {
+    id: 'bugs',
+    label: 'Reported bugs',
+    title: 'a bug becomes a test, then paid work.',
+    body: [
+      'Broken CI is not the only thing worth fixing. Label an open issue bug on a repository you connected, and Aeon picks it up: it reads the issue and the code, writes one test that fails because of the bug, and runs your test command with and without it to show the test is what fails.',
+      'You read the bug, the test and how it fails, and decide like any other finding. If it goes to a human, the fix is paid only when it adds that exact test and your whole workflow passes on it. A fix that edits or skips the test is not paid. Once it is, the test stays in your repository, so your CI guards against the bug from then on.',
+    ],
+  },
+  {
     id: 'engineers',
     label: 'For engineers',
     title: 'connect, read, decide.',
@@ -45,8 +54,8 @@ const SECTIONS = [
     title: 'bring your own aeon.',
     body: [
       'This is optional. bon travail already runs Aeon for every repository you connect, and nothing here needs you to run anything.',
-      'If you would rather run the agent on your own GitHub Actions and model keys, fork Aeon, then add the bon travail Pack from your instance with bin/install-skill-pack Svector-anu/bon-travail --path aeon. It adds two skills: proofwork-loop sweeps the loop every ten minutes, and proofwork-investigate reproduces a failure and writes down why. Enable both in aeon.yml with var set to https://bontravail.xyz.',
-      'Both skills need an agent token for the bon travail they talk to. For bontravail.xyz, write to hello@bontravail.xyz and we will send one; a self-hosted bon travail uses its own AGENT_API_TOKEN. Your Aeon can investigate and describe. It cannot approve work, choose who is paid, or move money.',
+      'If you would rather run the agent on your own GitHub Actions and model keys, fork Aeon, then add the bon travail Pack from your instance with bin/install-skill-pack Svector-anu/bon-travail --path aeon. It adds three skills: proofwork-loop sweeps the loop every ten minutes, proofwork-investigate reproduces a failure and writes down why, and proofwork-reproduce turns a reported bug into a failing test. Enable them in aeon.yml with var set to https://bontravail.xyz.',
+      'The skills need an agent token for the bon travail they talk to. For bontravail.xyz, write to hello@bontravail.xyz and we will send one; a self-hosted bon travail uses its own AGENT_API_TOKEN. Your Aeon can investigate and describe. It cannot approve work, choose who is paid, or move money.',
     ],
   },
   {
