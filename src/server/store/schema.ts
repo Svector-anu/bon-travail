@@ -213,6 +213,28 @@ CREATE TABLE IF NOT EXISTS finding_events (
   detail_json TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS finding_events_finding ON finding_events(finding_id);
+
+-- Findings that came from a bug report carry Aeon's reproducing test.
+ALTER TABLE findings ADD COLUMN IF NOT EXISTS bug_json TEXT;
+
+CREATE TABLE IF NOT EXISTS bug_reports (
+  id TEXT PRIMARY KEY,
+  seq INTEGER NOT NULL UNIQUE,
+  repo_id TEXT NOT NULL REFERENCES repos(id),
+  issue_number INTEGER NOT NULL,
+  issue_title TEXT NOT NULL,
+  issue_body TEXT NOT NULL,
+  issue_url TEXT NOT NULL,
+  issue_author TEXT NOT NULL,
+  status TEXT NOT NULL,
+  note TEXT,
+  finding_id TEXT REFERENCES findings(id),
+  reported_at BIGINT NOT NULL,
+  created_at BIGINT NOT NULL,
+  updated_at BIGINT NOT NULL,
+  UNIQUE (repo_id, issue_number)
+);
+CREATE INDEX IF NOT EXISTS bug_reports_status ON bug_reports(status);
 CREATE OR REPLACE TRIGGER finding_events_append_only BEFORE UPDATE OR DELETE ON finding_events
   FOR EACH ROW EXECUTE FUNCTION proofwork_append_only('finding_events is append-only');
 `

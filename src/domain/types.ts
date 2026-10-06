@@ -38,6 +38,20 @@ export interface RepoRef {
 }
 
 /**
+ * The test Aeon wrote to reproduce a reported bug. A fix must add this exact
+ * file; the whole watched workflow, which now runs it, must pass.
+ */
+export interface ReproTest {
+  path: string
+  content: string
+  sha256: string
+  command: string
+  issueNumber: number
+  issueTitle: string
+  issueUrl: string
+}
+
+/**
  * Frozen when the engineer approves. The claimant can never change the
  * acceptance condition, the protected paths or the payout wallet.
  */
@@ -60,6 +74,8 @@ export interface CiFixSpec {
   openToAnyone?: boolean
   /** USDC the team sends itself after the fix is paid, outside escrow ("29.00"). Absent when there is none. */
   bonusUsdc?: string
+  /** Present when the work is a reported bug rather than a failing CI job. */
+  reproTest?: ReproTest
   approvedBy: string
 }
 
@@ -155,7 +171,7 @@ export interface CiEvidence {
 
 export interface CiFixVerification extends VerificationBase {
   kind: typeof TASK_KIND_CI_FIX
-  code: 'CHECKS_PASSED' | 'CHECKS_FAILED' | 'PROTECTED_PATH' | 'WRONG_AUTHOR' | 'WRONG_TARGET' | 'CLOSED_UNMERGED'
+  code: 'CHECKS_PASSED' | 'CHECKS_FAILED' | 'PROTECTED_PATH' | 'WRONG_AUTHOR' | 'WRONG_TARGET' | 'CLOSED_UNMERGED' | 'REPRO_TEST_MISSING'
   evidence: CiEvidence
 }
 

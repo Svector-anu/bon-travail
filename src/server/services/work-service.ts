@@ -2,6 +2,7 @@ import { checkAddress } from '@/domain/address'
 import {
   INVESTIGABLE,
   NEEDS_DECISION,
+  type BugReportRecord,
   type FindingRecord,
   type Investigation,
   type InvestigationCommand,
@@ -11,6 +12,7 @@ import { formatUsdc, parseUsdc } from '@/domain/money'
 import { TASK_KIND_CI_FIX, type Address, type CiFixSpec, type CiFixSubmission, type Contributor, type TaskRecord } from '@/domain/types'
 import type { Clock } from '../clock'
 import { DomainError } from '../errors'
+import { reproTestDigest } from '../verification/repro-test'
 import { GITHUB_LOGIN, GitHubNotFoundError, parsePullUrl, REPO_SLUG, type GitHubClient } from '../github/client'
 import type { WatchStore } from '../store/watch-store'
 import type { Observer, ObserveReport } from './observer'
@@ -110,6 +112,98 @@ export function parseInvestigation(body: Record<string, unknown>, at: number): I
   }
 }
 
+export type CommandOutcome = 'failed' | 'passed' | 'error'
+
+/** What Aeon sends after trying to reproduce a reported bug with a new test. */
+export interface Reproduction {
+  reproduced: boolean
+  /** Why it could not be reproduced; required when reproduced is false. */
+  note: string | null
+  testPath: string
+  testContent: string
+  testCommand: string
+  baseSha: string
+  withTest: CommandOutcome
+  withoutTest: CommandOutcome
+  failingOutput: string
+  summary: string
+  rootCause: string
+  proposedScope: string
+  confidence: 'low' | 'medium' | 'high'
+  runUrl: string | null
+}
+
+const MAX_TEST_CHARS = 30_000
+const SHA = /^[0-9a-f]{40}$/
+
+function commandOutcome(value: unknown, field: string): CommandOutcome {
+  if (value !== 'failed' && value !== 'passed' && value !== 'error') throw new DomainError('BAD_REQUEST', `${field} must be failed, passed or error`)
+  return value
+}
+
+/** A path inside the repository that is not the CI configuration. */
+function testPathOf(value: unknown): string {
+  const path = text(value, 'testPath', 200).replace(/^\.\//, '')
+  if (path.startsWith('/') || path.split('/').some((part) => part === '..' || part === '') || path.startsWith('.github/')) {
+    throw new DomainError('BAD_REQUEST', 'testPath must be a relative path inside the repository, outside .github/')
+  }
+  return path
+}
+
+/** Kept byte for byte: it is the file the fix must add. */
+function testContentOf(value: unknown): string {
+  if (typeof value !== 'string' || value.trim().length === 0 || value.length > MAX_TEST_CHARS) {
+    throw new DomainError('BAD_REQUEST', `testContent must be 1-${MAX_TEST_CHARS} characters of text`)
+  }
+  return value
+}
+
+/**
+ * Validates what Aeon sends about a bug. It can say whether the bug
+ * reproduced and hand over the test; it cannot set money, people or approval.
+ * A bug only counts as reproduced when the new test makes the suite fail.
+ */
+export function parseReproduction(body: Record<string, unknown>): Reproduction {
+  const confidence = body.confidence
+  if (confidence !== 'low' && confidence !== 'medium' && confidence !== 'high') {
+    throw new DomainError('BAD_REQUEST', 'confidence must be low, medium or high')
+  }
+  const withTest = commandOutcome(body.withTest, 'withTest')
+  const withoutTest = commandOutcome(body.withoutTest, 'withoutTest')
+  const testPath = testPathOf(body.testPath)
+  const failingOutput = typeof body.failingOutput === 'string' ? body.failingOutput.slice(-4000) : ''
+  // When the suite already failed without the new test, only output naming the test shows it is what fails.
+  const testIsTheFailure = withoutTest === 'passed' || failingOutput.includes(testPath.split('/').pop()!)
+  const reproduced = body.reproduced === true && withTest === 'failed' && testIsTheFailure
+  const baseSha = text(body.baseSha, 'baseSha', 40, 40).toLowerCase()
+  if (!SHA.test(baseSha)) throw new DomainError('BAD_REQUEST', 'baseSha must be a full commit sha')
+  const runUrl = body.runUrl === undefined || body.runUrl === null ? null : text(body.runUrl, 'runUrl', 300)
+  if (runUrl && !runUrl.startsWith('https://github.com/')) throw new DomainError('BAD_REQUEST', 'runUrl must be a GitHub URL')
+  const note = body.note === undefined || body.note === null || body.note === '' ? null : text(body.note, 'note', 1500)
+  if (!reproduced && !note && body.reproduced !== true) throw new DomainError('BAD_REQUEST', 'Say in note why the bug did not reproduce')
+  return {
+    reproduced,
+    note: reproduced
+      ? null
+      : (note ??
+        (withTest !== 'failed'
+          ? `The test command ${withTest} with ${testPath} added, so it does not show the bug.`
+          : `The suite already failed without ${testPath}, and the failure does not name it, so it is not clear the new test is what fails.`)),
+    testPath,
+    testContent: testContentOf(body.testContent),
+    testCommand: text(body.testCommand, 'testCommand', 500),
+    baseSha,
+    withTest,
+    withoutTest,
+    failingOutput,
+    summary: text(body.summary, 'summary', 1200),
+    rootCause: text(body.rootCause, 'rootCause', 2000),
+    proposedScope: text(body.proposedScope, 'proposedScope', 2000),
+    confidence,
+    runUrl,
+  }
+}
+
 /**
  * The engineer's side of the product. Aeon and the observer prepare evidence;
  * only an authenticated owner decides what leaves the team, for how much,
@@ -185,6 +279,7 @@ export class WorkService {
     if (!INVESTIGABLE.includes(finding.status)) {
       throw new DomainError('CONFLICT', `${findingDisplayId(finding)} is ${finding.status}; there is nothing to investigate`)
     }
+    if (finding.bug) throw new DomainError('CONFLICT', `${findingDisplayId(finding)} is a reported bug; Aeon reproduced it with a test already`)
     return this.watch.updateFinding({
       findingId,
       at: this.clock.now(),
@@ -195,6 +290,92 @@ export class WorkService {
       detail: { confidence: investigation.confidence, firstBadSha: investigation.firstBadSha, runUrl: investigation.runUrl },
       patch: { investigation },
     })
+  }
+
+  /**
+   * Aeon's answer to a bug report. A reproduced bug becomes a finding the
+   * engineer decides on like any CI failure, carrying the test that proves it.
+   */
+  async recordReproduction(reportId: string, repro: Reproduction, actor: string): Promise<{ report: BugReportRecord; finding: FindingRecord | null }> {
+    const report = await this.watch.requireBugReport(reportId)
+    const open = ['reported', 'not_reproduced'] as const
+    if (!(open as readonly string[]).includes(report.status)) {
+      throw new DomainError('CONFLICT', `${report.id} is ${report.status}; there is nothing to reproduce`)
+    }
+    const now = this.clock.now()
+    if (!repro.reproduced) {
+      return { report: await this.watch.moveBugReport(report.id, open, 'not_reproduced', now, { note: repro.note }), finding: null }
+    }
+
+    const repo = await this.watch.requireRepo(report.repoId)
+    const seq = await this.watch.nextFindingSeq()
+    const runUrl = repro.runUrl ?? report.issueUrl
+    const alreadyRed = repro.withoutTest !== 'passed'
+    const finding: FindingRecord = {
+      id: `find_${String(seq).padStart(3, '0')}`,
+      seq,
+      repoId: repo.id,
+      signature: `issue:${report.issueNumber}`,
+      workflowPath: repo.workflowPath,
+      workflowName: repo.workflowName,
+      jobName: `bug #${report.issueNumber}`,
+      stepName: report.issueTitle,
+      stepCommand: repro.testCommand,
+      errorExcerpt: repro.failingOutput || null,
+      failureCount: 1,
+      firstFailedRunId: 0,
+      firstFailedSha: repro.baseSha,
+      firstFailedAt: now,
+      lastFailedRunId: 0,
+      lastFailedAt: now,
+      lastFailedRunUrl: runUrl,
+      regression: null,
+      status: 'investigated',
+      investigation: {
+        author: 'aeon',
+        runUrl: repro.runUrl,
+        summary: repro.summary,
+        rootCause: repro.rootCause,
+        reproduction: [`Add ${repro.testPath}`, repro.testCommand],
+        firstBadSha: null,
+        bisectMethod: null,
+        proposedAcceptance: `${repo.workflowName} passes with ${repro.testPath} added unchanged.`,
+        proposedScope: repro.proposedScope,
+        suggestedProtectedPaths: [],
+        // A suite that already failed without the test proves less about this bug.
+        confidence: alreadyRed && repro.confidence === 'high' ? 'medium' : repro.confidence,
+        commands: [
+          { command: repro.testCommand, sha: repro.baseSha, outcome: repro.withTest, note: `with ${repro.testPath}` },
+          { command: repro.testCommand, sha: repro.baseSha, outcome: repro.withoutTest, note: 'without the new test' },
+        ],
+        submittedAt: now,
+      },
+      decidedBy: null,
+      decidedAt: null,
+      taskId: null,
+      resolvedAt: null,
+      resolvedRunId: null,
+      resolvedSha: null,
+      recurrenceCount: 0,
+      lastRecurrenceAt: null,
+      bug: {
+        reportId: report.id,
+        issueNumber: report.issueNumber,
+        issueTitle: report.issueTitle,
+        issueUrl: report.issueUrl,
+        testPath: repro.testPath,
+        testContent: repro.testContent,
+        testSha256: reproTestDigest(repro.testContent),
+        testCommand: repro.testCommand,
+        baseSha: repro.baseSha,
+      },
+      createdAt: now,
+      updatedAt: now,
+      version: 0,
+    }
+    await this.watch.insertFinding(finding, actor, { issueNumber: report.issueNumber, issueUrl: report.issueUrl, testPath: repro.testPath })
+    const moved = await this.watch.moveBugReport(report.id, open, 'reproduced', now, { findingId: finding.id, note: null })
+    return { report: moved, finding: await this.watch.requireFinding(finding.id) }
   }
 
   // ---- engineer decisions --------------------------------------------------
@@ -252,11 +433,24 @@ export class WorkService {
       contributors: input.contributors,
       openToAnyone: input.openToAnyone,
       ...(input.bonusUsdc ? { bonusUsdc: input.bonusUsdc } : {}),
+      ...(finding.bug
+        ? {
+            reproTest: {
+              path: finding.bug.testPath,
+              content: finding.bug.testContent,
+              sha256: finding.bug.testSha256,
+              command: finding.bug.testCommand,
+              issueNumber: finding.bug.issueNumber,
+              issueTitle: finding.bug.issueTitle,
+              issueUrl: finding.bug.issueUrl,
+            },
+          }
+        : {}),
       approvedBy: actor,
     }
     const task = await this.tasks.createWorkTask(
       {
-        title: `Fix the failing "${finding.stepName}" step in ${finding.jobName}`,
+        title: finding.bug ? `Fix bug #${finding.bug.issueNumber}: ${finding.bug.issueTitle}` : `Fix the failing "${finding.stepName}" step in ${finding.jobName}`,
         description: input.scope,
         rewardMicro: input.rewardMicro,
         subject: `finding:${findingId}:${now}`,
@@ -422,11 +616,28 @@ export class WorkService {
 
   // ---- settlement ----------------------------------------------------------
 
-  /** A refunded package hands the finding back to the engineer; a paid one stays watched for recurrence. */
+  /**
+   * A refunded package hands the finding back to the engineer. A paid CI fix
+   * stays watched for recurrence; a paid bug is resolved, since its test now
+   * lives in the repository and CI guards it from here on.
+   */
   private async afterSettlement(task: TaskRecord): Promise<void> {
-    if (task.spec.kind !== TASK_KIND_CI_FIX || task.state !== 'REFUNDED') return
+    if (task.spec.kind !== TASK_KIND_CI_FIX) return
     const finding = await this.watch.getFinding(task.spec.findingId)
     if (!finding || finding.status !== 'externalized' || finding.taskId !== task.id) return
+    if (task.state === 'PAID' && finding.bug) {
+      await this.watch.updateFinding({
+        findingId: finding.id,
+        at: this.clock.now(),
+        actor: 'proofwork',
+        to: 'resolved',
+        event: 'resolved',
+        detail: { taskId: task.id, reason: 'fix paid with the reproducing test merged' },
+        patch: { resolvedAt: this.clock.now() },
+      })
+      return
+    }
+    if (task.state !== 'REFUNDED') return
     await this.watch.updateFinding({
       findingId: finding.id,
       at: this.clock.now(),

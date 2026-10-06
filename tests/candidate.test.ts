@@ -35,6 +35,8 @@ function finding(patch: Partial<FindingView> = {}): FindingView {
     investigated: true,
     investigationSummary: investigation.summary,
     taskId: null,
+    isBug: false,
+    bug: null,
     repoUrl: 'https://github.com/o/r',
     workflowName: 'Examples',
     workflowPath: '.github/workflows/examples.yml',

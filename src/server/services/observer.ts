@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { parse as parseYaml } from 'yaml'
 import {
+  BUG_LABELS,
   REPEAT_THRESHOLD,
   type FindingRecord,
   type FindingStatus,
@@ -20,6 +21,8 @@ export interface ObserveReport {
   repeated: string[]
   resolved: string[]
   recurred: string[]
+  /** Bug reports picked up from issues labeled as bugs. */
+  bugsReported: string[]
   notable: string[]
 }
 
@@ -29,6 +32,11 @@ const EXCERPT_LINES = 40
 const EXCERPT_CHARS = 4000
 const RUNS_PER_POLL = 30
 const MAX_REGRESSION_COMMITS = 20
+const ISSUE_BODY_CHARS = 6000
+
+export function isBugIssue(labels: readonly string[]): boolean {
+  return labels.some((label) => BUG_LABELS.includes(label.trim().toLowerCase()))
+}
 
 export function failureSignature(workflowPath: string, job: string, step: string): string {
   return createHash('sha256').update(`${workflowPath}\n${job}\n${step}`).digest('hex').slice(0, 16)
@@ -98,7 +106,16 @@ export class Observer {
   ) {}
 
   async poll(repo: RepoRecord, actor: string): Promise<ObserveReport> {
-    const report: ObserveReport = { repoId: repo.id, newRuns: 0, detected: [], repeated: [], resolved: [], recurred: [], notable: [] }
+    const report: ObserveReport = {
+      repoId: repo.id,
+      newRuns: 0,
+      detected: [],
+      repeated: [],
+      resolved: [],
+      recurred: [],
+      bugsReported: [],
+      notable: [],
+    }
     const runs = await this.github.listRuns(repo.owner, repo.name, repo.workflowId, {
       branch: repo.defaultBranch,
       status: 'completed',
@@ -118,8 +135,47 @@ export class Observer {
       else await this.record(repo, run, null, null)
       report.newRuns++
     }
+    await this.syncBugReports(repo, report)
     await this.watch.markPolled(repo.id, this.clock.now())
     return report
+  }
+
+  /**
+   * Picks up open issues labeled as bugs, and closes the ones whose issue
+   * closed before Aeon got to them. Best effort: an app without the Issues
+   * permission still watches CI.
+   */
+  private async syncBugReports(repo: RepoRecord, report: ObserveReport): Promise<void> {
+    let issues
+    try {
+      issues = (await this.github.listOpenIssues(repo.owner, repo.name)).filter((issue) => isBugIssue(issue.labels))
+    } catch {
+      return
+    }
+    const now = this.clock.now()
+    for (const issue of issues) {
+      const created = await this.watch.insertBugReport({
+        repoId: repo.id,
+        issueNumber: issue.number,
+        issueTitle: issue.title.slice(0, 300),
+        issueBody: issue.body.slice(0, ISSUE_BODY_CHARS),
+        issueUrl: issue.htmlUrl,
+        issueAuthor: issue.author,
+        status: 'reported',
+        note: null,
+        findingId: null,
+        reportedAt: issue.createdAt || now,
+        createdAt: now,
+        updatedAt: now,
+      })
+      if (!created) continue
+      report.bugsReported.push(created.id)
+      report.notable.push(`Bug #${issue.number} on ${repo.owner}/${repo.name} is waiting for Aeon to reproduce it: "${issue.title}". ${issue.htmlUrl}`)
+    }
+    const open = new Set(issues.map((issue) => issue.number))
+    for (const tracked of await this.watch.listBugReports({ repoId: repo.id, statuses: ['reported', 'not_reproduced'] })) {
+      if (!open.has(tracked.issueNumber)) await this.watch.moveBugReport(tracked.id, ['reported', 'not_reproduced'], 'closed', now)
+    }
   }
 
   private async record(
@@ -151,6 +207,8 @@ export class Observer {
     if (!(await this.record(repo, run, null, null))) return
     const open = await this.watch.listFindings({ repoId: repo.id, statuses: OPEN_STATUSES })
     for (const finding of open) {
+      // A bug's test is not in the repository until the fix lands, so a green run says nothing about it.
+      if (finding.bug) continue
       if (finding.lastFailedAt >= run.createdAt) continue
       await this.watch.updateFinding({
         findingId: finding.id,
@@ -218,6 +276,7 @@ export class Observer {
         resolvedSha: null,
         recurrenceCount: 0,
         lastRecurrenceAt: null,
+        bug: null,
         createdAt: now,
         updatedAt: now,
         version: 0,

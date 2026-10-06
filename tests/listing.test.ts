@@ -18,6 +18,7 @@ const ci = (bonusUsdc: string | null): CiTaskView => ({
   contributors: [],
   openToAnyone: true,
   bonusUsdc,
+  bug: null,
   approvedBy: 'owner',
 })
 

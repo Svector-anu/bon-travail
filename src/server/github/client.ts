@@ -88,6 +88,16 @@ export interface GhPull {
   body: string
 }
 
+export interface GhIssue {
+  number: number
+  title: string
+  body: string
+  htmlUrl: string
+  author: string
+  labels: string[]
+  createdAt: number
+}
+
 export interface RunQuery {
   branch?: string
   headSha?: string
@@ -109,6 +119,8 @@ export interface GitHubClient {
   compare(owner: string, name: string, base: string, head: string): Promise<GhCompare>
   getPull(owner: string, name: string, number: number): Promise<GhPull>
   listPullFiles(owner: string, name: string, number: number): Promise<string[]>
+  /** Open issues (never pull requests), newest first. Needs the app's Issues read permission. */
+  listOpenIssues(owner: string, name: string): Promise<GhIssue[]>
 }
 
 type Json = Record<string, unknown>
@@ -310,6 +322,21 @@ export class RestGitHubClient implements GitHubClient {
       if (batch.length < 100) break
     }
     return files
+  }
+
+  async listOpenIssues(owner: string, name: string): Promise<GhIssue[]> {
+    const response = await this.request(owner, name, `/repos/${owner}/${name}/issues?state=open&sort=created&direction=desc&per_page=50`)
+    return list(await response.json())
+      .filter((issue) => issue.pull_request === undefined)
+      .map((issue) => ({
+        number: n(issue.number),
+        title: s(issue.title),
+        body: s(issue.body),
+        htmlUrl: s(issue.html_url),
+        author: s(obj(issue.user).login),
+        labels: list(issue.labels).map((label) => s(label.name)),
+        createdAt: Date.parse(s(issue.created_at)) || 0,
+      }))
   }
 }
 

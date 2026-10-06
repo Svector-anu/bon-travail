@@ -1,5 +1,8 @@
 import {
   canMoveFinding,
+  type BugDetails,
+  type BugReportRecord,
+  type BugReportStatus,
   type FindingEvent,
   type FindingEventType,
   type FindingRecord,
@@ -52,6 +55,7 @@ function rowToWorkflowRun(row: Row): WorkflowRunRecord {
 function rowToFinding(row: Row): FindingRecord {
   const regression = optStr(row, 'regression_json')
   const investigation = optStr(row, 'investigation_json')
+  const bug = optStr(row, 'bug_json')
   return {
     id: str(row, 'id'),
     seq: num(row, 'seq'),
@@ -81,9 +85,29 @@ function rowToFinding(row: Row): FindingRecord {
     resolvedSha: optStr(row, 'resolved_sha'),
     recurrenceCount: num(row, 'recurrence_count'),
     lastRecurrenceAt: optNum(row, 'last_recurrence_at'),
+    bug: bug ? fromJson<BugDetails>(bug) : null,
     createdAt: num(row, 'created_at'),
     updatedAt: num(row, 'updated_at'),
     version: num(row, 'version'),
+  }
+}
+
+function rowToBugReport(row: Row): BugReportRecord {
+  return {
+    id: str(row, 'id'),
+    seq: num(row, 'seq'),
+    repoId: str(row, 'repo_id'),
+    issueNumber: num(row, 'issue_number'),
+    issueTitle: str(row, 'issue_title'),
+    issueBody: str(row, 'issue_body'),
+    issueUrl: str(row, 'issue_url'),
+    issueAuthor: str(row, 'issue_author'),
+    status: str(row, 'status') as BugReportStatus,
+    note: optStr(row, 'note'),
+    findingId: optStr(row, 'finding_id'),
+    reportedAt: num(row, 'reported_at'),
+    createdAt: num(row, 'created_at'),
+    updatedAt: num(row, 'updated_at'),
   }
 }
 
@@ -275,8 +299,8 @@ export class WatchStore extends Repository {
       await this.run(
         `INSERT INTO findings (id, seq, repo_id, signature, workflow_path, workflow_name, job_name, step_name, step_command,
            error_excerpt, failure_count, first_failed_run_id, first_failed_sha, first_failed_at, last_failed_run_id,
-           last_failed_at, last_failed_run_url, regression_json, status, created_at, updated_at, version)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, 0)`,
+           last_failed_at, last_failed_run_url, regression_json, status, investigation_json, bug_json, created_at, updated_at, version)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, 0)`,
         finding.id,
         finding.seq,
         finding.repoId,
@@ -296,10 +320,12 @@ export class WatchStore extends Repository {
         finding.lastFailedRunUrl,
         finding.regression ? toJson(finding.regression) : null,
         finding.status,
+        finding.investigation ? toJson(finding.investigation) : null,
+        finding.bug ? toJson(finding.bug) : null,
         finding.createdAt,
         finding.updatedAt,
       )
-      await this.appendFindingEvent(finding.id, finding.createdAt, 'detected', actor, detail)
+      await this.appendFindingEvent(finding.id, finding.createdAt, finding.bug ? 'reproduced' : 'detected', actor, detail)
     })
   }
 
@@ -402,5 +428,91 @@ export class WatchStore extends Repository {
       actor: str(row, 'actor'),
       detail: fromJson<Record<string, unknown>>(str(row, 'detail_json')),
     }))
+  }
+
+  // ---- bug reports ---------------------------------------------------------
+
+  /** Records an issue the first time it is seen; returns null if it was already tracked. */
+  async insertBugReport(report: Omit<BugReportRecord, 'id' | 'seq'>): Promise<BugReportRecord | null> {
+    return this.transaction(async () => {
+      const next = await this.get('SELECT COALESCE(MAX(seq), 0) + 1 AS next FROM bug_reports')
+      const seq = next ? num(next, 'next') : 1
+      const id = `bug_${String(seq).padStart(3, '0')}`
+      const inserted = await this.run(
+        `INSERT INTO bug_reports (id, seq, repo_id, issue_number, issue_title, issue_body, issue_url, issue_author, status,
+           note, finding_id, reported_at, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+         ON CONFLICT (repo_id, issue_number) DO NOTHING`,
+        id,
+        seq,
+        report.repoId,
+        report.issueNumber,
+        report.issueTitle,
+        report.issueBody,
+        report.issueUrl,
+        report.issueAuthor,
+        report.status,
+        report.note,
+        report.findingId,
+        report.reportedAt,
+        report.createdAt,
+        report.updatedAt,
+      )
+      return inserted === 1 ? this.requireBugReport(id) : null
+    })
+  }
+
+  async getBugReport(id: string): Promise<BugReportRecord | null> {
+    const row = await this.get('SELECT * FROM bug_reports WHERE id = $1', id)
+    return row ? rowToBugReport(row) : null
+  }
+
+  async requireBugReport(id: string): Promise<BugReportRecord> {
+    const report = await this.getBugReport(id)
+    if (!report) throw new NotFoundError(`bug report ${id}`)
+    return report
+  }
+
+  async listBugReports(options: { statuses?: readonly BugReportStatus[]; repoId?: string; limit?: number } = {}): Promise<BugReportRecord[]> {
+    const where: string[] = []
+    const params: unknown[] = []
+    if (options.statuses && options.statuses.length > 0) {
+      params.push([...options.statuses])
+      where.push(`status = ANY($${params.length})`)
+    }
+    if (options.repoId) {
+      params.push(options.repoId)
+      where.push(`repo_id = $${params.length}`)
+    }
+    params.push(options.limit ?? 100)
+    const sql = `SELECT * FROM bug_reports ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY reported_at ASC LIMIT $${params.length}`
+    return (await this.all(sql, ...params)).map(rowToBugReport)
+  }
+
+  /** Moves a report on only from one of the expected statuses, so two runs cannot both settle it. */
+  async moveBugReport(
+    id: string,
+    from: readonly BugReportStatus[],
+    to: BugReportStatus,
+    at: number,
+    patch: { note?: string | null; findingId?: string | null; issueTitle?: string; issueBody?: string } = {},
+  ): Promise<BugReportRecord> {
+    return this.transaction(async () => {
+      const row = await this.get('SELECT * FROM bug_reports WHERE id = $1 FOR UPDATE', id)
+      if (!row) throw new NotFoundError(`bug report ${id}`)
+      const report = rowToBugReport(row)
+      if (!from.includes(report.status)) throw new DomainError('CONFLICT', `${report.id} is ${report.status}, expected ${from.join(' or ')}`)
+      await this.run(
+        `UPDATE bug_reports SET status = $1, updated_at = $2, note = $3, finding_id = $4, issue_title = $5, issue_body = $6 WHERE id = $7`,
+        to,
+        at,
+        patch.note === undefined ? report.note : patch.note,
+        patch.findingId === undefined ? report.findingId : patch.findingId,
+        patch.issueTitle ?? report.issueTitle,
+        patch.issueBody ?? report.issueBody,
+        id,
+      )
+      return this.requireBugReport(id)
+    })
   }
 }

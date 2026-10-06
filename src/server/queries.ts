@@ -191,9 +191,22 @@ export interface ConsoleSnapshot {
   watching: FindingSummaryView[]
   inFlight: { finding: FindingSummaryView; task: TaskView | null }[]
   settled: FindingSummaryView[]
+  /** Issues labeled as bugs that Aeon has not turned into a failing test yet. */
+  bugsWaiting: BugWaitingView[]
   githubEnabled: boolean
   simulatedPayments: boolean
   paymentProvider: string
+}
+
+export interface BugWaitingView {
+  id: string
+  repo: string
+  issueNumber: number
+  issueTitle: string
+  issueUrl: string
+  status: 'reported' | 'not_reproduced'
+  note: string | null
+  reportedAt: number
 }
 
 const IN_FLIGHT: readonly FindingStatus[] = ['internal', 'externalized']
@@ -206,6 +219,20 @@ export async function consoleSnapshot(): Promise<ConsoleSnapshot> {
   const findings = await app.watch.listFindings({ limit: 200 })
   const summary = (status: readonly FindingStatus[]) =>
     findings.filter((f) => status.includes(f.status)).map((f) => toFindingSummary(f, bySlug.get(f.repoId) ?? { owner: '?', name: f.repoId }))
+  const waiting = await app.watch.listBugReports({ statuses: ['reported', 'not_reproduced'], limit: 50 })
+  const bugsWaiting: BugWaitingView[] = waiting.map((b) => {
+    const repo = bySlug.get(b.repoId)
+    return {
+      id: b.id,
+      repo: repo ? `${repo.owner}/${repo.name}` : b.repoId,
+      issueNumber: b.issueNumber,
+      issueTitle: b.issueTitle,
+      issueUrl: b.issueUrl,
+      status: b.status === 'not_reproduced' ? 'not_reproduced' : 'reported',
+      note: b.note,
+      reportedAt: b.reportedAt,
+    }
+  })
   const inFlight = await Promise.all(
     findings
       .filter((f) => IN_FLIGHT.includes(f.status))
@@ -238,6 +265,7 @@ export async function consoleSnapshot(): Promise<ConsoleSnapshot> {
     watching: summary(['watching']),
     inFlight,
     settled: summary(SETTLED),
+    bugsWaiting,
     githubEnabled: app.github !== null,
     simulatedPayments: app.payments.simulated,
     paymentProvider: app.payments.name,
@@ -296,7 +324,8 @@ export async function recurrenceWatch(taskId: string): Promise<RecurrenceWatch |
 /** What Aeon reads before it investigates: only findings awaiting evidence, with everything needed to reproduce. */
 export async function findingsForInvestigation(statuses: FindingStatus[]) {
   const app = await getApp()
-  const findings = await app.watch.listFindings({ statuses, limit: 20 })
+  // A reported bug was already reproduced with its own test; investigating CI runs would only overwrite that.
+  const findings = (await app.watch.listFindings({ statuses, limit: 20 })).filter((f) => f.bug === null)
   return Promise.all(
     findings.map(async (f) => {
       const repo = await app.watch.requireRepo(f.repoId)
@@ -320,6 +349,30 @@ export async function findingsForInvestigation(statuses: FindingStatus[]) {
         // An investigation older than the latest recurrence explains the previous episode, not this one.
         alreadyInvestigated: investigationIsCurrent(f),
         recurrenceCount: f.recurrenceCount,
+      }
+    }),
+  )
+}
+
+/** Bug reports waiting for Aeon, with what it needs to write a reproducing test. */
+export async function bugsForReproduction() {
+  const app = await getApp()
+  const reports = await app.watch.listBugReports({ statuses: ['reported'], limit: 20 })
+  return Promise.all(
+    reports.map(async (r) => {
+      const repo = await app.watch.requireRepo(r.repoId)
+      return {
+        id: r.id,
+        repo: `${repo.owner}/${repo.name}`,
+        cloneUrl: `https://github.com/${repo.owner}/${repo.name}.git`,
+        defaultBranch: repo.defaultBranch,
+        workflowPath: repo.workflowPath,
+        workflowName: repo.workflowName,
+        issueNumber: r.issueNumber,
+        issueTitle: r.issueTitle,
+        issueBody: r.issueBody,
+        issueUrl: r.issueUrl,
+        issueAuthor: r.issueAuthor,
       }
     }),
   )

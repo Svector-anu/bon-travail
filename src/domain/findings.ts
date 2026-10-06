@@ -125,6 +125,25 @@ export interface WorkflowRunRecord {
   observedAt: number
 }
 
+/**
+ * A finding that started as a bug report rather than a failing run. Aeon
+ * wrote a test that fails because of the bug; the fix must add that test
+ * unchanged, so the bug's own test is what proves it is fixed.
+ */
+export interface BugDetails {
+  reportId: string
+  issueNumber: number
+  issueTitle: string
+  issueUrl: string
+  testPath: string
+  testContent: string
+  /** sha256 of testContent: the verifier checks the merged file against it. */
+  testSha256: string
+  testCommand: string
+  /** The commit Aeon reproduced the bug on. */
+  baseSha: string
+}
+
 export interface FindingRecord {
   id: string
   seq: number
@@ -154,13 +173,44 @@ export interface FindingRecord {
   resolvedSha: string | null
   recurrenceCount: number
   lastRecurrenceAt: number | null
+  /** Set when the finding came from a bug report Aeon reproduced; null for CI failures. */
+  bug: BugDetails | null
   createdAt: number
   updatedAt: number
   version: number
 }
 
+/**
+ * An open issue labeled as a bug on a watched repository, waiting for Aeon
+ * to reproduce it with a failing test. Once reproduced it becomes a finding.
+ */
+export const BUG_REPORT_STATUSES = ['reported', 'reproduced', 'not_reproduced', 'closed'] as const
+export type BugReportStatus = (typeof BUG_REPORT_STATUSES)[number]
+
+/** Issue labels that mark a bug, compared case-insensitively. */
+export const BUG_LABELS: readonly string[] = ['bug', 'type: bug', 'type:bug', 'kind/bug', 'bug report']
+
+export interface BugReportRecord {
+  id: string
+  seq: number
+  repoId: string
+  issueNumber: number
+  issueTitle: string
+  issueBody: string
+  issueUrl: string
+  issueAuthor: string
+  status: BugReportStatus
+  /** Why Aeon could not reproduce it, for the engineer. */
+  note: string | null
+  findingId: string | null
+  reportedAt: number
+  createdAt: number
+  updatedAt: number
+}
+
 export type FindingEventType =
   | 'detected'
+  | 'reproduced'
   | 'repeated'
   | 'evidence_gathered'
   | 'investigated'
