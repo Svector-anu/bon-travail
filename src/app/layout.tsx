@@ -1,4 +1,5 @@
 import './globals.css'
+import { Analytics } from '@vercel/analytics/next'
 import type { Metadata } from 'next'
 import { Inter, Instrument_Serif } from 'next/font/google'
 import type { ReactNode } from 'react'
@@ -32,6 +33,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <Footer escrowUrl={escrowUrl} />
           </div>
         </Providers>
+        <Analytics />
       </body>
     </html>
   )
