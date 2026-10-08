@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import { OWNER_SESSION_MS, issueOwnerSession, requireOwner, verifyOwnerSession, type OwnerAuth } from '@/server/owner'
+import { resolveViewer } from '@/server/access'
+import { OWNER_SESSION_MS, issueOwnerSession, requireSession, verifyOwnerSession, type OwnerAuth } from '@/server/owner'
 import { TEST_ENV } from './helpers'
 
 const OWNER_TOKEN = TEST_ENV.OWNER_ACCESS_TOKEN
@@ -54,42 +55,51 @@ describe('owner sessions', () => {
   it('fails closed when the console is not configured', () => {
     // #given no token, no session secret, no logins
     // #when/#then
-    expect(() => requireOwner(request('POST'), { githubLogins: [] }, NOW)).toThrow(expect.objectContaining({ code: 'UNAVAILABLE' }))
+    expect(() => requireSession(request('POST'), { githubLogins: [] }, NOW)).toThrow(expect.objectContaining({ code: 'UNAVAILABLE' }))
   })
 
   it('accepts the bearer token for scripts and rejects a wrong one', () => {
     // #given bearer headers
     // #when/#then
-    expect(requireOwner(request('POST', { authorization: `Bearer ${OWNER_TOKEN}` }), AUTH, NOW)).toBe('owner')
-    expect(() => requireOwner(request('POST', { authorization: 'Bearer nope' }), AUTH, NOW)).toThrow(
+    expect(requireSession(request('POST', { authorization: `Bearer ${OWNER_TOKEN}` }), AUTH, NOW)).toBe('owner')
+    expect(() => requireSession(request('POST', { authorization: 'Bearer nope' }), AUTH, NOW)).toThrow(
       expect.objectContaining({ code: 'UNAUTHORIZED' }),
     )
   })
 
-  it('revokes a signed-in engineer the moment their login leaves the list', () => {
-    // #given a valid session for octocat
+  it('revokes an operator the moment their login leaves the list', async () => {
+    // #given a valid session for octocat, who is on no team
     const session = issueOwnerSession(SECRET, NOW, 'github:octocat')
-    const headers = { ...cookie(session), origin: 'http://console.test' }
-    // #when/#then
-    expect(requireOwner(request('POST', headers), AUTH, NOW)).toBe('github:octocat')
-    expect(() => requireOwner(request('POST', headers), { ...AUTH, githubLogins: ['someone-else'] }, NOW)).toThrow(
-      expect.objectContaining({ code: 'UNAUTHORIZED' }),
-    )
+    const actor = requireSession(request('POST', { ...cookie(session), origin: 'http://console.test' }), AUTH, NOW)
+    const noTeams = { membershipsOf: async () => new Map() }
+    // #when/#then an operator while listed, nobody once removed
+    expect(await resolveViewer(actor, AUTH, noTeams)).toMatchObject({ actor: 'github:octocat', operator: true })
+    expect(await resolveViewer(actor, { ...AUTH, githubLogins: ['someone-else'] }, noTeams)).toBeNull()
+  })
+
+  it('lets a team member in, limited to the teams GitHub reported', async () => {
+    // #given a login that is not an operator but is an engineer on one team
+    const teams = { membershipsOf: async () => new Map([['youdotcom', 'engineer' as const]]) }
+    // #when
+    const viewer = await resolveViewer('github:sparker', AUTH, teams)
+    // #then
+    expect(viewer).toMatchObject({ operator: false })
+    expect([...viewer!.teams]).toEqual([['youdotcom', 'engineer']])
   })
 
   it('only accepts a cookie-authenticated write from the site itself', () => {
     // #given a valid session cookie
     const session = issueOwnerSession(SECRET, NOW, 'github:octocat')
     // #when/#then same origin passes, cross origin and missing origin do not, reads need no origin
-    expect(requireOwner(request('POST', { ...cookie(session), origin: 'http://console.test' }), AUTH, NOW)).toBe('github:octocat')
-    expect(() => requireOwner(request('POST', { ...cookie(session), origin: 'https://evil.test' }), AUTH, NOW)).toThrow(
+    expect(requireSession(request('POST', { ...cookie(session), origin: 'http://console.test' }), AUTH, NOW)).toBe('github:octocat')
+    expect(() => requireSession(request('POST', { ...cookie(session), origin: 'https://evil.test' }), AUTH, NOW)).toThrow(
       expect.objectContaining({ code: 'FORBIDDEN' }),
     )
-    expect(() => requireOwner(request('POST', cookie(session)), AUTH, NOW)).toThrow(expect.objectContaining({ code: 'FORBIDDEN' }))
-    expect(() => requireOwner(request('POST', { ...cookie(session), origin: 'null' }), AUTH, NOW)).toThrow(
+    expect(() => requireSession(request('POST', cookie(session)), AUTH, NOW)).toThrow(expect.objectContaining({ code: 'FORBIDDEN' }))
+    expect(() => requireSession(request('POST', { ...cookie(session), origin: 'null' }), AUTH, NOW)).toThrow(
       expect.objectContaining({ code: 'FORBIDDEN' }),
     )
-    expect(requireOwner(request('GET', cookie(session)), AUTH, NOW)).toBe('github:octocat')
+    expect(requireSession(request('GET', cookie(session)), AUTH, NOW)).toBe('github:octocat')
   })
 })
 

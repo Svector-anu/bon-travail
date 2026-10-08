@@ -30,6 +30,7 @@ function rowToRepo(row: Row): RepoRecord {
     connectedAt: num(row, 'connected_at'),
     lastPolledAt: optNum(row, 'last_polled_at'),
     active: row.active === true,
+    private: row.private === true,
   }
 }
 
@@ -179,10 +180,10 @@ export class WatchStore extends Repository {
   async upsertRepo(repo: RepoRecord): Promise<RepoRecord> {
     await this.run(
       `INSERT INTO repos (id, owner, name, default_branch, workflow_path, workflow_id, workflow_name, connected_by,
-         connected_at, last_polled_at, active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NULL, TRUE)
+         connected_at, last_polled_at, active, private)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NULL, TRUE, $10)
        ON CONFLICT (id) DO UPDATE SET default_branch = EXCLUDED.default_branch, workflow_path = EXCLUDED.workflow_path,
-         workflow_id = EXCLUDED.workflow_id, workflow_name = EXCLUDED.workflow_name, active = TRUE`,
+         workflow_id = EXCLUDED.workflow_id, workflow_name = EXCLUDED.workflow_name, active = TRUE, private = EXCLUDED.private`,
       repo.id,
       repo.owner,
       repo.name,
@@ -192,6 +193,7 @@ export class WatchStore extends Repository {
       repo.workflowName,
       repo.connectedBy,
       repo.connectedAt,
+      repo.private,
     )
     return this.requireRepo(repo.id)
   }

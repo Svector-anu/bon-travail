@@ -104,6 +104,10 @@ export class TaskService {
     this.receiptContext = provider
   }
 
+  getTask(taskId: string): Promise<TaskRecord | null> {
+    return this.store.getTask(taskId)
+  }
+
   requireTask(taskId: string): Promise<TaskRecord> {
     return this.store.requireTask(taskId)
   }

@@ -6,7 +6,7 @@ import { AutoRefresh } from '@/components/auto-refresh'
 import { Ago } from '@/components/clock'
 import { ActionButton } from '@/components/owner-actions'
 import { Reveal } from '@/components/reveal'
-import { isOwnerSession } from '@/server/owner-session'
+import { consoleViewer } from '@/server/owner-session'
 import { agentActivity, agentPipeline, consoleSnapshot, type AgentPipeline } from '@/server/queries'
 
 export const dynamic = 'force-dynamic'
@@ -80,8 +80,13 @@ function publicNow(pipeline: AgentPipeline): { title: string; detail: string; hr
 }
 
 export default async function AgentPage() {
-  const owner = await isOwnerSession().catch(() => false)
-  const [{ status }, pipeline, snapshot] = await Promise.all([agentActivity(1, {}, owner ? 'owner' : 'public'), agentPipeline(), owner ? consoleSnapshot() : null])
+  const viewer = await consoleViewer().catch(() => null)
+  // Full agent detail is for operators; team members see their own candidates in the console.
+  const [{ status }, pipeline, snapshot] = await Promise.all([
+    agentActivity(1, {}, viewer?.operator ? 'owner' : 'public'),
+    agentPipeline(),
+    viewer ? consoleSnapshot(viewer) : null,
+  ])
   // The engineer sees the actual failure and can decide from here; everyone else sees counts.
   const candidate = snapshot?.needsDecision[0] ?? null
   const now = publicNow(pipeline)

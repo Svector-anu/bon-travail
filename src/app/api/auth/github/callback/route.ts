@@ -1,7 +1,8 @@
 import { timingSafeEqual } from 'node:crypto'
 import { getApp } from '@/server/container'
-import { OAUTH_STATE_COOKIE, loginFromCode } from '@/server/github/oauth'
+import { OAUTH_STATE_COOKIE, signInFromCode, type SignIn } from '@/server/github/oauth'
 import { signedInHintCookie } from '@/lib/signed-in-hint'
+import { accessRequestMessage, notifyOperator } from '@/server/notify'
 import { OWNER_COOKIE, OWNER_SESSION_MS, issueOwnerSession, readCookie } from '@/server/owner'
 
 export const dynamic = 'force-dynamic'
@@ -28,7 +29,7 @@ function sameState(a: string | undefined, b: string | null): boolean {
 }
 
 export async function GET(request: Request) {
-  const { config, clock } = await getApp()
+  const { config, clock, teams } = await getApp()
   const url = new URL(request.url)
   const secure = url.protocol === 'https:' ? '; Secure' : ''
   const clearState = `${OAUTH_STATE_COOKIE}=; Path=/api/auth/github; HttpOnly; SameSite=Lax; Max-Age=0${secure}`
@@ -39,9 +40,9 @@ export async function GET(request: Request) {
   const code = url.searchParams.get('code')
   if (!code) return finish('/console?error=denied', [clearState])
 
-  let login: string
+  let signIn: SignIn
   try {
-    login = await loginFromCode({
+    signIn = await signInFromCode({
       clientId: config.githubApp.clientId,
       clientSecret: config.githubApp.clientSecret,
       code,
@@ -51,7 +52,15 @@ export async function GET(request: Request) {
     console.error('github sign-in failed', error)
     return finish('/console?error=github', [clearState])
   }
-  if (!config.ownerGithubLogins.includes(login.toLowerCase())) {
+  const { login } = signIn
+  const operator = config.ownerGithubLogins.includes(login.toLowerCase())
+  // Without an answer from GitHub, keep what was known and let only operators in.
+  if (signIn.teams === null && !operator) return finish('/console?error=github', [clearState])
+  // GitHub said who can reach which installation just now; that replaces whatever was known before.
+  if (signIn.teams !== null) await teams.recordSignIn(login, signIn.teams, clock.now())
+  if (!operator && signIn.teams !== null && signIn.teams.length === 0) {
+    const { request: asked, people } = await teams.recordAccessRequest(login, clock.now())
+    await notifyOperator(config, accessRequestMessage(login, asked.attempts, people))
     return finish(`/console?error=not_owner&login=${encodeURIComponent(login)}`, [clearState])
   }
   const session = issueOwnerSession(config.sessionSecret, clock.now(), `github:${login}`)

@@ -16,6 +16,7 @@ import type {
 } from '@/domain/views'
 import { publicRun } from '@/lib/public-activity'
 import { loadConfig } from './config'
+import { canSeeRepo, visibleTo, type Viewer } from './access'
 import { getApp, type App } from './container'
 import { displayId, findingDisplayIdOf, toAttemptView, toFindingSummary, toFindingView, toRepoView, toTaskView } from './services/views'
 
@@ -78,24 +79,34 @@ export function rankOpenWork(tasks: TaskView[]): TaskView[] {
 
 const pageNumber = (page: number, total: number) => Math.min(Math.max(1, Math.floor(page) || 1), Math.max(1, Math.ceil(total / PAGE_SIZE)))
 
+/** Work from private repositories stays inside its team: public lists never show it. */
+async function publicOnly(app: App, tasks: TaskRecord[]): Promise<TaskRecord[]> {
+  const hidden = new Set((await app.watch.listRepos()).filter((r) => r.private).map((r) => r.id))
+  if (hidden.size === 0) return tasks
+  return tasks.filter((t) => t.spec.kind !== TASK_KIND_CI_FIX || !hidden.has(`${t.spec.repo.owner}/${t.spec.repo.name}`.toLowerCase()))
+}
+
+const LIST_LIMIT = 500
+
 export async function listWorkPage(view: 'open' | 'settled', page: number): Promise<{ list: ListPage<TaskView>; counts: { open: number; settled: number } }> {
   const app = await getApp()
-  const [open, settled] = await Promise.all([app.store.countTasks({ states: LIVE_STATES }), app.store.countTasks({ states: SETTLED_STATES })])
-  const total = view === 'open' ? open : settled
+  const [live, done] = await Promise.all([
+    publicOnly(app, await app.store.listTasks({ states: LIVE_STATES, limit: LIST_LIMIT })),
+    publicOnly(app, await app.store.listTasks({ states: SETTLED_STATES, limit: LIST_LIMIT })),
+  ])
+  const total = view === 'open' ? live.length : done.length
   const current = pageNumber(page, total)
-  const items =
-    view === 'open'
-      ? rankOpenWork(await toViews(app, await app.store.listTasks({ states: LIVE_STATES, limit: 500 }))).slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE)
-      : await toViews(app, await app.store.listTasks({ states: SETTLED_STATES, limit: PAGE_SIZE, offset: (current - 1) * PAGE_SIZE }))
-  return { list: { items, page: current, pageSize: PAGE_SIZE, total }, counts: { open, settled } }
+  const window = (items: TaskView[]) => items.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE)
+  const items = view === 'open' ? window(rankOpenWork(await toViews(app, live))) : await toViews(app, done.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE))
+  return { list: { items, page: current, pageSize: PAGE_SIZE, total }, counts: { open: live.length, settled: done.length } }
 }
 
 export async function listReceiptPage(page: number): Promise<ListPage<TaskView>> {
   const app = await getApp()
-  const total = await app.store.countTasks({ states: RECEIPT_STATES })
-  const current = pageNumber(page, total)
-  const items = await toViews(app, await app.store.listTasks({ states: RECEIPT_STATES, limit: PAGE_SIZE, offset: (current - 1) * PAGE_SIZE }))
-  return { items, page: current, pageSize: PAGE_SIZE, total }
+  const all = await publicOnly(app, await app.store.listTasks({ states: RECEIPT_STATES, limit: LIST_LIMIT }))
+  const current = pageNumber(page, all.length)
+  const items = await toViews(app, all.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE))
+  return { items, page: current, pageSize: PAGE_SIZE, total: all.length }
 }
 
 export async function listTaskViews(options: { limit?: number; kinds?: TaskKind[] } = {}): Promise<TaskView[]> {
@@ -177,7 +188,7 @@ export function escrowExplorerUrlFromConfig(): string | null {
 /** The work package the home page points to: the first one open to contributors, else the newest in flight. */
 export async function openWork(): Promise<TaskView | null> {
   const app = await getApp()
-  const live = await toViews(app, await app.store.listTasks({ states: LIVE_STATES, limit: 10, kinds: [TASK_KIND_CI_FIX] }))
+  const live = await toViews(app, await publicOnly(app, await app.store.listTasks({ states: LIVE_STATES, limit: 50, kinds: [TASK_KIND_CI_FIX] })))
   return live.find((t) => t.state === 'OPEN') ?? live[0] ?? null
 }
 
@@ -193,6 +204,12 @@ export interface ConsoleSnapshot {
   settled: FindingSummaryView[]
   /** Issues labeled as bugs that Aeon has not turned into a failing test yet. */
   bugsWaiting: BugWaitingView[]
+  /** Who is looking: an operator sees every team; a member sees their teams and each one's budget. */
+  viewer: { operator: boolean; teams: { team: string; role: string; budget: string }[] }
+  /** Operators only: people who signed in with GitHub but are on no team yet. */
+  accessRequests: { login: string; attempts: number; lastAt: number }[]
+  /** Operators only: every team, who is on it, and its budget. */
+  teams: { id: string; budget: string; members: { login: string; role: string }[] }[]
   githubEnabled: boolean
   simulatedPayments: boolean
   paymentProvider: string
@@ -212,14 +229,15 @@ export interface BugWaitingView {
 const IN_FLIGHT: readonly FindingStatus[] = ['internal', 'externalized']
 const SETTLED: readonly FindingStatus[] = ['resolved', 'dismissed']
 
-export async function consoleSnapshot(): Promise<ConsoleSnapshot> {
+export async function consoleSnapshot(viewer: Viewer): Promise<ConsoleSnapshot> {
   const app = await getApp()
-  const repos = await app.watch.listRepos()
+  const visible = visibleTo(viewer)
+  const repos = (await app.watch.listRepos()).filter((r) => visible(r.owner))
   const bySlug = new Map(repos.map((r) => [r.id, r]))
-  const findings = await app.watch.listFindings({ limit: 200 })
+  const findings = (await app.watch.listFindings({ limit: 200 })).filter((f) => bySlug.has(f.repoId))
   const summary = (status: readonly FindingStatus[]) =>
     findings.filter((f) => status.includes(f.status)).map((f) => toFindingSummary(f, bySlug.get(f.repoId) ?? { owner: '?', name: f.repoId }))
-  const waiting = await app.watch.listBugReports({ statuses: ['reported', 'not_reproduced'], limit: 50 })
+  const waiting = (await app.watch.listBugReports({ statuses: ['reported', 'not_reproduced'], limit: 50 })).filter((b) => bySlug.has(b.repoId))
   const bugsWaiting: BugWaitingView[] = waiting.map((b) => {
     const repo = bySlug.get(b.repoId)
     return {
@@ -250,7 +268,7 @@ export async function consoleSnapshot(): Promise<ConsoleSnapshot> {
     try {
       const watched = new Set(repos.filter((r) => r.active).map((r) => r.id))
       installable = (await app.githubApp.listRepos())
-        .filter((r) => !watched.has(`${r.owner}/${r.name}`.toLowerCase()))
+        .filter((r) => visible(r.owner) && !watched.has(`${r.owner}/${r.name}`.toLowerCase()))
         .map((r) => ({ slug: `${r.owner}/${r.name}`, private: r.private }))
     } catch (error) {
       githubError = error instanceof Error ? error.message : 'GitHub is unreachable'
@@ -266,6 +284,16 @@ export async function consoleSnapshot(): Promise<ConsoleSnapshot> {
     inFlight,
     settled: summary(SETTLED),
     bugsWaiting,
+    viewer: {
+      operator: viewer.operator,
+      teams: await Promise.all(
+        [...viewer.teams].map(async ([team, role]) => ({ team, role, budget: formatUsdc((await app.teams.getTeam(team))?.budgetMicro ?? 0n) })),
+      ),
+    },
+    accessRequests: viewer.operator ? (await app.teams.listAccessRequests(20)).map(({ login, attempts, lastAt }) => ({ login, attempts, lastAt })) : [],
+    teams: viewer.operator
+      ? (await app.teams.listTeams()).map((t) => ({ id: t.id, budget: formatUsdc(t.budgetMicro), members: t.members }))
+      : [],
     githubEnabled: app.github !== null,
     simulatedPayments: app.payments.simulated,
     paymentProvider: app.payments.name,
@@ -280,11 +308,12 @@ export interface FindingDetail {
   simulatedPayments: boolean
 }
 
-export async function getFindingDetail(findingId: string): Promise<FindingDetail | null> {
+export async function getFindingDetail(findingId: string, viewer: Viewer): Promise<FindingDetail | null> {
   const app = await getApp()
   const finding = await app.watch.getFinding(findingId)
   if (!finding) return null
   const repo = await app.watch.requireRepo(finding.repoId)
+  if (!canSeeRepo(viewer, repo.owner)) return null
   const [runs, events] = await Promise.all([app.watch.runsForFinding(finding.id, 20), app.watch.listFindingEvents(finding.id)])
   const taskIds = [...new Set(events.map((e) => e.detail.taskId).filter((id): id is string => typeof id === 'string'))]
   const tasks = (await Promise.all(taskIds.map((id) => app.store.getTask(id)))).filter((t): t is TaskRecord => t !== null)

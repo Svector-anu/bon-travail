@@ -1,8 +1,9 @@
+import { requireRepoAccess } from '@/server/access'
 import { getApp } from '@/server/container'
 import { DomainError } from '@/server/errors'
 import { REPO_SLUG } from '@/server/github/client'
 import { workflowSetup } from '@/server/github/workflow-setup'
-import { handle, json, requireOwnerRequest } from '@/server/http'
+import { handle, json, requireConsoleRequest } from '@/server/http'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,9 +13,10 @@ export const dynamic = 'force-dynamic'
  */
 export async function GET(request: Request) {
   return handle(async () => {
-    await requireOwnerRequest(request)
+    const viewer = await requireConsoleRequest(request)
     const match = REPO_SLUG.exec(new URL(request.url).searchParams.get('repo') ?? '')
     if (!match) throw new DomainError('BAD_REQUEST', 'repo must look like owner/name')
+    requireRepoAccess(viewer, match[1]!, `${match[1]}/${match[2]}`)
     const { github } = await getApp()
     if (!github) throw new DomainError('UNAVAILABLE', 'GitHub is not connected in this deployment')
     const workflows = (await github.listWorkflows(match[1]!, match[2]!)).filter((w) => w.state === 'active')

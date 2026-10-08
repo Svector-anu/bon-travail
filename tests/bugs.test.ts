@@ -6,7 +6,7 @@ import { jobsRunning } from '@/server/services/observer'
 import { parseReproduction, type ExternalizeInput } from '@/server/services/work-service'
 import { reproTestDigest } from '@/server/verification/repro-test'
 import { FakeGitHub, JOB, NAME, OWNER, sha } from './fake-github'
-import { T0, makeApp } from './helpers'
+import { OPERATOR, T0, makeApp } from './helpers'
 
 const HOUR = 60 * 60 * 1000
 const ADA = 'ada'
@@ -66,7 +66,7 @@ async function reported(issues: GhIssue[] = [issue()]) {
   github.issues = issues
   const app = await makeApp({ github, env: { TARGET_OPEN_TASKS: '0' } })
   github.addRun({ sha: sha('a1'), at: T0 - 4 * HOUR, conclusion: 'success' })
-  const { repo, report } = await app.work.connectRepo(REPO, undefined, 'owner')
+  const { repo, report } = await app.work.connectRepo(REPO, undefined, OPERATOR)
   return { app, github, repo, report }
 }
 
@@ -79,7 +79,7 @@ async function reproduced() {
 
 async function claimedBugWork(files: string[]) {
   const ctx = await reproduced()
-  const task = await ctx.app.work.externalize(ctx.finding.id, externalizeInput(), 'owner')
+  const task = await ctx.app.work.externalize(ctx.finding.id, externalizeInput(), OPERATOR)
   const pr = ctx.github.addPull({ number: 7, author: ADA, title: 'WORK-001: hand out the split remainder' }, files)
   await ctx.app.work.claimWithPullRequest(task.id, pr.htmlUrl)
   await ctx.app.work.submitPullRequest(task.id, pr.htmlUrl)
@@ -129,7 +129,7 @@ describe('bug reports from issues', () => {
     const app = await makeApp({ github, env: { TARGET_OPEN_TASKS: '0' } })
     github.addRun({ sha: sha('a1'), at: T0 - HOUR, conclusion: 'success' })
     // #when/#then connecting still works
-    const { report } = await app.work.connectRepo(REPO, undefined, 'owner')
+    const { report } = await app.work.connectRepo(REPO, undefined, OPERATOR)
     expect(report).toMatchObject({ newRuns: 1, bugsReported: [] })
   })
 })
@@ -247,7 +247,7 @@ describe('a reproduced bug', () => {
 
   it('freezes the test into the work package', async () => {
     const { app, finding } = await reproduced()
-    const task = await app.work.externalize(finding.id, externalizeInput(), 'owner')
+    const task = await app.work.externalize(finding.id, externalizeInput(), OPERATOR)
     expect(task.title).toBe('Fix bug #42: split() loses a micro-unit on thirds')
     expect(task.spec.kind === 'ci-fix' && task.spec.reproTest).toMatchObject({
       path: TEST_PATH,

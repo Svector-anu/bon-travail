@@ -13,7 +13,7 @@ import { ActionButton } from '@/components/owner-actions'
 import { Reveal } from '@/components/reveal'
 import { candidateLabel, preparation } from '@/lib/candidate'
 import { FINDING_STATUS, TASK_STATUS, whoMayTake } from '@/lib/format'
-import { isOwnerSession } from '@/server/owner-session'
+import { consoleViewer } from '@/server/owner-session'
 import { getFindingDetail } from '@/server/queries'
 import { Roll } from '@/components/roll'
 
@@ -69,8 +69,9 @@ function history(finding: FindingView): HistoryItem[] {
 }
 
 export default async function FindingPage({ params }: { params: Promise<{ id: string }> }) {
-  if (!(await isOwnerSession())) redirect('/console')
-  const detail = await getFindingDetail((await params).id)
+  const viewer = await consoleViewer()
+  if (!viewer) redirect('/console')
+  const detail = await getFindingDetail((await params).id, viewer)
   if (!detail) notFound()
   const { finding, task, pastTasks } = detail
   const status = FINDING_STATUS[finding.status]

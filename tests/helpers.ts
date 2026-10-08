@@ -1,3 +1,4 @@
+import type { Viewer } from '@/server/access'
 import { formatUsdc } from '@/domain/money'
 import type { Address, Hex } from '@/domain/types'
 import type { ChainReader, TransferRead } from '@/server/chain/chain-reader'
@@ -151,3 +152,6 @@ export async function claimAndSubmit(app: App, taskId: string, worker: Address, 
   await app.tasks.submitTask(taskId, { claimId: claim.claimId, claimToken: claim.claimToken, ...answer })
   return claim
 }
+
+/** An operator: sees and decides on every team's repositories. */
+export const OPERATOR: Viewer = { actor: 'owner', operator: true, teams: new Map() }

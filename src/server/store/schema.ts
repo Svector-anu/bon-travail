@@ -235,6 +235,35 @@ CREATE TABLE IF NOT EXISTS bug_reports (
   UNIQUE (repo_id, issue_number)
 );
 CREATE INDEX IF NOT EXISTS bug_reports_status ON bug_reports(status);
+
+-- A team is the GitHub account an installation of the app belongs to. GitHub
+-- decides who is on it; each member is re-read from GitHub at every sign-in.
+CREATE TABLE IF NOT EXISTS teams (
+  id TEXT PRIMARY KEY,
+  installation_id BIGINT NOT NULL,
+  budget_micro TEXT NOT NULL DEFAULT '0',
+  created_at BIGINT NOT NULL,
+  updated_at BIGINT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS team_members (
+  team_id TEXT NOT NULL REFERENCES teams(id),
+  login TEXT NOT NULL,
+  role TEXT NOT NULL,
+  verified_at BIGINT NOT NULL,
+  PRIMARY KEY (team_id, login)
+);
+CREATE INDEX IF NOT EXISTS team_members_login ON team_members(login);
+
+-- People who signed in with GitHub but belong to no team yet.
+CREATE TABLE IF NOT EXISTS access_requests (
+  login TEXT PRIMARY KEY,
+  attempts INTEGER NOT NULL,
+  first_at BIGINT NOT NULL,
+  last_at BIGINT NOT NULL
+);
+
+ALTER TABLE repos ADD COLUMN IF NOT EXISTS private BOOLEAN NOT NULL DEFAULT FALSE;
 CREATE OR REPLACE TRIGGER finding_events_append_only BEFORE UPDATE OR DELETE ON finding_events
   FOR EACH ROW EXECUTE FUNCTION proofwork_append_only('finding_events is append-only');
 `

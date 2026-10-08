@@ -10,10 +10,12 @@ import {
 } from '@/domain/findings'
 import { formatUsdc, parseUsdc } from '@/domain/money'
 import { TASK_KIND_CI_FIX, type Address, type CiFixSpec, type CiFixSubmission, type Contributor, type TaskRecord } from '@/domain/types'
+import { canFund, requireRepoAccess, type Viewer } from '../access'
 import type { Clock } from '../clock'
 import { DomainError } from '../errors'
 import { reproTestDigest } from '../verification/repro-test'
 import { GITHUB_LOGIN, GitHubNotFoundError, parsePullUrl, REPO_SLUG, type GitHubClient } from '../github/client'
+import type { TeamStore } from '../store/team-store'
 import type { WatchStore } from '../store/watch-store'
 import { jobsRunning, type Observer, type ObserveReport } from './observer'
 import type { TaskService } from './task-service'
@@ -134,6 +136,7 @@ export interface Reproduction {
 }
 
 const MAX_TEST_CHARS = 30_000
+const ESCROWED: readonly TaskRecord['state'][] = ['FUNDED', 'OPEN', 'CLAIMED', 'SUBMITTED', 'VERIFYING', 'ACCEPTED']
 const SHA = /^[0-9a-f]{40}$/
 
 function commandOutcome(value: unknown, field: string): CommandOutcome {
@@ -217,6 +220,7 @@ export class WorkService {
     private readonly github: GitHubClient | null,
     private readonly clock: Clock,
     private readonly settings: WorkSettings,
+    private readonly teams: Pick<TeamStore, 'getTeam'> | null = null,
   ) {
     tasks.onSettled((task) => this.afterSettlement(task))
     tasks.useReceiptContext((task) => this.receiptContext(task))
@@ -229,12 +233,13 @@ export class WorkService {
 
   // ---- repositories --------------------------------------------------------
 
-  async connectRepo(slug: string, workflowPath: string | undefined, actor: string): Promise<{ repo: RepoRecord; report: ObserveReport }> {
+  async connectRepo(slug: string, workflowPath: string | undefined, viewer: Viewer): Promise<{ repo: RepoRecord; report: ObserveReport }> {
     const gh = this.requireGitHub()
     const match = REPO_SLUG.exec(slug.trim())
     if (!match) throw new DomainError('BAD_REQUEST', 'Repository must look like owner/name')
     const owner = match[1]!
     const name = match[2]!
+    requireRepoAccess(viewer, owner, `${owner}/${name}`)
     let found
     try {
       found = await gh.getRepo(owner, name)
@@ -258,10 +263,11 @@ export class WorkService {
       workflowPath: workflow.path,
       workflowId: workflow.id,
       workflowName: workflow.name,
-      connectedBy: actor,
+      connectedBy: viewer.actor,
       connectedAt: this.clock.now(),
       lastPolledAt: null,
       active: true,
+      private: found.private,
     })
     return { repo, report: await this.observe(repo) }
   }
@@ -384,7 +390,18 @@ export class WorkService {
 
   // ---- engineer decisions --------------------------------------------------
 
-  async keepInternal(findingId: string, actor: string): Promise<FindingRecord> {
+  /** The finding, if the viewer's team owns its repository; NOT_FOUND otherwise, so teams cannot probe each other. */
+  private async findingFor(findingId: string, viewer: Viewer): Promise<{ finding: FindingRecord; repo: RepoRecord }> {
+    const finding = await this.watch.getFinding(findingId)
+    const repo = finding ? await this.watch.getRepo(finding.repoId) : null
+    if (!finding || !repo) throw new DomainError('NOT_FOUND', `finding ${findingId} not found`)
+    requireRepoAccess(viewer, repo.owner, `finding ${findingId}`)
+    return { finding, repo }
+  }
+
+  async keepInternal(findingId: string, viewer: Viewer): Promise<FindingRecord> {
+    await this.findingFor(findingId, viewer)
+    const actor = viewer.actor
     return this.watch.updateFinding({
       findingId,
       at: this.clock.now(),
@@ -396,7 +413,9 @@ export class WorkService {
     })
   }
 
-  async dismiss(findingId: string, actor: string): Promise<FindingRecord> {
+  async dismiss(findingId: string, viewer: Viewer): Promise<FindingRecord> {
+    await this.findingFor(findingId, viewer)
+    const actor = viewer.actor
     return this.watch.updateFinding({
       findingId,
       at: this.clock.now(),
@@ -413,13 +432,17 @@ export class WorkService {
    * deadline, allowlist, acceptance condition and scope; the workflow file and
    * .github/ are always protected so a fix cannot pass by editing the judge.
    */
-  async externalize(findingId: string, raw: ExternalizeInput, actor: string): Promise<TaskRecord> {
-    const finding = await this.watch.requireFinding(findingId)
+  async externalize(findingId: string, raw: ExternalizeInput, viewer: Viewer): Promise<TaskRecord> {
+    const { finding, repo } = await this.findingFor(findingId, viewer)
+    const actor = viewer.actor
     if (![...NEEDS_DECISION, 'internal'].includes(finding.status)) {
       throw new DomainError('CONFLICT', `${findingDisplayId(finding)} is ${finding.status} and cannot be externalized`)
     }
-    const repo = await this.watch.requireRepo(finding.repoId)
+    if (!canFund(viewer, repo.owner)) {
+      throw new DomainError('FORBIDDEN', `Only an admin of ${repo.owner} on GitHub can put money behind this work`)
+    }
     const input = this.validateExternalize(raw, finding)
+    if (!viewer.operator) await this.assertWithinTeamBudget(repo.owner, input.rewardMicro)
 
     const now = this.clock.now()
     const spec: CiFixSpec = {
@@ -560,8 +583,43 @@ export class WorkService {
     return wallet.address
   }
 
-  async releaseClaim(taskId: string, actor: string): Promise<TaskRecord> {
-    return this.tasks.releaseClaim(taskId, actor)
+  async releaseClaim(taskId: string, viewer: Viewer): Promise<TaskRecord> {
+    const task = await this.tasks.getTask(taskId)
+    if (!task || task.spec.kind !== TASK_KIND_CI_FIX) throw new DomainError('NOT_FOUND', `task ${taskId} not found`)
+    requireRepoAccess(viewer, task.spec.repo.owner, `task ${taskId}`)
+    return this.tasks.releaseClaim(taskId, viewer.actor)
+  }
+
+  /**
+   * A team spends only what it was given. Until teams fund their own rewards,
+   * bon travail sets each team's budget; it starts at zero, so joining a team
+   * never spends the operator's wallet by itself.
+   */
+  private async assertWithinTeamBudget(repoOwner: string, rewardMicro: bigint): Promise<void> {
+    const team = await this.teams?.getTeam(repoOwner)
+    const budget = team?.budgetMicro ?? 0n
+    if (budget === 0n) {
+      throw new DomainError('FORBIDDEN', `${repoOwner} has no budget for paid work yet. Ask bon travail to sponsor your pilot.`)
+    }
+    const held = await this.escrowHeldFor(repoOwner)
+    if (held + rewardMicro > budget) {
+      throw new DomainError(
+        'FORBIDDEN',
+        `${repoOwner} can hold ${formatUsdc(budget)} USDC in escrow at once and ${formatUsdc(held)} is already set aside. Ask bon travail to raise it.`,
+      )
+    }
+  }
+
+  /** USDC set aside for this team's open work: funded and not yet paid or refunded. */
+  private async escrowHeldFor(repoOwner: string): Promise<bigint> {
+    const repoIds = new Set((await this.watch.listRepos()).filter((r) => r.owner.toLowerCase() === repoOwner.toLowerCase()).map((r) => r.id))
+    const open = (await this.watch.listFindings({ statuses: ['externalized'], limit: 500 })).filter((f) => repoIds.has(f.repoId) && f.taskId)
+    let held = 0n
+    for (const f of open) {
+      const task = await this.tasks.getTask(f.taskId!)
+      if (task && ESCROWED.includes(task.state)) held += task.rewardMicro
+    }
+    return held
   }
 
   // ---- contributor flow ----------------------------------------------------

@@ -1,7 +1,8 @@
 import { timingSafeEqual } from 'node:crypto'
 import { getApp } from './container'
 import { DomainError } from './errors'
-import { ownerAuth, requireOwner } from './owner'
+import { resolveViewer, type Viewer } from './access'
+import { ownerAuth, requireSession } from './owner'
 
 export function json(body: unknown, status = 200): Response {
   return Response.json(body, { status, headers: { 'cache-control': 'no-store' } })
@@ -76,9 +77,13 @@ export function field(body: Record<string, unknown>, name: string, maxLength = 2
 }
 
 /** Owner-only: returns the actor name recorded on every decision. */
-export async function requireOwnerRequest(request: Request): Promise<string> {
+/** The signed-in operator or team member behind a console request; fails closed for anyone else. */
+export async function requireConsoleRequest(request: Request): Promise<Viewer> {
   const app = await getApp()
-  return requireOwner(request, ownerAuth(app.config), app.clock.now())
+  const auth = ownerAuth(app.config)
+  const viewer = await resolveViewer(requireSession(request, auth, app.clock.now()), auth, app.teams)
+  if (!viewer) throw new DomainError('UNAUTHORIZED', 'Sign in to the engineer console')
+  return viewer
 }
 
 export function optionalField(body: Record<string, unknown>, name: string, maxLength = 200): string | undefined {

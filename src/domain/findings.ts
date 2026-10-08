@@ -106,6 +106,8 @@ export interface RepoRecord {
   connectedAt: number
   lastPolledAt: number | null
   active: boolean
+  /** Private repositories never appear on public pages. */
+  private: boolean
 }
 
 export interface WorkflowRunRecord {
