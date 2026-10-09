@@ -16,6 +16,7 @@ import { Observer } from './services/observer'
 import { TaskService } from './services/task-service'
 import { WorkService } from './services/work-service'
 import { Store } from './store/store'
+import { TeamFunding } from './services/team-funding'
 import { TeamStore } from './store/team-store'
 import { WatchStore } from './store/watch-store'
 import { CiFixVerifier } from './verification/ci-verifier'
@@ -28,6 +29,7 @@ export interface App {
   store: Store
   watch: WatchStore
   teams: TeamStore
+  funding: TeamFunding
   chain: ChainReader
   github: GitHubClient | null
   payments: PaymentProvider
@@ -121,11 +123,19 @@ export function createApp(config: AppConfig, store: Store, overrides: AppOverrid
     { explorerUrl: chain.explorerUrl },
   )
   const observer = github ? new Observer(watch, github, clock) : null
+  const funding = new TeamFunding(
+    teams,
+    tasks,
+    chain,
+    clock,
+    config.teamDepositAddress ?? operatorAddress(config),
+    config.arcEscrowAddress ? [config.arcEscrowAddress] : [],
+  )
   const work = new WorkService(watch, tasks, observer, github, clock, {
     maxRewardMicro: config.maxRewardMicro,
     operatorAddress: operatorAddress(config),
     escrowAddress: config.arcEscrowAddress ?? null,
-  }, teams)
+  }, funding)
   const agent = new Agent(
     store,
     watch,
@@ -143,7 +153,7 @@ export function createApp(config: AppConfig, store: Store, overrides: AppOverrid
     },
     github !== null,
   )
-  return { config, githubApp, store, watch, teams, chain, github, payments, tasks, work, agent, clock, identity }
+  return { config, githubApp, store, watch, teams, funding, chain, github, payments, tasks, work, agent, clock, identity }
 }
 
 const globalForStore = globalThis as typeof globalThis & { proofworkStore?: Promise<Store> }

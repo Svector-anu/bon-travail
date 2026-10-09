@@ -1901,6 +1901,16 @@ button.text-link:disabled {
   padding: 0 10px;
 }
 
+.team-budget .input.team-wide {
+  width: min(420px, 60vw);
+}
+
+.team-funds {
+  display: grid;
+  gap: 14px;
+  margin-top: 12px;
+}
+
 .connect {
   display: grid;
   grid-template-columns: 1fr 1fr auto;

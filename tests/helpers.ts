@@ -91,6 +91,11 @@ export interface TestApp extends App {
 }
 
 const TABLES = [
+  'team_deposits',
+  'team_members',
+  'teams',
+  'access_requests',
+  'bug_reports',
   'finding_events',
   'findings',
   'workflow_runs',

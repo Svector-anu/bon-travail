@@ -264,6 +264,20 @@ CREATE TABLE IF NOT EXISTS access_requests (
 );
 
 ALTER TABLE repos ADD COLUMN IF NOT EXISTS private BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- A team funds its own work: it registers the wallet it pays from, sends USDC
+-- to the deposit address, and each verified transaction is credited once.
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS funding_wallet TEXT;
+CREATE TABLE IF NOT EXISTS team_deposits (
+  tx_hash TEXT PRIMARY KEY,
+  team_id TEXT NOT NULL REFERENCES teams(id),
+  amount_micro TEXT NOT NULL,
+  from_address TEXT NOT NULL,
+  block_number TEXT NOT NULL,
+  credited_at BIGINT NOT NULL,
+  credited_by TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS team_deposits_team ON team_deposits(team_id);
 CREATE OR REPLACE TRIGGER finding_events_append_only BEFORE UPDATE OR DELETE ON finding_events
   FOR EACH ROW EXECUTE FUNCTION proofwork_append_only('finding_events is append-only');
 `

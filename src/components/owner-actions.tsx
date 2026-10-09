@@ -354,10 +354,75 @@ export function TeamBudget({ team, budget }: { team: string; budget: string }) {
           disabled={busy || value.trim() === budget}
           onClick={() => void run(() => postJson('/api/owner/teams/budget', { team, budget: value.trim() }))}
         >
-          {busy ? 'Saving' : 'Set budget'}
+          {busy ? 'Saving' : 'Set sponsorship'}
         </button>
       </span>
       {error && <small className="form-error">{error}</small>}
     </span>
+  )
+}
+
+/** A team admin names the wallet the team deposits from. */
+export function TeamWallet({ team, wallet }: { team: string; wallet: string | null }) {
+  const { busy, error, run } = useAction()
+  const [value, setValue] = useState(wallet ?? '')
+  return (
+    <div className="field">
+      <label htmlFor={`wallet-${team}`}>Wallet you deposit from</label>
+      <span className="team-budget">
+        <input
+          id={`wallet-${team}`}
+          className="input mono team-wide"
+          placeholder="0x…"
+          autoComplete="off"
+          spellCheck={false}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+        />
+        <button
+          type="button"
+          className="action-pill"
+          disabled={busy || value.trim() === (wallet ?? '')}
+          onClick={() => void run(() => postJson('/api/owner/teams/funding-wallet', { team, wallet: value.trim() }))}
+        >
+          {busy ? 'Saving' : 'Save'}
+        </button>
+      </span>
+      {error && <small className="form-error">{error}</small>}
+    </div>
+  )
+}
+
+/** After sending USDC, the admin pastes the transaction hash; bon travail reads it from the chain before crediting it. */
+export function TeamDeposit({ team }: { team: string }) {
+  const { busy, error, run } = useAction()
+  const [hash, setHash] = useState('')
+  return (
+    <div className="field">
+      <label htmlFor={`deposit-${team}`}>Transaction hash of your deposit</label>
+      <span className="team-budget">
+        <input
+          id={`deposit-${team}`}
+          className="input mono team-wide"
+          placeholder="0x…"
+          autoComplete="off"
+          spellCheck={false}
+          value={hash}
+          onChange={(e) => setHash(e.target.value)}
+        />
+        <button
+          type="button"
+          className="action-pill"
+          disabled={busy || hash.trim().length === 0}
+          onClick={() => void run(() => postJson('/api/owner/teams/deposits', { team, txHash: hash.trim() }), () => {
+            setHash('')
+            window.location.reload()
+          })}
+        >
+          {busy ? 'Checking the chain' : 'Credit deposit'}
+        </button>
+      </span>
+      {error && <small className="form-error">{error}</small>}
+    </div>
   )
 }

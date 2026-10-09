@@ -4,7 +4,7 @@ import Link from 'next/link'
 import type { FindingSummaryView } from '@/domain/views'
 import { AutoRefresh } from '@/components/auto-refresh'
 import { Ago } from '@/components/clock'
-import { CheckNow, ConnectRepo, GithubMark, OwnerLogin, SignOut, TeamBudget, WatchPicker } from '@/components/owner-actions'
+import { CheckNow, ConnectRepo, GithubMark, OwnerLogin, SignOut, TeamBudget, TeamDeposit, TeamWallet, WatchPicker } from '@/components/owner-actions'
 import { Reveal } from '@/components/reveal'
 import { SignedInHint } from '@/components/signed-in-hint'
 import { candidateLabel } from '@/lib/candidate'
@@ -123,7 +123,7 @@ export default async function ConsolePage({ searchParams }: { searchParams: Prom
         Payments: {snapshot.simulatedPayments ? 'simulated (no USDC moves)' : `${snapshot.paymentProvider} on Arc Testnet`}
         {snapshot.viewer.operator
           ? ' · operator: you see every team'
-          : snapshot.viewer.teams.map((t) => ` · ${t.team} (${t.role}, budget ${t.budget} USDC)`).join('')}
+          : snapshot.viewer.teams.map((t) => ` · ${t.team} (${t.role}, ${t.available} USDC available)`).join('')}
       </p>
 
       <section className="console-section">
@@ -232,6 +232,55 @@ export default async function ConsolePage({ searchParams }: { searchParams: Prom
         </section>
       )}
 
+      {snapshot.viewer.teams.map((t) => (
+        <section key={t.team} className="console-section">
+          <div className="panel-title">
+            <span className="label">{t.team} funds</span>
+            <span className="label tnum">{t.available} USDC available</span>
+          </div>
+          <p className="muted">
+            Your work is paid from what {t.team} deposits{t.sponsored !== '0.00' ? `, plus ${t.sponsored} USDC bon travail sponsors` : ''}.{' '}
+            Deposited {t.deposited} · set aside for open work {t.held} · paid out {t.paid}.
+          </p>
+          {t.role === 'admin' ? (
+            snapshot.deposits ? (
+              <div className="team-funds">
+                <TeamWallet team={t.team} wallet={t.fundingWallet} />
+                {t.fundingWallet && (
+                  <>
+                    <p className="muted">
+                      Send USDC on Arc testnet from <span className="mono">{t.fundingWallet}</span> to{' '}
+                      <span className="mono">{snapshot.deposits.address}</span>, then paste the transaction hash. bon travail reads it from
+                      the chain before crediting it.
+                    </p>
+                    <TeamDeposit team={t.team} />
+                  </>
+                )}
+              </div>
+            ) : (
+              <p className="muted">Deposits are off here: payments are simulated in this deployment.</p>
+            )
+          ) : (
+            <p className="muted">Only a GitHub admin of {t.team} can deposit or post paid work.</p>
+          )}
+          {t.deposits.length > 0 && snapshot.deposits && (
+            <div className="rows">
+              {t.deposits.map((d) => (
+                <a key={d.txHash} className="finding-row" href={`${snapshot.deposits!.explorerUrl}/tx/${d.txHash}`} target="_blank" rel="noreferrer">
+                  <span className="status paid">Credited</span>
+                  <span className="id tnum">{d.amount} USDC</span>
+                  <strong className="mono">{d.txHash.slice(0, 10)}…{d.txHash.slice(-6)}</strong>
+                  <small>
+                    <Ago ts={d.at} />
+                  </small>
+                  <ArrowUpRight size={16} className="go" aria-hidden />
+                </a>
+              ))}
+            </div>
+          )}
+        </section>
+      ))}
+
       {snapshot.viewer.operator && snapshot.teams.length > 0 && (
         <section className="console-section">
           <div className="panel-title">
@@ -240,20 +289,20 @@ export default async function ConsolePage({ searchParams }: { searchParams: Prom
           </div>
           <div className="rows">
             {snapshot.teams.map((team) => (
-              <div key={team.id} className="repo-row">
+              <div key={team.team} className="repo-row">
                 <GitBranch size={16} aria-hidden />
                 <div>
-                  <a href={`https://github.com/${team.id}`} target="_blank" rel="noreferrer">
-                    {team.id} <ArrowUpRight size={13} />
+                  <a href={`https://github.com/${team.team}`} target="_blank" rel="noreferrer">
+                    {team.team} <ArrowUpRight size={13} />
                   </a>
                   <small>
                     {team.members.length === 0
                       ? 'Nobody has signed in yet'
                       : team.members.map((m) => `@${m.login} (${m.role})`).join(', ')}{' '}
-                    · may hold {team.budget} USDC in escrow
+                    · {team.available} USDC available ({team.deposited} deposited, {team.sponsored} sponsored, {team.held} held, {team.paid} paid)
                   </small>
                 </div>
-                <TeamBudget team={team.id} budget={team.budget} />
+                <TeamBudget team={team.team} budget={team.sponsored} />
               </div>
             ))}
           </div>

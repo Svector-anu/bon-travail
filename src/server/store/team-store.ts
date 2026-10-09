@@ -1,12 +1,34 @@
 import type { TeamAccess, TeamRole } from '../github/oauth'
-import { num, str } from './codec'
+import { num, optStr, str } from './codec'
+import type { Row } from './db'
 import { Repository } from './store'
 
 export interface TeamRecord {
   id: string
   installationId: number
-  /** USDC (micro-units) the team may hold in escrow at once. 0 until bon travail sponsors it or the team funds its own. */
+  /** USDC (micro-units) bon travail sponsors this team with, on top of what it deposits. */
   budgetMicro: bigint
+  /** The wallet the team deposits from; deposits from any other wallet are not credited. */
+  fundingWallet: string | null
+}
+
+export interface TeamDeposit {
+  txHash: string
+  team: string
+  amountMicro: bigint
+  from: string
+  blockNumber: string
+  creditedAt: number
+  creditedBy: string
+}
+
+function rowToTeam(row: Row): TeamRecord {
+  return {
+    id: str(row, 'id'),
+    installationId: num(row, 'installation_id'),
+    budgetMicro: BigInt(str(row, 'budget_micro')),
+    fundingWallet: optStr(row, 'funding_wallet'),
+  }
 }
 
 export interface AccessRequest {
@@ -43,22 +65,59 @@ export class TeamStore extends Repository {
 
   async getTeam(id: string): Promise<TeamRecord | null> {
     const row = await this.get('SELECT * FROM teams WHERE id = $1', id.toLowerCase())
-    return row ? { id: str(row, 'id'), installationId: num(row, 'installation_id'), budgetMicro: BigInt(str(row, 'budget_micro')) } : null
+    return row ? rowToTeam(row) : null
   }
 
   async listTeams(): Promise<(TeamRecord & { members: { login: string; role: TeamRole }[] })[]> {
     const teams = await this.all('SELECT * FROM teams ORDER BY id ASC')
     const members = await this.all('SELECT team_id, login, role FROM team_members ORDER BY login ASC')
     return teams.map((row) => ({
-      id: str(row, 'id'),
-      installationId: num(row, 'installation_id'),
-      budgetMicro: BigInt(str(row, 'budget_micro')),
+      ...rowToTeam(row),
       members: members.filter((m) => str(m, 'team_id') === str(row, 'id')).map((m) => ({ login: str(m, 'login'), role: str(m, 'role') as TeamRole })),
     }))
   }
 
   async setBudget(id: string, budgetMicro: bigint, at: number): Promise<void> {
     await this.run('UPDATE teams SET budget_micro = $1, updated_at = $2 WHERE id = $3', budgetMicro.toString(), at, id.toLowerCase())
+  }
+
+  async setFundingWallet(id: string, wallet: string, at: number): Promise<void> {
+    await this.run('UPDATE teams SET funding_wallet = $1, updated_at = $2 WHERE id = $3', wallet, at, id.toLowerCase())
+  }
+
+  /** Credits a deposit once. Returns false if that transaction was already credited, to this team or any other. */
+  async recordDeposit(deposit: TeamDeposit): Promise<boolean> {
+    const inserted = await this.run(
+      `INSERT INTO team_deposits (tx_hash, team_id, amount_micro, from_address, block_number, credited_at, credited_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (tx_hash) DO NOTHING`,
+      deposit.txHash.toLowerCase(),
+      deposit.team.toLowerCase(),
+      deposit.amountMicro.toString(),
+      deposit.from,
+      deposit.blockNumber,
+      deposit.creditedAt,
+      deposit.creditedBy,
+    )
+    return inserted === 1
+  }
+
+  async depositedMicro(team: string): Promise<bigint> {
+    const rows = await this.all('SELECT amount_micro FROM team_deposits WHERE team_id = $1', team.toLowerCase())
+    return rows.reduce((sum, row) => sum + BigInt(str(row, 'amount_micro')), 0n)
+  }
+
+  async listDeposits(team: string, limit = 20): Promise<TeamDeposit[]> {
+    return (await this.all('SELECT * FROM team_deposits WHERE team_id = $1 ORDER BY credited_at DESC LIMIT $2', team.toLowerCase(), limit)).map(
+      (row) => ({
+        txHash: str(row, 'tx_hash'),
+        team: str(row, 'team_id'),
+        amountMicro: BigInt(str(row, 'amount_micro')),
+        from: str(row, 'from_address'),
+        blockNumber: str(row, 'block_number'),
+        creditedAt: num(row, 'credited_at'),
+        creditedBy: str(row, 'credited_by'),
+      }),
+    )
   }
 
   /** Counts an attempt; returns the person's record and how many distinct people have asked so far. */

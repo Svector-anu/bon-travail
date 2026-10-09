@@ -204,15 +204,44 @@ export interface ConsoleSnapshot {
   settled: FindingSummaryView[]
   /** Issues labeled as bugs that Aeon has not turned into a failing test yet. */
   bugsWaiting: BugWaitingView[]
-  /** Who is looking: an operator sees every team; a member sees their teams and each one's budget. */
-  viewer: { operator: boolean; teams: { team: string; role: string; budget: string }[] }
+  /** Who is looking: an operator sees every team; a member sees their teams and each one's funds. */
+  viewer: { operator: boolean; teams: TeamFundsView[] }
+  /** Where teams send deposits, and the explorer to check them on. Null when payments are simulated. */
+  deposits: { address: string; explorerUrl: string } | null
   /** Operators only: people who signed in with GitHub but are on no team yet. */
   accessRequests: { login: string; attempts: number; lastAt: number }[]
-  /** Operators only: every team, who is on it, and its budget. */
-  teams: { id: string; budget: string; members: { login: string; role: string }[] }[]
+  /** Operators only: every team, who is on it, and its funds. */
+  teams: (TeamFundsView & { members: { login: string; role: string }[] })[]
   githubEnabled: boolean
   simulatedPayments: boolean
   paymentProvider: string
+}
+
+export interface TeamFundsView {
+  team: string
+  role: string
+  sponsored: string
+  deposited: string
+  held: string
+  paid: string
+  available: string
+  fundingWallet: string | null
+  deposits: { txHash: string; amount: string; at: number }[]
+}
+
+async function teamFunds(app: App, team: string, role: string): Promise<TeamFundsView> {
+  const [record, balance, deposits] = await Promise.all([app.teams.getTeam(team), app.funding.balance(team), app.teams.listDeposits(team, 5)])
+  return {
+    team,
+    role,
+    sponsored: formatUsdc(balance.sponsoredMicro),
+    deposited: formatUsdc(balance.depositedMicro),
+    held: formatUsdc(balance.heldMicro),
+    paid: formatUsdc(balance.paidMicro),
+    available: formatUsdc(balance.availableMicro),
+    fundingWallet: record?.fundingWallet ?? null,
+    deposits: deposits.map((d) => ({ txHash: d.txHash, amount: formatUsdc(d.amountMicro), at: d.creditedAt })),
+  }
 }
 
 export interface BugWaitingView {
@@ -286,13 +315,12 @@ export async function consoleSnapshot(viewer: Viewer): Promise<ConsoleSnapshot> 
     bugsWaiting,
     viewer: {
       operator: viewer.operator,
-      teams: await Promise.all(
-        [...viewer.teams].map(async ([team, role]) => ({ team, role, budget: formatUsdc((await app.teams.getTeam(team))?.budgetMicro ?? 0n) })),
-      ),
+      teams: await Promise.all([...viewer.teams].map(([team, role]) => teamFunds(app, team, role))),
     },
+    deposits: app.funding.depositAddress ? { address: app.funding.depositAddress, explorerUrl: app.chain.explorerUrl } : null,
     accessRequests: viewer.operator ? (await app.teams.listAccessRequests(20)).map(({ login, attempts, lastAt }) => ({ login, attempts, lastAt })) : [],
     teams: viewer.operator
-      ? (await app.teams.listTeams()).map((t) => ({ id: t.id, budget: formatUsdc(t.budgetMicro), members: t.members }))
+      ? await Promise.all((await app.teams.listTeams()).map(async (t) => ({ ...(await teamFunds(app, t.id, 'operator view')), members: t.members })))
       : [],
     githubEnabled: app.github !== null,
     simulatedPayments: app.payments.simulated,

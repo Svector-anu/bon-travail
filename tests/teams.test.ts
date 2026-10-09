@@ -96,7 +96,7 @@ describe('a team cannot reach another team', () => {
 describe('a team spends only its budget', () => {
   it('starts at zero, so joining a team never spends the operator wallet', async () => {
     const { app, finding } = await acme()
-    await expect(app.work.externalize(finding.id, input(), ACME_ADMIN)).rejects.toThrow(/no budget for paid work yet/)
+    await expect(app.work.externalize(finding.id, input(), ACME_ADMIN)).rejects.toThrow(/no funds for paid work yet/)
   })
 
   it('funds work within the budget the operator set, and refuses past it', async () => {
@@ -112,7 +112,7 @@ describe('a team spends only its budget', () => {
     await app.work.observe(await app.watch.requireRepo(REPO.toLowerCase()))
     const second = (await app.watch.listFindings({ statuses: ['candidate'] }))[0]!
     // #then 0.75 more would pass 1 USDC
-    await expect(app.work.externalize(second.id, input('0.75'), ACME_ADMIN)).rejects.toThrow(/can hold 1.00 USDC in escrow at once and 0.75 is already set aside/)
+    await expect(app.work.externalize(second.id, input('0.75'), ACME_ADMIN)).rejects.toThrow(/0.25 USDC available \(0.75 set aside for open work/)
   })
 
   it('does not limit operators', async () => {
