@@ -165,15 +165,24 @@ async function submit() {
   const testPath = addedTestFile(report.testPath, facts.setupChanges ?? [])
   const testContent = readFileSync(join(REPO, testPath), 'utf8')
 
-  const withTest = run(report.testCommand)
-  const aside = join(WORKDIR, 'aside')
-  mkdirSync(dirname(join(aside, testPath)), { recursive: true })
-  renameSync(join(REPO, testPath), join(aside, testPath))
-  const withoutTest = run(report.testCommand)
-  renameSync(join(aside, testPath), join(REPO, testPath))
+  // Only a command the watched workflow already runs is ever executed here: the model's choice is
+  // checked first, because the issue it read is untrusted and could have talked it into anything.
+  const ciCommands = facts.ciCommands ?? []
+  const command = ciCommands.find((c) => c === String(report.testCommand ?? '').trim()) ?? null
+  const runByCi = command !== null
+  const skipped = { outcome: 'error', tail: '' }
+  let withTest = skipped
+  let withoutTest = skipped
+  if (runByCi) {
+    withTest = run(command)
+    const aside = join(WORKDIR, 'aside')
+    mkdirSync(dirname(join(aside, testPath)), { recursive: true })
+    renameSync(join(REPO, testPath), join(aside, testPath))
+    withoutTest = run(command)
+    renameSync(join(aside, testPath), join(REPO, testPath))
+  }
 
   // A test CI never runs cannot judge a fix, and a suite that was already red only counts if it names the test.
-  const runByCi = (facts.ciCommands ?? []).includes(report.testCommand.trim())
   const namesTest = withoutTest.outcome === 'passed' || withTest.tail.includes(testPath.split('/').pop())
   const reproduced = runByCi && withTest.outcome === 'failed' && namesTest
   const why = !runByCi
@@ -186,7 +195,7 @@ async function submit() {
     note: reproduced ? null : [report.note, why].filter(Boolean).join(' '),
     testPath,
     testContent,
-    testCommand: report.testCommand,
+    testCommand: command ?? String(report.testCommand ?? '').slice(0, 500),
     baseSha: facts.baseSha,
     withTest: withTest.outcome,
     withoutTest: withoutTest.outcome,
