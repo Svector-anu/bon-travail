@@ -25,11 +25,12 @@ const SECTIONS = [
   },
   {
     id: 'engineers',
-    label: 'For engineers',
-    title: 'connect, read, decide.',
+    label: 'For teams',
+    title: 'install, sign in, decide.',
     body: [
-      'Sign in to the console with GitHub. Install the bon travail GitHub App on the repositories you want watched; it can only read workflow runs, logs, contents and pull requests, and it never writes. Pick a repository and the workflow to watch.',
-      'When a finding needs you, open it: you will see what failed, the evidence, and Aeon’s investigation. Keep it internal, dismiss it, or externalize it. Externalizing means you set the reward, the deadline, the acceptance condition, the scope, the protected paths and the GitHub logins (with the wallet each is paid at) allowed to take it. The reward is escrowed the moment you approve.',
+      'A GitHub admin installs the bon travail app on the repositories your team wants watched. It only reads workflow runs, logs, issues, contents and pull requests, and it never writes. Then sign in with GitHub. GitHub decides who is on your team: you see exactly the repositories you can reach there, and nobody outside your team sees them.',
+      'When a finding needs you, open it: what failed, the evidence, and Aeon\u2019s investigation. Anyone with write access can keep it internal or dismiss it. Putting money behind it takes an admin of that repository, who sets the reward, the deadline, the acceptance condition, the scope and who may take it. The reward is set aside in escrow the moment you approve.',
+      'Your team pays from its own balance. In the console, an admin saves the wallet you pay from, sends USDC from it to the deposit address shown there, and pastes the transaction hash. bon travail reads that transfer from the chain before crediting it, and open work holds its reward until it is paid or refunded.',
     ],
   },
   {
