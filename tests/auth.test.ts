@@ -71,17 +71,17 @@ describe('owner sessions', () => {
     // #given a valid session for octocat, who is on no team
     const session = issueOwnerSession(SECRET, NOW, 'github:octocat')
     const actor = requireSession(request('POST', { ...cookie(session), origin: 'http://console.test' }), AUTH, NOW)
-    const noTeams = { membershipsOf: async () => new Map() }
+    const noTeams = { membershipsOf: async () => ({ teams: new Map(), repos: new Map() }) }
     // #when/#then an operator while listed, nobody once removed
-    expect(await resolveViewer(actor, AUTH, noTeams)).toMatchObject({ actor: 'github:octocat', operator: true })
-    expect(await resolveViewer(actor, { ...AUTH, githubLogins: ['someone-else'] }, noTeams)).toBeNull()
+    expect(await resolveViewer(actor, AUTH, noTeams, NOW)).toMatchObject({ actor: 'github:octocat', operator: true })
+    expect(await resolveViewer(actor, { ...AUTH, githubLogins: ['someone-else'] }, noTeams, NOW)).toBeNull()
   })
 
   it('lets a team member in, limited to the teams GitHub reported', async () => {
     // #given a login that is not an operator but is an engineer on one team
-    const teams = { membershipsOf: async () => new Map([['youdotcom', 'engineer' as const]]) }
+    const teams = { membershipsOf: async () => ({ teams: new Map([['youdotcom', 'engineer' as const]]), repos: new Map([['youdotcom/sdk', 'engineer' as const]]) }) }
     // #when
-    const viewer = await resolveViewer('github:sparker', AUTH, teams)
+    const viewer = await resolveViewer('github:sparker', AUTH, teams, NOW)
     // #then
     expect(viewer).toMatchObject({ operator: false })
     expect([...viewer!.teams]).toEqual([['youdotcom', 'engineer']])

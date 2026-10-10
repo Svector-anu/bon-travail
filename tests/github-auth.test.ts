@@ -125,7 +125,9 @@ describe('Sign in with GitHub', () => {
     // #then signed in, and recorded on that team only
     expect(verifyOwnerSession(SECRET, sessionFrom(response), Date.now())).toBe('github:Sparker')
     const { teams } = await getApp()
-    expect([...(await teams.membershipsOf('sparker'))]).toEqual([['youdotcom', 'engineer']])
+    const access = await teams.membershipsOf('sparker')
+    expect([...access.teams]).toEqual([['youdotcom', 'engineer']])
+    expect([...access.repos]).toEqual([['youdotcom/sdk', 'engineer']])
   })
 
   it('counts someone who is on no team, so the operator can be told', async () => {

@@ -16,7 +16,7 @@ export async function GET(request: Request) {
     const viewer = await requireConsoleRequest(request)
     const match = REPO_SLUG.exec(new URL(request.url).searchParams.get('repo') ?? '')
     if (!match) throw new DomainError('BAD_REQUEST', 'repo must look like owner/name')
-    requireRepoAccess(viewer, match[1]!, `${match[1]}/${match[2]}`)
+    requireRepoAccess(viewer, match[1]!, match[2]!, `${match[1]}/${match[2]}`)
     const { github } = await getApp()
     if (!github) throw new DomainError('UNAVAILABLE', 'GitHub is not connected in this deployment')
     const workflows = (await github.listWorkflows(match[1]!, match[2]!)).filter((w) => w.state === 'active')

@@ -352,9 +352,15 @@ export class WatchStore extends Repository {
     return row ? rowToFinding(row) : null
   }
 
-  async listFindings(options: { statuses?: readonly FindingStatus[]; repoId?: string; limit?: number } = {}): Promise<FindingRecord[]> {
+  async listFindings(
+    options: { statuses?: readonly FindingStatus[]; repoId?: string; repoIds?: readonly string[]; limit?: number } = {},
+  ): Promise<FindingRecord[]> {
     const where: string[] = []
     const params: unknown[] = []
+    if (options.repoIds) {
+      params.push([...options.repoIds])
+      where.push(`repo_id = ANY($${params.length})`)
+    }
     if (options.statuses && options.statuses.length > 0) {
       params.push([...options.statuses])
       where.push(`status = ANY($${params.length})`)
@@ -475,9 +481,15 @@ export class WatchStore extends Repository {
     return report
   }
 
-  async listBugReports(options: { statuses?: readonly BugReportStatus[]; repoId?: string; limit?: number } = {}): Promise<BugReportRecord[]> {
+  async listBugReports(
+    options: { statuses?: readonly BugReportStatus[]; repoId?: string; repoIds?: readonly string[]; limit?: number } = {},
+  ): Promise<BugReportRecord[]> {
     const where: string[] = []
     const params: unknown[] = []
+    if (options.repoIds) {
+      params.push([...options.repoIds])
+      where.push(`repo_id = ANY($${params.length})`)
+    }
     if (options.statuses && options.statuses.length > 0) {
       params.push([...options.statuses])
       where.push(`status = ANY($${params.length})`)

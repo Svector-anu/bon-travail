@@ -9,7 +9,7 @@ export async function consoleViewer(): Promise<Viewer | null> {
   const auth = ownerAuth(app.config)
   if (!auth.sessionSecret) return null
   const actor = verifyOwnerSession(auth.sessionSecret, (await cookies()).get(OWNER_COOKIE)?.value, app.clock.now())
-  return actor ? resolveViewer(actor, auth, app.teams) : null
+  return actor ? resolveViewer(actor, auth, app.teams, app.clock.now()) : null
 }
 
 export async function isOwnerSession(): Promise<boolean> {

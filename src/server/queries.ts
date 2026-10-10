@@ -261,12 +261,16 @@ const SETTLED: readonly FindingStatus[] = ['resolved', 'dismissed']
 export async function consoleSnapshot(viewer: Viewer): Promise<ConsoleSnapshot> {
   const app = await getApp()
   const visible = visibleTo(viewer)
-  const repos = (await app.watch.listRepos()).filter((r) => visible(r.owner))
+  const repos = (await app.watch.listRepos()).filter((r) => visible(r.owner, r.name))
   const bySlug = new Map(repos.map((r) => [r.id, r]))
-  const findings = (await app.watch.listFindings({ limit: 200 })).filter((f) => bySlug.has(f.repoId))
+  // Limit after scoping, so one busy team never pushes another team's items out of its console.
+  const repoIds = viewer.operator ? undefined : repos.map((r) => r.id)
+  const findings = (await app.watch.listFindings({ repoIds, limit: 200 })).filter((f) => bySlug.has(f.repoId))
   const summary = (status: readonly FindingStatus[]) =>
     findings.filter((f) => status.includes(f.status)).map((f) => toFindingSummary(f, bySlug.get(f.repoId) ?? { owner: '?', name: f.repoId }))
-  const waiting = (await app.watch.listBugReports({ statuses: ['reported', 'not_reproduced'], limit: 50 })).filter((b) => bySlug.has(b.repoId))
+  const waiting = (await app.watch.listBugReports({ statuses: ['reported', 'not_reproduced'], repoIds, limit: 50 })).filter((b) =>
+    bySlug.has(b.repoId),
+  )
   const bugsWaiting: BugWaitingView[] = waiting.map((b) => {
     const repo = bySlug.get(b.repoId)
     return {
@@ -297,7 +301,7 @@ export async function consoleSnapshot(viewer: Viewer): Promise<ConsoleSnapshot> 
     try {
       const watched = new Set(repos.filter((r) => r.active).map((r) => r.id))
       installable = (await app.githubApp.listRepos())
-        .filter((r) => visible(r.owner) && !watched.has(`${r.owner}/${r.name}`.toLowerCase()))
+        .filter((r) => visible(r.owner, r.name) && !watched.has(`${r.owner}/${r.name}`.toLowerCase()))
         .map((r) => ({ slug: `${r.owner}/${r.name}`, private: r.private }))
     } catch (error) {
       githubError = error instanceof Error ? error.message : 'GitHub is unreachable'
@@ -341,7 +345,7 @@ export async function getFindingDetail(findingId: string, viewer: Viewer): Promi
   const finding = await app.watch.getFinding(findingId)
   if (!finding) return null
   const repo = await app.watch.requireRepo(finding.repoId)
-  if (!canSeeRepo(viewer, repo.owner)) return null
+  if (!canSeeRepo(viewer, repo.owner, repo.name)) return null
   const [runs, events] = await Promise.all([app.watch.runsForFinding(finding.id, 20), app.watch.listFindingEvents(finding.id)])
   const taskIds = [...new Set(events.map((e) => e.detail.taskId).filter((id): id is string => typeof id === 'string'))]
   const tasks = (await Promise.all(taskIds.map((id) => app.store.getTask(id)))).filter((t): t is TaskRecord => t !== null)

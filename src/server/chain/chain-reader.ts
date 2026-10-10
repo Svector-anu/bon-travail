@@ -21,4 +21,6 @@ export interface ChainReader {
   readTransfer(txHash: Hex): Promise<TransferRead>
   /** Recent transaction hashes that look like plain USDC transfers, newest first. */
   recentTransferCandidates(limit: number): Promise<Hex[]>
+  /** The chain's current block height. */
+  latestBlockNumber(): Promise<bigint>
 }

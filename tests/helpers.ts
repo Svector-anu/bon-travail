@@ -57,6 +57,11 @@ export class SwitchableChain implements ChainReader {
     return this.inner.readTransfer(txHash)
   }
 
+  async latestBlockNumber(): Promise<bigint> {
+    if (this.down) throw new ChainUnavailableError('rpc down')
+    return this.inner.latestBlockNumber()
+  }
+
   async recentTransferCandidates(limit: number): Promise<Hex[]> {
     if (this.down) throw new ChainUnavailableError('rpc down')
     return this.inner.recentTransferCandidates(limit)
@@ -159,4 +164,4 @@ export async function claimAndSubmit(app: App, taskId: string, worker: Address, 
 }
 
 /** An operator: sees and decides on every team's repositories. */
-export const OPERATOR: Viewer = { actor: 'owner', operator: true, teams: new Map() }
+export const OPERATOR: Viewer = { actor: 'owner', operator: true, teams: new Map(), repos: new Map() }

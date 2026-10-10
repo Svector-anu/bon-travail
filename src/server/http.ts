@@ -81,7 +81,8 @@ export function field(body: Record<string, unknown>, name: string, maxLength = 2
 export async function requireConsoleRequest(request: Request): Promise<Viewer> {
   const app = await getApp()
   const auth = ownerAuth(app.config)
-  const viewer = await resolveViewer(requireSession(request, auth, app.clock.now()), auth, app.teams)
+  const now = app.clock.now()
+  const viewer = await resolveViewer(requireSession(request, auth, now), auth, app.teams, now)
   if (!viewer) throw new DomainError('UNAUTHORIZED', 'Sign in to the engineer console')
   return viewer
 }

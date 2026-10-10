@@ -254,6 +254,8 @@ CREATE TABLE IF NOT EXISTS team_members (
   PRIMARY KEY (team_id, login)
 );
 CREATE INDEX IF NOT EXISTS team_members_login ON team_members(login);
+-- The repos ("owner/name" to role) this member can reach, as GitHub reported at sign-in.
+ALTER TABLE team_members ADD COLUMN IF NOT EXISTS repos_json TEXT NOT NULL DEFAULT '{}';
 
 -- People who signed in with GitHub but belong to no team yet.
 CREATE TABLE IF NOT EXISTS access_requests (
@@ -268,6 +270,10 @@ ALTER TABLE repos ADD COLUMN IF NOT EXISTS private BOOLEAN NOT NULL DEFAULT FALS
 -- A team funds its own work: it registers the wallet it pays from, sends USDC
 -- to the deposit address, and each verified transaction is credited once.
 ALTER TABLE teams ADD COLUMN IF NOT EXISTS funding_wallet TEXT;
+-- The block height when the wallet was registered: only transfers after it count, so nobody can
+-- register someone else's wallet and claim transfers it already made. One wallet, one team.
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS funding_wallet_block TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS teams_funding_wallet ON teams(LOWER(funding_wallet)) WHERE funding_wallet IS NOT NULL;
 CREATE TABLE IF NOT EXISTS team_deposits (
   tx_hash TEXT PRIMARY KEY,
   team_id TEXT NOT NULL REFERENCES teams(id),

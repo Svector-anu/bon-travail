@@ -219,7 +219,7 @@ export class WorkService {
     private readonly github: GitHubClient | null,
     private readonly clock: Clock,
     private readonly settings: WorkSettings,
-    private readonly funding: Pick<TeamFunding, 'assertCanFund'> | null = null,
+    private readonly funding: Pick<TeamFunding, 'reserve'> | null = null,
   ) {
     tasks.onSettled((task) => this.afterSettlement(task))
     tasks.useReceiptContext((task) => this.receiptContext(task))
@@ -238,7 +238,7 @@ export class WorkService {
     if (!match) throw new DomainError('BAD_REQUEST', 'Repository must look like owner/name')
     const owner = match[1]!
     const name = match[2]!
-    requireRepoAccess(viewer, owner, `${owner}/${name}`)
+    requireRepoAccess(viewer, owner, name, `${owner}/${name}`)
     let found
     try {
       found = await gh.getRepo(owner, name)
@@ -394,7 +394,7 @@ export class WorkService {
     const finding = await this.watch.getFinding(findingId)
     const repo = finding ? await this.watch.getRepo(finding.repoId) : null
     if (!finding || !repo) throw new DomainError('NOT_FOUND', `finding ${findingId} not found`)
-    requireRepoAccess(viewer, repo.owner, `finding ${findingId}`)
+    requireRepoAccess(viewer, repo.owner, repo.name, `finding ${findingId}`)
     return { finding, repo }
   }
 
@@ -437,15 +437,11 @@ export class WorkService {
     if (![...NEEDS_DECISION, 'internal'].includes(finding.status)) {
       throw new DomainError('CONFLICT', `${findingDisplayId(finding)} is ${finding.status} and cannot be externalized`)
     }
-    if (!canFund(viewer, repo.owner)) {
-      throw new DomainError('FORBIDDEN', `Only an admin of ${repo.owner} on GitHub can put money behind this work`)
+    if (!canFund(viewer, repo.owner, repo.name)) {
+      throw new DomainError('FORBIDDEN', `Only an admin of ${repo.owner}/${repo.name} on GitHub can put money behind this work`)
     }
     const input = this.validateExternalize(raw, finding)
-    // Operators fund from the treasury directly; a team pays only from its own deposits and sponsorship.
-    if (!viewer.operator) {
-      if (!this.funding) throw new DomainError('UNAVAILABLE', 'Team funding is not set up in this deployment')
-      await this.funding.assertCanFund(repo.owner, input.rewardMicro)
-    }
+    if (!viewer.operator && !this.funding) throw new DomainError('UNAVAILABLE', 'Team funding is not set up in this deployment')
 
     const now = this.clock.now()
     const spec: CiFixSpec = {
@@ -479,17 +475,21 @@ export class WorkService {
         : {}),
       approvedBy: actor,
     }
-    const task = await this.tasks.createWorkTask(
-      {
-        title: finding.bug ? `Fix bug #${finding.bug.issueNumber}: ${finding.bug.issueTitle}` : `Fix the failing "${finding.stepName}" step in ${finding.jobName}`,
-        description: input.scope,
-        rewardMicro: input.rewardMicro,
-        subject: `finding:${findingId}:${now}`,
-        spec,
-        deadlineAt: now + input.deadlineHours * 60 * 60 * 1000,
-      },
-      actor,
-    )
+    const create = () =>
+      this.tasks.createWorkTask(
+        {
+          title: finding.bug ? `Fix bug #${finding.bug.issueNumber}: ${finding.bug.issueTitle}` : `Fix the failing "${finding.stepName}" step in ${finding.jobName}`,
+          description: input.scope,
+          rewardMicro: input.rewardMicro,
+          subject: `finding:${findingId}:${now}`,
+          spec,
+          deadlineAt: now + input.deadlineHours * 60 * 60 * 1000,
+        },
+        actor,
+      )
+    // Operators fund from the treasury directly; a team pays only from its own deposits and sponsorship,
+    // checked and reserved as one step so two approvals at once cannot both spend the same balance.
+    const task = viewer.operator ? await create() : await this.funding!.reserve(repo.owner, input.rewardMicro, create)
     await this.watch.updateFinding({
       findingId,
       at: now,
@@ -589,7 +589,7 @@ export class WorkService {
   async releaseClaim(taskId: string, viewer: Viewer): Promise<TaskRecord> {
     const task = await this.tasks.getTask(taskId)
     if (!task || task.spec.kind !== TASK_KIND_CI_FIX) throw new DomainError('NOT_FOUND', `task ${taskId} not found`)
-    requireRepoAccess(viewer, task.spec.repo.owner, `task ${taskId}`)
+    requireRepoAccess(viewer, task.spec.repo.owner, task.spec.repo.name, `task ${taskId}`)
     return this.tasks.releaseClaim(taskId, viewer.actor)
   }
 

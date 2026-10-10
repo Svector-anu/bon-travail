@@ -13,7 +13,10 @@ export type TeamRole = 'admin' | 'engineer'
 export interface TeamAccess {
   team: string
   installationId: number
+  /** The strongest permission on any repo in the installation: what the person may do with the team's funds. */
   role: TeamRole
+  /** Each repo ("owner/name", lowercase) this person can reach in the installation, with their role on it. */
+  repos: Record<string, TeamRole>
 }
 
 export interface SignIn {
@@ -63,17 +66,21 @@ export async function teamsForUser(token: string, fetchImpl: typeof fetch = fetc
     const account = String((install.account as Record<string, unknown> | undefined)?.login ?? '').toLowerCase()
     if (!installationId || !account) continue
     let role: TeamRole | null = null
-    for (let page = 1; page <= MAX_REPO_PAGES && role !== 'admin'; page++) {
+    const reachable: Record<string, TeamRole> = {}
+    for (let page = 1; page <= MAX_REPO_PAGES; page++) {
       const body = await getJson(fetchImpl, `/user/installations/${installationId}/repositories?per_page=100&page=${page}`, token)
       const repos = (Array.isArray(body.repositories) ? body.repositories : []) as Record<string, unknown>[]
       for (const repo of repos) {
         const r = roleFromPermissions(repo.permissions)
+        const name = String(repo.name ?? '').toLowerCase()
+        if (!r || !name) continue
+        reachable[`${account}/${name}`] = r
         if (r === 'admin') role = 'admin'
-        else if (r === 'engineer' && role === null) role = 'engineer'
+        else if (role === null) role = 'engineer'
       }
       if (repos.length < 100) break
     }
-    if (role) teams.push({ team: account, installationId, role })
+    if (role) teams.push({ team: account, installationId, role, repos: reachable })
   }
   return teams
 }

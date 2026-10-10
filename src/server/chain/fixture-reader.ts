@@ -101,4 +101,9 @@ export class FixtureChainReader implements ChainReader {
   async recentTransferCandidates(limit: number): Promise<Hex[]> {
     return this.fixtures.slice(0, limit).map((f) => f.hash)
   }
+
+  /** Just past the newest fixture, so every fixture transfer is in the past. */
+  async latestBlockNumber(): Promise<bigint> {
+    return this.fixtures.reduce((max, f) => (f.blockNumber > max ? f.blockNumber : max), 0n) + 1n
+  }
 }

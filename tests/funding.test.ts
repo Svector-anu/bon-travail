@@ -12,17 +12,24 @@ const TEAM_WALLET: Address = '0x6666666666666666666666666666666666666666'
 const OTHER_WALLET: Address = '0x7777777777777777777777777777777777777777'
 const tx = (n: number) => `0x${n.toString(16).padStart(64, '0')}` as Hex
 
-const ADMIN: Viewer = { actor: 'github:boss', operator: false, teams: new Map([[OWNER, 'admin']]) }
-const ENGINEER: Viewer = { actor: 'github:dev', operator: false, teams: new Map([[OWNER, 'engineer']]) }
-const OTHER_ADMIN: Viewer = { actor: 'github:else', operator: false, teams: new Map([['othercorp', 'admin']]) }
+const REPO_KEY = `${OWNER}/${NAME}`.toLowerCase()
+const ADMIN: Viewer = { actor: 'github:boss', operator: false, teams: new Map([[OWNER, 'admin']]), repos: new Map([[REPO_KEY, 'admin']]) }
+const ENGINEER: Viewer = { actor: 'github:dev', operator: false, teams: new Map([[OWNER, 'engineer']]), repos: new Map([[REPO_KEY, 'engineer']]) }
+const OTHER_ADMIN: Viewer = { actor: 'github:else', operator: false, teams: new Map([['othercorp', 'admin']]), repos: new Map([['othercorp/app', 'admin']]) }
 
 /** A chain where each test decides what a transaction did. */
 class ScriptedChain implements ChainReader {
   readonly chainLabel = 'Arc Testnet'
   readonly explorerUrl = 'https://testnet.arcscan.app'
   readonly txs = new Map<string, TransferRead>()
+  /** The chain's height; every new payment lands in the next block. */
+  height = 100n
   pay(hash: Hex, from: Address, recipient: Address, amountMicro: bigint): void {
-    this.txs.set(hash, { kind: 'ok', fact: { from, recipient, amountMicro, blockNumber: 100n, source: 'erc20-transfer-log' } })
+    this.height += 1n
+    this.txs.set(hash, { kind: 'ok', fact: { from, recipient, amountMicro, blockNumber: this.height, source: 'erc20-transfer-log' } })
+  }
+  async latestBlockNumber(): Promise<bigint> {
+    return this.height
   }
   async readTransfer(hash: Hex): Promise<TransferRead> {
     return this.txs.get(hash) ?? { kind: 'not_found' }
@@ -52,10 +59,10 @@ async function team() {
   github.addRun({ sha: sha('a1'), at: T0 - 4 * HOUR, conclusion: 'success' })
   github.addRun({ sha: sha('b1'), at: T0 - 3 * HOUR, conclusion: 'failure' })
   github.addRun({ sha: sha('c1'), at: T0 - 2 * HOUR, conclusion: 'failure' })
-  await app.teams.recordSignIn('boss', [{ team: OWNER, installationId: 1, role: 'admin' }], T0)
+  await app.teams.recordSignIn('boss', [{ team: OWNER, installationId: 1, role: 'admin', repos: { [REPO_KEY]: 'admin' } }], T0)
   await app.work.connectRepo(`${OWNER}/${NAME}`, undefined, ADMIN)
   const finding = (await app.watch.listFindings())[0]!
-  return { app, chain, finding }
+  return { app, chain, github, finding }
 }
 
 describe('registering the wallet a team deposits from', () => {
@@ -69,6 +76,28 @@ describe('registering the wallet a team deposits from', () => {
   it('cannot be bon travail\'s own deposit address', async () => {
     const { app } = await team()
     await expect(app.funding.setFundingWallet(OWNER, DEPOSIT, ADMIN)).rejects.toThrow(/bon travail's own address/)
+  })
+})
+
+describe('nobody can claim someone else\'s deposit', () => {
+  it('only credits transfers made after the wallet was registered', async () => {
+    // #given the wallet paid the treasury before anyone registered it (an old top-up, or another team's deposit)
+    const { app, chain } = await team()
+    chain.pay(tx(20), TEAM_WALLET, DEPOSIT, 3_000_000n)
+    // #when a team registers that wallet afterwards and claims the old transfer
+    await app.funding.setFundingWallet(OWNER, TEAM_WALLET, ADMIN)
+    // #then it is refused
+    await expect(app.funding.recordDeposit(OWNER, tx(20), ADMIN)).rejects.toThrow(/sent before this wallet was registered/)
+  })
+
+  it('lets one wallet belong to one team only', async () => {
+    // #given acme registered its wallet
+    const { app } = await team()
+    await app.funding.setFundingWallet(OWNER, TEAM_WALLET, ADMIN)
+    await app.teams.recordSignIn('else', [{ team: 'othercorp', installationId: 2, role: 'admin', repos: { 'othercorp/app': 'admin' } }], T0)
+    // #when another team registers the same wallet
+    // #then it is refused, so it can never claim acme's deposits
+    await expect(app.funding.setFundingWallet('othercorp', TEAM_WALLET, OTHER_ADMIN)).rejects.toMatchObject({ code: 'CONFLICT' })
   })
 })
 
@@ -129,6 +158,40 @@ describe('paying for work from the team\'s own funds', () => {
     expect(task.state).toBe('OPEN')
     expect(await app.funding.balance(OWNER)).toMatchObject({ heldMicro: 750_000n, availableMicro: 250_000n })
     await expect(app.funding.assertCanFund(OWNER, 500_000n)).rejects.toThrow(/0.25 USDC available/)
+  })
+
+  it('lets only one of two simultaneous approvals spend the same balance', async () => {
+    // #given 1 USDC and two findings
+    const { app, chain, github, finding } = await team()
+    await app.funding.setFundingWallet(OWNER, TEAM_WALLET, ADMIN)
+    chain.pay(tx(10), TEAM_WALLET, DEPOSIT, 1_000_000n)
+    await app.funding.recordDeposit(OWNER, tx(10), ADMIN)
+    github.addRun({ sha: sha('d1'), at: T0 - HOUR, conclusion: 'failure', failing: { job: 'lint', step: 'Run lint' } })
+    github.addRun({ sha: sha('e1'), at: T0 - HOUR / 2, conclusion: 'failure', failing: { job: 'lint', step: 'Run lint' } })
+    await app.work.observe(await app.watch.requireRepo(`${OWNER}/${NAME}`.toLowerCase()))
+    const second = (await app.watch.listFindings({ statuses: ['candidate'] })).find((f) => f.id !== finding.id)!
+    // #when both are approved for 0.75 USDC at the same moment
+    const results = await Promise.allSettled([
+      app.work.externalize(finding.id, work('0.75'), ADMIN),
+      app.work.externalize(second.id, work('0.75'), ADMIN),
+    ])
+    // #then exactly one is funded
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
+    expect((await app.funding.balance(OWNER)).heldMicro).toBe(750_000n)
+  })
+
+  it('keeps holding the reward of rejected and expired work until it is refunded', async () => {
+    // #given a 1 USDC deposit fully committed to one task
+    const { app, chain, finding } = await team()
+    await app.funding.setFundingWallet(OWNER, TEAM_WALLET, ADMIN)
+    chain.pay(tx(9), TEAM_WALLET, DEPOSIT, 1_000_000n)
+    await app.funding.recordDeposit(OWNER, tx(9), ADMIN)
+    const task = await app.work.externalize(finding.id, work('1'), ADMIN)
+    // #when the task expires (its reward still in escrow, waiting for the refund)
+    app.clock.advance(25 * HOUR)
+    await app.tasks.expireTask(task.id, 'test')
+    // #then nothing is free to spend again yet
+    expect(await app.funding.balance(OWNER)).toMatchObject({ heldMicro: 1_000_000n, availableMicro: 0n })
   })
 
   it('adds what bon travail sponsors to what the team deposited', async () => {

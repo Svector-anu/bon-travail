@@ -172,6 +172,13 @@ export class FakeGitHub implements GitHubClient {
     return this.issues
   }
 
+  /** Issues listed as open are open; others count as closed unless kept open here. */
+  stillOpen = new Set<number>()
+  async issueIsOpen(_owner: string, _name: string, number: number): Promise<boolean> {
+    this.check()
+    return this.issues.some((i) => i.number === number) || this.stillOpen.has(number)
+  }
+
   async listPaths(): Promise<string[]> {
     this.check()
     return [WORKFLOW_PATH, ...Object.keys(this.files)]

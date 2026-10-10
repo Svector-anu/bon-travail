@@ -120,6 +120,17 @@ describe('bug reports from issues', () => {
     expect((await app.watch.listBugReports())[0]).toMatchObject({ status: 'closed' })
   })
 
+  it('does not close a report just because its issue fell out of the listing', async () => {
+    // #given a reported bug whose issue is still open on GitHub but no longer in the listing
+    const { app, github, repo } = await reported()
+    github.issues = []
+    github.stillOpen.add(42)
+    // #when the repository is polled
+    await app.work.observe(repo)
+    // #then the report keeps waiting for Aeon
+    expect((await app.watch.listBugReports())[0]).toMatchObject({ status: 'reported' })
+  })
+
   it('keeps watching CI when the app cannot read issues', async () => {
     // #given GitHub refuses the issues call
     const github = new FakeGitHub()

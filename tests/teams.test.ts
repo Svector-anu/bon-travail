@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Address } from '@/domain/types'
-import { canFund, canSeeRepo, type Viewer } from '@/server/access'
+import { canFund, canSeeRepo, resolveViewer, type Viewer } from '@/server/access'
 import { roleFromPermissions } from '@/server/github/oauth'
 import { accessRequestMessage, notifyOperator } from '@/server/notify'
 import type { ExternalizeInput } from '@/server/services/work-service'
@@ -11,7 +11,12 @@ const HOUR = 60 * 60 * 1000
 const REPO = `${OWNER}/${NAME}`
 const ADA_WALLET: Address = '0x3333333333333333333333333333333333333333'
 
-const member = (team: string, role: 'admin' | 'engineer'): Viewer => ({ actor: `github:${role}-of-${team}`, operator: false, teams: new Map([[team, role]]) })
+const member = (team: string, role: 'admin' | 'engineer'): Viewer => ({
+  actor: `github:${role}-of-${team}`,
+  operator: false,
+  teams: new Map([[team, role]]),
+  repos: new Map([[`${team}/${team === OWNER ? NAME : 'app'}`.toLowerCase(), role]]),
+})
 const ACME_ADMIN = member(OWNER, 'admin')
 const ACME_ENGINEER = member(OWNER, 'engineer')
 const STRANGER = member('othercorp', 'admin')
@@ -35,23 +40,30 @@ async function acme() {
   github.addRun({ sha: sha('a1'), at: T0 - 4 * HOUR, conclusion: 'success' })
   github.addRun({ sha: sha('b1'), at: T0 - 3 * HOUR, conclusion: 'failure' })
   github.addRun({ sha: sha('c1'), at: T0 - 2 * HOUR, conclusion: 'failure' })
-  await app.teams.recordSignIn('admin-of-acme', [{ team: OWNER, installationId: 1, role: 'admin' }], T0)
+  await app.teams.recordSignIn('admin-of-acme', [{ team: OWNER, installationId: 1, role: 'admin', repos: { [`${OWNER}/${NAME}`.toLowerCase()]: 'admin' } }], T0)
   await app.work.connectRepo(REPO, undefined, ACME_ADMIN)
   const finding = (await app.watch.listFindings())[0]!
   return { app, github, finding }
 }
 
 describe('who can see and fund what', () => {
-  it('lets operators see everything and members only their teams', () => {
-    expect(canSeeRepo(OPERATOR, 'anyone')).toBe(true)
-    expect(canSeeRepo(ACME_ENGINEER, 'ACME')).toBe(true)
-    expect(canSeeRepo(STRANGER, OWNER)).toBe(false)
+  it('lets operators see everything and members only the repos GitHub lets them reach', () => {
+    expect(canSeeRepo(OPERATOR, 'anyone', 'anything')).toBe(true)
+    expect(canSeeRepo(ACME_ENGINEER, 'ACME', NAME)).toBe(true)
+    expect(canSeeRepo(STRANGER, OWNER, NAME)).toBe(false)
   })
 
-  it('lets only operators and team admins put money behind work', () => {
-    expect(canFund(OPERATOR, OWNER)).toBe(true)
-    expect(canFund(ACME_ADMIN, OWNER)).toBe(true)
-    expect(canFund(ACME_ENGINEER, OWNER)).toBe(false)
+  it('keeps a member out of their own team\'s repos they cannot reach on GitHub', () => {
+    // #given an engineer who can reach acme/sdk-examples but not acme/payroll
+    expect(canSeeRepo(ACME_ENGINEER, OWNER, 'payroll')).toBe(false)
+  })
+
+  it('lets only operators and admins of that very repo put money behind work', () => {
+    expect(canFund(OPERATOR, OWNER, NAME)).toBe(true)
+    expect(canFund(ACME_ADMIN, OWNER, NAME)).toBe(true)
+    expect(canFund(ACME_ENGINEER, OWNER, NAME)).toBe(false)
+    // an admin of one small repo cannot spend on another repo of the team
+    expect(canFund(ACME_ADMIN, OWNER, 'payroll')).toBe(false)
   })
 
   it.each([
@@ -90,6 +102,18 @@ describe('a team cannot reach another team', () => {
     // #when/#then
     await expect(app.work.externalize(finding.id, input(), ACME_ENGINEER)).rejects.toMatchObject({ code: 'FORBIDDEN' })
     expect((await app.work.keepInternal(finding.id, ACME_ENGINEER)).status).toBe('internal')
+  })
+})
+
+describe('team access follows GitHub', () => {
+  it('stops trusting a membership 12 hours after GitHub last confirmed it', async () => {
+    // #given an engineer confirmed by GitHub at sign-in
+    const { app } = await acme()
+    await app.teams.recordSignIn('dev', [{ team: OWNER, installationId: 1, role: 'engineer', repos: { [`${OWNER}/${NAME}`.toLowerCase()]: 'engineer' } }], T0)
+    const auth = { githubLogins: [] as string[], sessionSecret: 's' }
+    // #then trusted for 12 hours, then they must sign in again
+    expect(await resolveViewer('github:dev', auth, app.teams, T0 + 11 * 60 * 60 * 1000)).not.toBeNull()
+    expect(await resolveViewer('github:dev', auth, app.teams, T0 + 13 * 60 * 60 * 1000)).toBeNull()
   })
 })
 

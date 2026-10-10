@@ -10,6 +10,8 @@ export interface TeamRecord {
   budgetMicro: bigint
   /** The wallet the team deposits from; deposits from any other wallet are not credited. */
   fundingWallet: string | null
+  /** Block height when that wallet was registered; only later transfers are credited. */
+  fundingWalletBlock: bigint | null
 }
 
 export interface TeamDeposit {
@@ -28,6 +30,7 @@ function rowToTeam(row: Row): TeamRecord {
     installationId: num(row, 'installation_id'),
     budgetMicro: BigInt(str(row, 'budget_micro')),
     fundingWallet: optStr(row, 'funding_wallet'),
+    fundingWalletBlock: optStr(row, 'funding_wallet_block') === null ? null : BigInt(optStr(row, 'funding_wallet_block')!),
   }
 }
 
@@ -53,14 +56,34 @@ export class TeamStore extends Repository {
           t.installationId,
           at,
         )
-        await this.run('INSERT INTO team_members (team_id, login, role, verified_at) VALUES ($1, $2, $3, $4)', t.team, who, t.role, at)
+        await this.run(
+          'INSERT INTO team_members (team_id, login, role, verified_at, repos_json) VALUES ($1, $2, $3, $4, $5)',
+          t.team,
+          who,
+          t.role,
+          at,
+          JSON.stringify(t.repos),
+        )
       }
     })
   }
 
-  async membershipsOf(login: string): Promise<Map<string, TeamRole>> {
-    const rows = await this.all('SELECT team_id, role FROM team_members WHERE login = $1', login.toLowerCase())
-    return new Map(rows.map((row) => [str(row, 'team_id'), str(row, 'role') as TeamRole]))
+  /** Runs fn in a transaction holding this team's lock: concurrent spending for one team runs one at a time. */
+  async withTeamLock<T>(team: string, fn: () => Promise<T>): Promise<T> {
+    return this.transaction(async () => {
+      await this.get('SELECT pg_advisory_xact_lock(hashtext($1))', `team:${team.toLowerCase()}`)
+      return fn()
+    })
+  }
+
+  /** Teams and repos GitHub confirmed for this person at a sign-in no older than `since` (epoch ms). */
+  async membershipsOf(login: string, since = 0): Promise<{ teams: Map<string, TeamRole>; repos: Map<string, TeamRole> }> {
+    const rows = await this.all('SELECT team_id, role, repos_json FROM team_members WHERE login = $1 AND verified_at >= $2', login.toLowerCase(), since)
+    const repos = new Map<string, TeamRole>()
+    for (const row of rows) {
+      for (const [repo, role] of Object.entries(JSON.parse(str(row, 'repos_json')) as Record<string, TeamRole>)) repos.set(repo, role)
+    }
+    return { teams: new Map(rows.map((row) => [str(row, 'team_id'), str(row, 'role') as TeamRole])), repos }
   }
 
   async getTeam(id: string): Promise<TeamRecord | null> {
@@ -81,8 +104,20 @@ export class TeamStore extends Repository {
     await this.run('UPDATE teams SET budget_micro = $1, updated_at = $2 WHERE id = $3', budgetMicro.toString(), at, id.toLowerCase())
   }
 
-  async setFundingWallet(id: string, wallet: string, at: number): Promise<void> {
-    await this.run('UPDATE teams SET funding_wallet = $1, updated_at = $2 WHERE id = $3', wallet, at, id.toLowerCase())
+  /** The team that already registered this wallet, if any. */
+  async teamWithWallet(wallet: string): Promise<string | null> {
+    const row = await this.get('SELECT id FROM teams WHERE LOWER(funding_wallet) = $1', wallet.toLowerCase())
+    return row ? str(row, 'id') : null
+  }
+
+  async setFundingWallet(id: string, wallet: string, block: bigint, at: number): Promise<void> {
+    await this.run(
+      'UPDATE teams SET funding_wallet = $1, funding_wallet_block = $2, updated_at = $3 WHERE id = $4',
+      wallet,
+      block.toString(),
+      at,
+      id.toLowerCase(),
+    )
   }
 
   /** Credits a deposit once. Returns false if that transaction was already credited, to this team or any other. */

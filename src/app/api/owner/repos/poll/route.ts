@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     const { watch, work } = await getApp()
     const repo = await watch.getRepo(field(await readBody(request), 'repoId', 140))
     if (!repo) throw new DomainError('NOT_FOUND', 'repository not found')
-    requireRepoAccess(viewer, repo.owner, 'repository')
+    requireRepoAccess(viewer, repo.owner, repo.name, 'repository')
     return json({ report: await work.observe(repo) })
   })
 }

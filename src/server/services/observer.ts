@@ -189,7 +189,10 @@ export class Observer {
     }
     const open = new Set(issues.map((issue) => issue.number))
     for (const tracked of await this.watch.listBugReports({ repoId: repo.id, statuses: ['reported', 'not_reproduced'] })) {
-      if (!open.has(tracked.issueNumber)) await this.watch.moveBugReport(tracked.id, ['reported', 'not_reproduced'], 'closed', now)
+      if (open.has(tracked.issueNumber)) continue
+      // Not in the listing could mean closed, unlabeled, or just past the pages read: ask GitHub about this one issue.
+      const stillOpen = await this.github.issueIsOpen(repo.owner, repo.name, tracked.issueNumber).catch(() => true)
+      if (!stillOpen) await this.watch.moveBugReport(tracked.id, ['reported', 'not_reproduced'], 'closed', now)
     }
   }
 
