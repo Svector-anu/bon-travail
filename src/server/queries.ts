@@ -16,6 +16,7 @@ import type {
 } from '@/domain/views'
 import { publicRun } from '@/lib/public-activity'
 import { loadConfig } from './config'
+import { canSeeRepo, visibleTo, type Viewer } from './access'
 import { getApp, type App } from './container'
 import { displayId, findingDisplayIdOf, toAttemptView, toFindingSummary, toFindingView, toRepoView, toTaskView } from './services/views'
 
@@ -78,24 +79,34 @@ export function rankOpenWork(tasks: TaskView[]): TaskView[] {
 
 const pageNumber = (page: number, total: number) => Math.min(Math.max(1, Math.floor(page) || 1), Math.max(1, Math.ceil(total / PAGE_SIZE)))
 
+/** Work from private repositories stays inside its team: public lists never show it. */
+async function publicOnly(app: App, tasks: TaskRecord[]): Promise<TaskRecord[]> {
+  const hidden = new Set((await app.watch.listRepos()).filter((r) => r.private).map((r) => r.id))
+  if (hidden.size === 0) return tasks
+  return tasks.filter((t) => t.spec.kind !== TASK_KIND_CI_FIX || !hidden.has(`${t.spec.repo.owner}/${t.spec.repo.name}`.toLowerCase()))
+}
+
+const LIST_LIMIT = 500
+
 export async function listWorkPage(view: 'open' | 'settled', page: number): Promise<{ list: ListPage<TaskView>; counts: { open: number; settled: number } }> {
   const app = await getApp()
-  const [open, settled] = await Promise.all([app.store.countTasks({ states: LIVE_STATES }), app.store.countTasks({ states: SETTLED_STATES })])
-  const total = view === 'open' ? open : settled
+  const [live, done] = await Promise.all([
+    publicOnly(app, await app.store.listTasks({ states: LIVE_STATES, limit: LIST_LIMIT })),
+    publicOnly(app, await app.store.listTasks({ states: SETTLED_STATES, limit: LIST_LIMIT })),
+  ])
+  const total = view === 'open' ? live.length : done.length
   const current = pageNumber(page, total)
-  const items =
-    view === 'open'
-      ? rankOpenWork(await toViews(app, await app.store.listTasks({ states: LIVE_STATES, limit: 500 }))).slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE)
-      : await toViews(app, await app.store.listTasks({ states: SETTLED_STATES, limit: PAGE_SIZE, offset: (current - 1) * PAGE_SIZE }))
-  return { list: { items, page: current, pageSize: PAGE_SIZE, total }, counts: { open, settled } }
+  const window = (items: TaskView[]) => items.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE)
+  const items = view === 'open' ? window(rankOpenWork(await toViews(app, live))) : await toViews(app, done.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE))
+  return { list: { items, page: current, pageSize: PAGE_SIZE, total }, counts: { open: live.length, settled: done.length } }
 }
 
 export async function listReceiptPage(page: number): Promise<ListPage<TaskView>> {
   const app = await getApp()
-  const total = await app.store.countTasks({ states: RECEIPT_STATES })
-  const current = pageNumber(page, total)
-  const items = await toViews(app, await app.store.listTasks({ states: RECEIPT_STATES, limit: PAGE_SIZE, offset: (current - 1) * PAGE_SIZE }))
-  return { items, page: current, pageSize: PAGE_SIZE, total }
+  const all = await publicOnly(app, await app.store.listTasks({ states: RECEIPT_STATES, limit: LIST_LIMIT }))
+  const current = pageNumber(page, all.length)
+  const items = await toViews(app, all.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE))
+  return { items, page: current, pageSize: PAGE_SIZE, total: all.length }
 }
 
 export async function listTaskViews(options: { limit?: number; kinds?: TaskKind[] } = {}): Promise<TaskView[]> {
@@ -177,7 +188,7 @@ export function escrowExplorerUrlFromConfig(): string | null {
 /** The work package the home page points to: the first one open to contributors, else the newest in flight. */
 export async function openWork(): Promise<TaskView | null> {
   const app = await getApp()
-  const live = await toViews(app, await app.store.listTasks({ states: LIVE_STATES, limit: 10, kinds: [TASK_KIND_CI_FIX] }))
+  const live = await toViews(app, await publicOnly(app, await app.store.listTasks({ states: LIVE_STATES, limit: 50, kinds: [TASK_KIND_CI_FIX] })))
   return live.find((t) => t.state === 'OPEN') ?? live[0] ?? null
 }
 
@@ -191,21 +202,88 @@ export interface ConsoleSnapshot {
   watching: FindingSummaryView[]
   inFlight: { finding: FindingSummaryView; task: TaskView | null }[]
   settled: FindingSummaryView[]
+  /** Issues labeled as bugs that Aeon has not turned into a failing test yet. */
+  bugsWaiting: BugWaitingView[]
+  /** Who is looking: an operator sees every team; a member sees their teams and each one's funds. */
+  viewer: { operator: boolean; teams: TeamFundsView[] }
+  /** Where teams send deposits, and the explorer to check them on. Null when payments are simulated. */
+  deposits: { address: string; explorerUrl: string } | null
+  /** Operators only: people who signed in with GitHub but are on no team yet. */
+  accessRequests: { login: string; attempts: number; lastAt: number }[]
+  /** Operators only: every team, who is on it, and its funds. */
+  teams: (TeamFundsView & { members: { login: string; role: string }[] })[]
   githubEnabled: boolean
   simulatedPayments: boolean
   paymentProvider: string
 }
 
+export interface TeamFundsView {
+  team: string
+  role: string
+  sponsored: string
+  deposited: string
+  held: string
+  paid: string
+  available: string
+  fundingWallet: string | null
+  deposits: { txHash: string; amount: string; at: number }[]
+}
+
+async function teamFunds(app: App, team: string, role: string): Promise<TeamFundsView> {
+  const [record, balance, deposits] = await Promise.all([app.teams.getTeam(team), app.funding.balance(team), app.teams.listDeposits(team, 5)])
+  return {
+    team,
+    role,
+    sponsored: formatUsdc(balance.sponsoredMicro),
+    deposited: formatUsdc(balance.depositedMicro),
+    held: formatUsdc(balance.heldMicro),
+    paid: formatUsdc(balance.paidMicro),
+    available: formatUsdc(balance.availableMicro),
+    fundingWallet: record?.fundingWallet ?? null,
+    deposits: deposits.map((d) => ({ txHash: d.txHash, amount: formatUsdc(d.amountMicro), at: d.creditedAt })),
+  }
+}
+
+export interface BugWaitingView {
+  id: string
+  repo: string
+  issueNumber: number
+  issueTitle: string
+  issueUrl: string
+  status: 'reported' | 'not_reproduced'
+  note: string | null
+  reportedAt: number
+}
+
 const IN_FLIGHT: readonly FindingStatus[] = ['internal', 'externalized']
 const SETTLED: readonly FindingStatus[] = ['resolved', 'dismissed']
 
-export async function consoleSnapshot(): Promise<ConsoleSnapshot> {
+export async function consoleSnapshot(viewer: Viewer): Promise<ConsoleSnapshot> {
   const app = await getApp()
-  const repos = await app.watch.listRepos()
+  const visible = visibleTo(viewer)
+  const repos = (await app.watch.listRepos()).filter((r) => visible(r.owner, r.name))
   const bySlug = new Map(repos.map((r) => [r.id, r]))
-  const findings = await app.watch.listFindings({ limit: 200 })
+  // Limit after scoping, so one busy team never pushes another team's items out of its console.
+  const repoIds = viewer.operator ? undefined : repos.map((r) => r.id)
+  const findings = (await app.watch.listFindings({ repoIds, limit: 200 })).filter((f) => bySlug.has(f.repoId))
   const summary = (status: readonly FindingStatus[]) =>
     findings.filter((f) => status.includes(f.status)).map((f) => toFindingSummary(f, bySlug.get(f.repoId) ?? { owner: '?', name: f.repoId }))
+  const waiting = (await app.watch.listBugReports({ statuses: ['reported', 'not_reproduced'], repoIds, limit: 50 })).filter((b) =>
+    bySlug.has(b.repoId),
+  )
+  const bugsWaiting: BugWaitingView[] = waiting.map((b) => {
+    const repo = bySlug.get(b.repoId)
+    return {
+      id: b.id,
+      repo: repo ? `${repo.owner}/${repo.name}` : b.repoId,
+      issueNumber: b.issueNumber,
+      issueTitle: b.issueTitle,
+      issueUrl: b.issueUrl,
+      status: b.status === 'not_reproduced' ? 'not_reproduced' : 'reported',
+      note: b.note,
+      reportedAt: b.reportedAt,
+    }
+  })
   const inFlight = await Promise.all(
     findings
       .filter((f) => IN_FLIGHT.includes(f.status))
@@ -223,7 +301,7 @@ export async function consoleSnapshot(): Promise<ConsoleSnapshot> {
     try {
       const watched = new Set(repos.filter((r) => r.active).map((r) => r.id))
       installable = (await app.githubApp.listRepos())
-        .filter((r) => !watched.has(`${r.owner}/${r.name}`.toLowerCase()))
+        .filter((r) => visible(r.owner, r.name) && !watched.has(`${r.owner}/${r.name}`.toLowerCase()))
         .map((r) => ({ slug: `${r.owner}/${r.name}`, private: r.private }))
     } catch (error) {
       githubError = error instanceof Error ? error.message : 'GitHub is unreachable'
@@ -238,6 +316,16 @@ export async function consoleSnapshot(): Promise<ConsoleSnapshot> {
     watching: summary(['watching']),
     inFlight,
     settled: summary(SETTLED),
+    bugsWaiting,
+    viewer: {
+      operator: viewer.operator,
+      teams: await Promise.all([...viewer.teams].map(([team, role]) => teamFunds(app, team, role))),
+    },
+    deposits: app.funding.depositAddress ? { address: app.funding.depositAddress, explorerUrl: app.chain.explorerUrl } : null,
+    accessRequests: viewer.operator ? (await app.teams.listAccessRequests(20)).map(({ login, attempts, lastAt }) => ({ login, attempts, lastAt })) : [],
+    teams: viewer.operator
+      ? await Promise.all((await app.teams.listTeams()).map(async (t) => ({ ...(await teamFunds(app, t.id, 'operator view')), members: t.members })))
+      : [],
     githubEnabled: app.github !== null,
     simulatedPayments: app.payments.simulated,
     paymentProvider: app.payments.name,
@@ -252,11 +340,12 @@ export interface FindingDetail {
   simulatedPayments: boolean
 }
 
-export async function getFindingDetail(findingId: string): Promise<FindingDetail | null> {
+export async function getFindingDetail(findingId: string, viewer: Viewer): Promise<FindingDetail | null> {
   const app = await getApp()
   const finding = await app.watch.getFinding(findingId)
   if (!finding) return null
   const repo = await app.watch.requireRepo(finding.repoId)
+  if (!canSeeRepo(viewer, repo.owner, repo.name)) return null
   const [runs, events] = await Promise.all([app.watch.runsForFinding(finding.id, 20), app.watch.listFindingEvents(finding.id)])
   const taskIds = [...new Set(events.map((e) => e.detail.taskId).filter((id): id is string => typeof id === 'string'))]
   const tasks = (await Promise.all(taskIds.map((id) => app.store.getTask(id)))).filter((t): t is TaskRecord => t !== null)
@@ -296,7 +385,8 @@ export async function recurrenceWatch(taskId: string): Promise<RecurrenceWatch |
 /** What Aeon reads before it investigates: only findings awaiting evidence, with everything needed to reproduce. */
 export async function findingsForInvestigation(statuses: FindingStatus[]) {
   const app = await getApp()
-  const findings = await app.watch.listFindings({ statuses, limit: 20 })
+  // A reported bug was already reproduced with its own test; investigating CI runs would only overwrite that.
+  const findings = (await app.watch.listFindings({ statuses, limit: 20 })).filter((f) => f.bug === null)
   return Promise.all(
     findings.map(async (f) => {
       const repo = await app.watch.requireRepo(f.repoId)
@@ -320,6 +410,30 @@ export async function findingsForInvestigation(statuses: FindingStatus[]) {
         // An investigation older than the latest recurrence explains the previous episode, not this one.
         alreadyInvestigated: investigationIsCurrent(f),
         recurrenceCount: f.recurrenceCount,
+      }
+    }),
+  )
+}
+
+/** Bug reports waiting for Aeon, with what it needs to write a reproducing test. */
+export async function bugsForReproduction() {
+  const app = await getApp()
+  const reports = await app.watch.listBugReports({ statuses: ['reported'], limit: 20 })
+  return Promise.all(
+    reports.map(async (r) => {
+      const repo = await app.watch.requireRepo(r.repoId)
+      return {
+        id: r.id,
+        repo: `${repo.owner}/${repo.name}`,
+        cloneUrl: `https://github.com/${repo.owner}/${repo.name}.git`,
+        defaultBranch: repo.defaultBranch,
+        workflowPath: repo.workflowPath,
+        workflowName: repo.workflowName,
+        issueNumber: r.issueNumber,
+        issueTitle: r.issueTitle,
+        issueBody: r.issueBody,
+        issueUrl: r.issueUrl,
+        issueAuthor: r.issueAuthor,
       }
     }),
   )

@@ -8,6 +8,7 @@ import {
 } from '@/domain/types'
 import type { Clock } from '../clock'
 import { GitHubNotFoundError, GitHubUnavailableError, type GhJob, type GhRun, type GitHubClient } from '../github/client'
+import { reproTestDigest } from './repro-test'
 import { VerificationPendingError, VerificationUnavailableError, type TaskVerifier } from './verifier'
 
 export const CI_VERIFIER_NAME = 'github-actions/v1'
@@ -39,9 +40,10 @@ function latest(runs: GhRun[]): GhRun | null {
  * - the PR targets the task's repository and base branch
  * - it was opened by the contributor holding the claim
  * - it does not touch a protected path (the workflow, the acceptance test)
+ * - for a reported bug, it adds Aeon's reproducing test, unchanged
  * - the acceptance job of the watched workflow passed on the exact commit:
  *   the merge commit on the base branch when merge is required, otherwise
- *   the PR head
+ *   the PR head. For a bug, the jobs that run Aeon's test (every job if unknown)
  * Anything not decided yet is pending, not failed, until the grace period
  * after the deadline runs out.
  */
@@ -100,10 +102,19 @@ export class CiFixVerifier implements TaskVerifier {
     if (files.length >= MAX_VERIFIABLE_FILES) {
       return this.verdict(false, 'PROTECTED_PATH', `PR #${pr.number} is too large to check its protected paths.`, evidence)
     }
-    const touched = [...new Set(files.filter((f) => isProtected(f, spec.protectedPaths)))]
+    // Adding the approved reproducing test is the point of the fix, even inside a protected test directory.
+    const touched = [...new Set(files.filter((f) => f !== spec.reproTest?.path && isProtected(f, spec.protectedPaths)))]
     evidence.protectedTouched = touched
     if (touched.length > 0) {
       return this.verdict(false, 'PROTECTED_PATH', `PR #${pr.number} changes protected ${touched.length === 1 ? 'path' : 'paths'} ${touched.join(', ')}.`, evidence)
+    }
+    if (spec.reproTest && !files.includes(spec.reproTest.path)) {
+      return this.verdict(
+        false,
+        'REPRO_TEST_MISSING',
+        `PR #${pr.number} does not add the test that reproduces bug #${spec.reproTest.issueNumber} (${spec.reproTest.path}).`,
+        evidence,
+      )
     }
 
     let sha: string
@@ -123,6 +134,18 @@ export class CiFixVerifier implements TaskVerifier {
     }
     evidence.verifiedSha = sha
 
+    if (spec.reproTest) {
+      const added = await gh.fileAt(owner, name, spec.reproTest.path, sha)
+      if (added === null || reproTestDigest(added) !== spec.reproTest.sha256) {
+        return this.verdict(
+          false,
+          'REPRO_TEST_MISSING',
+          `${spec.reproTest.path} at ${sha.slice(0, 7)} is not the approved test for bug #${spec.reproTest.issueNumber}: it was changed or removed.`,
+          evidence,
+        )
+      }
+    }
+
     const runs = await gh.listRuns(owner, name, workflowFile(spec), { headSha: sha, event, perPage: 20 })
     const run = latest(runs.filter((r) => r.headSha === sha && r.path.endsWith(spec.workflowPath)))
     if (!run) throw new VerificationPendingError(`${spec.workflowName} has not run on ${sha.slice(0, 7)} yet`)
@@ -131,11 +154,17 @@ export class CiFixVerifier implements TaskVerifier {
     evidence.runConclusion = run.conclusion
     if (run.status !== 'completed') throw new VerificationPendingError(`${spec.workflowName} run #${run.runNumber} is ${run.status}`)
 
-    const jobs = acceptanceJobs(await gh.listJobs(owner, name, run.id), spec.jobName)
-    evidence.jobName = spec.jobName
+    const allJobs = await gh.listJobs(owner, name, run.id)
+    const testJobs = spec.reproTest?.jobs ?? []
+    const jobs = spec.reproTest
+      ? testJobs.length > 0
+        ? testJobs.flatMap((job) => acceptanceJobs(allJobs, job))
+        : allJobs
+      : acceptanceJobs(allJobs, spec.jobName)
+    evidence.jobName = spec.reproTest ? (testJobs.length > 0 ? testJobs.join(', ') : `every job in ${spec.workflowName}`) : spec.jobName
     evidence.jobUrl = jobs[0]?.htmlUrl ?? null
     if (jobs.length === 0) {
-      return this.verdict(false, 'CHECKS_FAILED', `The acceptance job "${spec.jobName}" did not run on ${sha.slice(0, 7)}.`, evidence)
+      return this.verdict(false, 'CHECKS_FAILED', `The acceptance job "${evidence.jobName}" did not run on ${sha.slice(0, 7)}.`, evidence)
     }
     const failed = jobs.find((job) => job.conclusion !== 'success')
     evidence.jobConclusion = failed ? failed.conclusion : 'success'
@@ -144,6 +173,14 @@ export class CiFixVerifier implements TaskVerifier {
         false,
         'CHECKS_FAILED',
         `"${failed.name}" concluded ${failed.conclusion ?? 'without a result'} on ${sha.slice(0, 7)} (run #${run.runNumber}).`,
+        evidence,
+      )
+    }
+    if (spec.reproTest) {
+      return this.verdict(
+        true,
+        'CHECKS_PASSED',
+        `${testJobs.length > 0 ? testJobs.map((j) => `"${j}"`).join(', ') : spec.workflowName} passed with the test for bug #${spec.reproTest.issueNumber} on ${spec.requireMerge ? `${spec.baseBranch} after merging` : 'the head of'} PR #${pr.number} (${sha.slice(0, 7)}, run #${run.runNumber}). No protected path was changed.`,
         evidence,
       )
     }

@@ -92,7 +92,7 @@ interface StoryLine {
   tone?: 'final' | 'refund'
 }
 
-/** The whole receipt in five plain lines: what broke, what Aeon found, who fixed it, what proved it, where the money went. */
+/** The whole receipt in five plain lines: what broke (or was reported), what Aeon found, who fixed it, what proved it, where the money went. */
 function storyLines(
   receipt: ReceiptView,
   ctx: {
@@ -107,27 +107,44 @@ function storyLines(
   const ci = task.ci!
   const short = (sha: string | null | undefined) => (sha ? sha.slice(0, 7) : '')
   const firstBad = investigation?.firstBadSha ?? finding?.regression?.firstRedSha ?? finding?.firstFailedSha ?? null
-  const lines: StoryLine[] = [
-    {
-      word: 'Broke',
-      text: `"${finding?.stepName ?? ci.jobName}" started failing${firstBad ? ` at ${short(firstBad)}` : ''}.`,
-      href: finding?.lastFailedRunUrl ?? null,
-      where: 'the run',
-      at: finding?.firstFailedAt ?? null,
-    },
-    {
-      word: 'Found',
-      text: investigation ? (investigation.firstBadSha ? `Aeon traced it to one commit, ${short(investigation.firstBadSha)}.` : 'Aeon reproduced it.') : 'GitHub recorded the failing step.',
-      href: investigation?.runUrl ?? null,
-      where: "Aeon's run",
-      at: null,
-    },
-  ]
+  const lines: StoryLine[] = ci.bug
+    ? [
+        {
+          word: 'Reported',
+          text: `Bug #${ci.bug.issueNumber} was reported: "${ci.bug.issueTitle}".`,
+          href: ci.bug.issueUrl,
+          where: 'the issue',
+          at: null,
+        },
+        {
+          word: 'Found',
+          text: `Aeon wrote ${ci.bug.testPath}, a test that fails because of it.`,
+          href: investigation?.runUrl ?? null,
+          where: "Aeon's run",
+          at: finding?.firstFailedAt ?? null,
+        },
+      ]
+    : [
+        {
+          word: 'Broke',
+          text: `"${finding?.stepName ?? ci.jobName}" started failing${firstBad ? ` at ${short(firstBad)}` : ''}.`,
+          href: finding?.lastFailedRunUrl ?? null,
+          where: 'the run',
+          at: finding?.firstFailedAt ?? null,
+        },
+        {
+          word: 'Found',
+          text: investigation ? (investigation.firstBadSha ? `Aeon traced it to one commit, ${short(investigation.firstBadSha)}.` : 'Aeon reproduced it.') : 'GitHub recorded the failing step.',
+          href: investigation?.runUrl ?? null,
+          where: "Aeon's run",
+          at: null,
+        },
+      ]
   if (ctx.ev && ctx.who) {
     lines.push({ word: 'Fixed', text: `${ctx.who} fixed it in pull request #${ctx.ev.prNumber}.`, href: ctx.ev.prUrl, where: 'GitHub', at: lastAt(receipt.timeline, 'submitted') })
     lines.push({
       word: 'Proved',
-      text: `Your tests passed on ${ci.baseBranch}${ctx.ev.verifiedSha ? ` at ${short(ctx.ev.verifiedSha)}` : ''}.`,
+      text: `Your tests passed on ${ci.baseBranch}${ci.bug ? " with Aeon's test added" : ''}${ctx.ev.verifiedSha ? ` at ${short(ctx.ev.verifiedSha)}` : ''}.`,
       href: ctx.ev.jobUrl,
       where: 'the check',
       at: firstAt(receipt.timeline, 'accepted'),

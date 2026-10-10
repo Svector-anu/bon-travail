@@ -2,6 +2,7 @@ import {
   GitHubNotFoundError,
   GitHubUnavailableError,
   type GhCompare,
+  type GhIssue,
   type GhJob,
   type GhPull,
   type GhRepo,
@@ -50,6 +51,7 @@ export class FakeGitHub implements GitHubClient {
   fork = false
   /** Extra files at the repository root, by path. */
   files: Record<string, string> = {}
+  issues: GhIssue[] = []
   workflows: GhWorkflow[] = [{ id: WORKFLOW_ID, name: 'Examples', path: WORKFLOW_PATH, state: 'active' }]
 
   private check() {
@@ -163,6 +165,18 @@ export class FakeGitHub implements GitHubClient {
     this.check()
     if (path === WORKFLOW_PATH) return WORKFLOW_YAML
     return this.files[path] ?? null
+  }
+
+  async listOpenIssues(): Promise<GhIssue[]> {
+    this.check()
+    return this.issues
+  }
+
+  /** Issues listed as open are open; others count as closed unless kept open here. */
+  stillOpen = new Set<number>()
+  async issueIsOpen(_owner: string, _name: string, number: number): Promise<boolean> {
+    this.check()
+    return this.issues.some((i) => i.number === number) || this.stillOpen.has(number)
   }
 
   async listPaths(): Promise<string[]> {

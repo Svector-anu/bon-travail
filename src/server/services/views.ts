@@ -96,6 +96,16 @@ export function toTaskView(task: TaskRecord, attemptCount: number, ctx: ViewCont
             contributors: spec.contributors.map((c) => c.login),
             openToAnyone: spec.openToAnyone === true,
             bonusUsdc: spec.bonusUsdc ?? null,
+            bug: spec.reproTest
+              ? {
+                  issueNumber: spec.reproTest.issueNumber,
+                  issueTitle: spec.reproTest.issueTitle,
+                  issueUrl: spec.reproTest.issueUrl,
+                  testPath: spec.reproTest.path,
+                  testContent: spec.reproTest.content,
+                  testCommand: spec.reproTest.command,
+                }
+              : null,
             approvedBy: spec.approvedBy,
           }
         : null,
@@ -275,6 +285,7 @@ export function toFindingSummary(finding: FindingRecord, repo: Pick<RepoRecord, 
     investigated: investigationIsCurrent(finding),
     investigationSummary: investigationIsCurrent(finding) ? (finding.investigation?.summary ?? null) : null,
     taskId: finding.taskId,
+    isBug: finding.bug !== null,
   }
 }
 
@@ -286,6 +297,7 @@ export function toFindingView(
 ): FindingView {
   return {
     ...toFindingSummary(finding, repo),
+    bug: finding.bug,
     repoUrl: `https://github.com/${repo.owner}/${repo.name}`,
     workflowName: finding.workflowName,
     workflowPath: finding.workflowPath,

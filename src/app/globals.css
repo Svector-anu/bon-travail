@@ -1889,6 +1889,28 @@ button.text-link:disabled {
   gap: 4px;
 }
 
+.team-budget {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.team-budget .input {
+  width: 96px;
+  height: 34px;
+  padding: 0 10px;
+}
+
+.team-budget .input.team-wide {
+  width: min(420px, 60vw);
+}
+
+.team-funds {
+  display: grid;
+  gap: 14px;
+  margin-top: 12px;
+}
+
 .connect {
   display: grid;
   grid-template-columns: 1fr 1fr auto;

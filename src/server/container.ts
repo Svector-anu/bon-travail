@@ -16,6 +16,8 @@ import { Observer } from './services/observer'
 import { TaskService } from './services/task-service'
 import { WorkService } from './services/work-service'
 import { Store } from './store/store'
+import { TeamFunding } from './services/team-funding'
+import { TeamStore } from './store/team-store'
 import { WatchStore } from './store/watch-store'
 import { CiFixVerifier } from './verification/ci-verifier'
 import { TxFactVerifier } from './verification/tx-fact-verifier'
@@ -26,6 +28,8 @@ export interface App {
   githubApp: GitHubApp | null
   store: Store
   watch: WatchStore
+  teams: TeamStore
+  funding: TeamFunding
   chain: ChainReader
   github: GitHubClient | null
   payments: PaymentProvider
@@ -87,6 +91,7 @@ export function createApp(config: AppConfig, store: Store, overrides: AppOverrid
   const clock = overrides.clock ?? systemClock
   const identity = overrides.identity ?? defaultIdentity(config)
   const watch = new WatchStore(store.database, store.transactions)
+  const teams = new TeamStore(store.database, store.transactions)
   const chain = overrides.chain ?? defaultChain(config)
   const githubApp = config.githubApp ? new GitHubApp(config.githubApp) : null
   const tokens: RepoTokenSource | null = githubApp ?? (config.githubToken ? new StaticTokenSource(config.githubToken) : null)
@@ -118,11 +123,19 @@ export function createApp(config: AppConfig, store: Store, overrides: AppOverrid
     { explorerUrl: chain.explorerUrl },
   )
   const observer = github ? new Observer(watch, github, clock) : null
+  const funding = new TeamFunding(
+    teams,
+    tasks,
+    chain,
+    clock,
+    config.teamDepositAddress ?? operatorAddress(config),
+    config.arcEscrowAddress ? [config.arcEscrowAddress] : [],
+  )
   const work = new WorkService(watch, tasks, observer, github, clock, {
     maxRewardMicro: config.maxRewardMicro,
     operatorAddress: operatorAddress(config),
     escrowAddress: config.arcEscrowAddress ?? null,
-  })
+  }, funding)
   const agent = new Agent(
     store,
     watch,
@@ -139,8 +152,9 @@ export function createApp(config: AppConfig, store: Store, overrides: AppOverrid
       publicBaseUrl: config.publicBaseUrl,
     },
     github !== null,
+    teams,
   )
-  return { config, githubApp, store, watch, chain, github, payments, tasks, work, agent, clock, identity }
+  return { config, githubApp, store, watch, teams, funding, chain, github, payments, tasks, work, agent, clock, identity }
 }
 
 const globalForStore = globalThis as typeof globalThis & { proofworkStore?: Promise<Store> }

@@ -32,6 +32,11 @@ export interface AppConfig {
   sessionSecret: string | undefined
   ownerAccessToken: string | undefined
   cronSecret: string | undefined
+  /** Where teams send USDC deposits. Defaults to the payer wallet that funds escrow. */
+  teamDepositAddress: string | undefined
+  /** Telegram bot that tells the operator when someone asks for console access. Both optional. */
+  telegramBotToken: string | undefined
+  telegramChatId: string | undefined
   observeIntervalMs: number
   ciVerifyGraceMs: number
 }
@@ -120,6 +125,9 @@ export function loadConfig(env: Env = process.env): AppConfig {
     sessionSecret: secret(env, 'SESSION_SECRET') ?? secret(env, 'OWNER_ACCESS_TOKEN'),
     ownerAccessToken: secret(env, 'OWNER_ACCESS_TOKEN'),
     cronSecret: secret(env, 'CRON_SECRET'),
+    teamDepositAddress: env.TEAM_DEPOSIT_ADDRESS || undefined,
+    telegramBotToken: env.TELEGRAM_BOT_TOKEN || undefined,
+    telegramChatId: env.TELEGRAM_CHAT_ID || undefined,
     observeIntervalMs: nonNegativeInt(env, 'OBSERVE_INTERVAL_SECONDS', 60) * 1000,
     ciVerifyGraceMs: nonNegativeInt(env, 'CI_VERIFY_GRACE_SECONDS', 6 * 60 * 60) * 1000,
   }

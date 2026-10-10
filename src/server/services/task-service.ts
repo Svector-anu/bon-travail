@@ -104,6 +104,15 @@ export class TaskService {
     this.receiptContext = provider
   }
 
+  /** Work packages (CI fixes and bugs) in the given states, newest first. */
+  listWorkTasks(states: readonly TaskRecord['state'][]): Promise<TaskRecord[]> {
+    return this.store.listTasks({ kinds: [TASK_KIND_CI_FIX], states, limit: 2000 })
+  }
+
+  getTask(taskId: string): Promise<TaskRecord | null> {
+    return this.store.getTask(taskId)
+  }
+
   requireTask(taskId: string): Promise<TaskRecord> {
     return this.store.requireTask(taskId)
   }

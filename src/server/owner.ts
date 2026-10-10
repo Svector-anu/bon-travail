@@ -11,7 +11,7 @@ export interface OwnerAuth {
   accessToken?: string
   /** Signs session cookies. */
   sessionSecret?: string
-  /** GitHub logins allowed into the console (lowercase). */
+  /** Operators: GitHub logins that run bon travail and see every team (lowercase). */
   githubLogins: readonly string[]
 }
 
@@ -57,7 +57,7 @@ export function ownerTokenMatches(ownerToken: string, presented: string): boolea
   return safeEqual(presented, ownerToken)
 }
 
-/** A GitHub actor stays an owner only while their login is on the list. */
+/** Operators: the access token, or a GitHub login on the operator list. Team members are checked against GitHub separately. */
 export function actorAllowed(actor: string, auth: OwnerAuth): boolean {
   if (actor === 'owner') return Boolean(auth.accessToken)
   if (actor.startsWith('github:')) return auth.githubLogins.includes(actor.slice('github:'.length).toLowerCase())
@@ -65,7 +65,7 @@ export function actorAllowed(actor: string, auth: OwnerAuth): boolean {
 }
 
 export function ownerConsoleEnabled(auth: OwnerAuth): boolean {
-  return Boolean(auth.accessToken) || (Boolean(auth.sessionSecret) && auth.githubLogins.length > 0)
+  return Boolean(auth.accessToken) || Boolean(auth.sessionSecret)
 }
 
 function originHost(origin: string): string | null {
@@ -86,13 +86,14 @@ export function readCookie(request: Request, name: string): string | undefined {
 }
 
 /**
- * Engineer-only endpoints decide what work leaves the team, for how much and
- * to whom, so they fail closed. Browsers authenticate with the session cookie
- * from "Sign in with GitHub"; a cookie-authenticated write must come from this
+ * Console endpoints decide what work leaves a team, for how much and to whom,
+ * so they fail closed. Browsers authenticate with the session cookie from
+ * "Sign in with GitHub"; a cookie-authenticated write must come from this
  * site's own pages. Scripts may send OWNER_ACCESS_TOKEN as a bearer instead.
- * Returns the actor recorded on every decision.
+ * Returns the signed-in actor; whether they are an operator or on a team is
+ * decided by the caller.
  */
-export function requireOwner(request: Request, auth: OwnerAuth, now: number): string {
+export function requireSession(request: Request, auth: OwnerAuth, now: number): string {
   if (!ownerConsoleEnabled(auth)) {
     throw new DomainError('UNAVAILABLE', 'The engineer console is not configured in this deployment')
   }
@@ -102,7 +103,7 @@ export function requireOwner(request: Request, auth: OwnerAuth, now: number): st
     throw new DomainError('UNAUTHORIZED', 'Invalid owner token')
   }
   const actor = auth.sessionSecret ? verifyOwnerSession(auth.sessionSecret, readCookie(request, OWNER_COOKIE), now) : null
-  if (!actor || !actorAllowed(actor, auth)) throw new DomainError('UNAUTHORIZED', 'Sign in to the engineer console')
+  if (!actor || !actor.startsWith('github:')) throw new DomainError('UNAUTHORIZED', 'Sign in to the engineer console')
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     const origin = request.headers.get('origin')
     const host = request.headers.get('x-forwarded-host') ?? request.headers.get('host')

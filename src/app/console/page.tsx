@@ -4,14 +4,14 @@ import Link from 'next/link'
 import type { FindingSummaryView } from '@/domain/views'
 import { AutoRefresh } from '@/components/auto-refresh'
 import { Ago } from '@/components/clock'
-import { CheckNow, ConnectRepo, GithubMark, OwnerLogin, SignOut, WatchPicker } from '@/components/owner-actions'
+import { CheckNow, ConnectRepo, GithubMark, OwnerLogin, SignOut, TeamBudget, TeamDeposit, TeamWallet, WatchPicker } from '@/components/owner-actions'
 import { Reveal } from '@/components/reveal'
 import { SignedInHint } from '@/components/signed-in-hint'
 import { candidateLabel } from '@/lib/candidate'
 import { FINDING_STATUS, TASK_STATUS } from '@/lib/format'
 import { getApp } from '@/server/container'
 import { OWNER_SESSION_MS } from '@/server/owner'
-import { ownerActor } from '@/server/owner-session'
+import { consoleViewer } from '@/server/owner-session'
 import { consoleSnapshot } from '@/server/queries'
 import { Roll } from '@/components/roll'
 
@@ -28,9 +28,17 @@ function FindingRow({ finding, extra }: { finding: FindingSummaryView; extra?: R
         {finding.jobName} › {finding.stepName}
       </strong>
       <small>
-        {finding.repo} · failed <span className="tnum">{finding.failureCount}</span>× · last <Ago ts={finding.lastFailedAt} />
-        {finding.recurrenceCount > 0 && ` · came back ${finding.recurrenceCount}×`}
-        {finding.investigated && ' · Aeon investigated'}
+        {finding.isBug ? (
+          <>
+            {finding.repo} · reported bug, reproduced by Aeon <Ago ts={finding.firstFailedAt} />
+          </>
+        ) : (
+          <>
+            {finding.repo} · failed <span className="tnum">{finding.failureCount}</span>× · last <Ago ts={finding.lastFailedAt} />
+            {finding.recurrenceCount > 0 && ` · came back ${finding.recurrenceCount}×`}
+            {finding.investigated && ' · Aeon investigated'}
+          </>
+        )}
       </small>
       {extra}
       <ArrowRight size={16} className="go" aria-hidden />
@@ -47,8 +55,16 @@ function CandidateCard({ finding }: { finding: FindingSummaryView }) {
         {finding.jobName} <span aria-hidden>›</span> {finding.stepName}
       </h3>
       <p className="cand-card-where">
-        {finding.repo} · failed <span className="tnum">{finding.failureCount}</span> in a row · first seen <Ago ts={finding.firstFailedAt} />
-        {finding.recurrenceCount > 0 && ` · came back ${finding.recurrenceCount}×`}
+        {finding.isBug ? (
+          <>
+            {finding.repo} · Aeon wrote a test that fails because of it <Ago ts={finding.firstFailedAt} />
+          </>
+        ) : (
+          <>
+            {finding.repo} · failed <span className="tnum">{finding.failureCount}</span> in a row · first seen <Ago ts={finding.firstFailedAt} />
+            {finding.recurrenceCount > 0 && ` · came back ${finding.recurrenceCount}×`}
+          </>
+        )}
       </p>
       <p className={finding.investigationSummary ? 'cand-card-found' : 'cand-card-found pending'}>
         {finding.investigationSummary ? (
@@ -67,17 +83,23 @@ function CandidateCard({ finding }: { finding: FindingSummaryView }) {
 }
 
 export default async function ConsolePage({ searchParams }: { searchParams: Promise<{ error?: string; login?: string }> }) {
-  const actor = await ownerActor()
-  if (!actor) {
+  const viewer = await consoleViewer()
+  if (!viewer) {
     const { error, login } = await searchParams
-    const { config } = await getApp()
+    const { config, githubApp } = await getApp()
     return (
       <Reveal>
-        <OwnerLogin error={error ?? null} login={login ?? null} enabled={Boolean(config.githubApp && config.ownerGithubLogins.length > 0)} />
+        <OwnerLogin
+          error={error ?? null}
+          login={login ?? null}
+          enabled={Boolean(config.githubApp)}
+          installUrl={githubApp?.installUrl ?? null}
+        />
       </Reveal>
     )
   }
-  const snapshot = await consoleSnapshot()
+  const actor = viewer.actor
+  const snapshot = await consoleSnapshot(viewer)
 
   return (
     <Reveal>
@@ -99,6 +121,9 @@ export default async function ConsolePage({ searchParams }: { searchParams: Prom
       )}
       <p className="console-mode muted">
         Payments: {snapshot.simulatedPayments ? 'simulated (no USDC moves)' : `${snapshot.paymentProvider} on Arc Testnet`}
+        {snapshot.viewer.operator
+          ? ' · operator: you see every team'
+          : snapshot.viewer.teams.map((t) => ` · ${t.team} (${t.role}, ${t.available} USDC available)`).join('')}
       </p>
 
       <section className="console-section">
@@ -175,9 +200,136 @@ export default async function ConsolePage({ searchParams }: { searchParams: Prom
           <ConnectRepo />
         )}
         <p className="muted console-note">
-          Read-only: bon travail can read workflow runs, logs and pull requests on the repositories you choose. It never writes to them.
+          Read-only: bon travail can read workflow runs, logs, issues and pull requests on the repositories you choose. It never writes to them.
+          Label an issue <span className="mono">bug</span> and Aeon turns it into a failing test you can pay a human to fix.
         </p>
       </section>
+
+      {snapshot.bugsWaiting.length > 0 && (
+        <section className="console-section">
+          <div className="panel-title">
+            <span className="label">Bugs waiting for Aeon</span>
+            <span className="label tnum">{snapshot.bugsWaiting.length}</span>
+          </div>
+          <div className="rows">
+            {snapshot.bugsWaiting.map((bug) => (
+              <a key={bug.id} href={bug.issueUrl} target="_blank" rel="noreferrer" className="finding-row">
+                <span className="status">{bug.status === 'reported' ? 'Reproducing' : 'Not reproduced'}</span>
+                <span className="id">#{bug.issueNumber}</span>
+                <strong>{bug.issueTitle}</strong>
+                <small>
+                  {bug.repo} · reported <Ago ts={bug.reportedAt} />
+                  {bug.status === 'reported'
+                    ? ' · Aeon writes a test that fails because of it on its next pass'
+                    : bug.note
+                      ? ` · Aeon: ${bug.note}`
+                      : ''}
+                </small>
+                <ArrowUpRight size={16} className="go" aria-hidden />
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {snapshot.viewer.teams.map((t) => (
+        <section key={t.team} className="console-section">
+          <div className="panel-title">
+            <span className="label">{t.team} funds</span>
+            <span className="label tnum">{t.available} USDC available</span>
+          </div>
+          <p className="muted">
+            Your work is paid from what {t.team} deposits{t.sponsored !== '0.00' ? `, plus ${t.sponsored} USDC bon travail sponsors` : ''}.{' '}
+            Deposited {t.deposited} · set aside for open work {t.held} · paid out {t.paid}.
+          </p>
+          {t.role === 'admin' ? (
+            snapshot.deposits ? (
+              <div className="team-funds">
+                <TeamWallet team={t.team} wallet={t.fundingWallet} />
+                {t.fundingWallet && (
+                  <>
+                    <p className="muted">
+                      Send USDC on Arc testnet from <span className="mono">{t.fundingWallet}</span> to{' '}
+                      <span className="mono">{snapshot.deposits.address}</span>, then paste the transaction hash. bon travail reads it from
+                      the chain before crediting it.
+                    </p>
+                    <TeamDeposit team={t.team} />
+                  </>
+                )}
+              </div>
+            ) : (
+              <p className="muted">Deposits are off here: payments are simulated in this deployment.</p>
+            )
+          ) : (
+            <p className="muted">Only a GitHub admin of {t.team} can deposit or post paid work.</p>
+          )}
+          {t.deposits.length > 0 && snapshot.deposits && (
+            <div className="rows">
+              {t.deposits.map((d) => (
+                <a key={d.txHash} className="finding-row" href={`${snapshot.deposits!.explorerUrl}/tx/${d.txHash}`} target="_blank" rel="noreferrer">
+                  <span className="status paid">Credited</span>
+                  <span className="id tnum">{d.amount} USDC</span>
+                  <strong className="mono">{d.txHash.slice(0, 10)}…{d.txHash.slice(-6)}</strong>
+                  <small>
+                    <Ago ts={d.at} />
+                  </small>
+                  <ArrowUpRight size={16} className="go" aria-hidden />
+                </a>
+              ))}
+            </div>
+          )}
+        </section>
+      ))}
+
+      {snapshot.viewer.operator && snapshot.teams.length > 0 && (
+        <section className="console-section">
+          <div className="panel-title">
+            <span className="label">Teams</span>
+            <span className="label tnum">{snapshot.teams.length}</span>
+          </div>
+          <div className="rows">
+            {snapshot.teams.map((team) => (
+              <div key={team.team} className="repo-row">
+                <GitBranch size={16} aria-hidden />
+                <div>
+                  <a href={`https://github.com/${team.team}`} target="_blank" rel="noreferrer">
+                    {team.team} <ArrowUpRight size={13} />
+                  </a>
+                  <small>
+                    {team.members.length === 0
+                      ? 'Nobody has signed in yet'
+                      : team.members.map((m) => `@${m.login} (${m.role})`).join(', ')}{' '}
+                    · {team.available} USDC available ({team.deposited} deposited, {team.sponsored} sponsored, {team.held} held, {team.paid} paid)
+                  </small>
+                </div>
+                <TeamBudget team={team.team} budget={team.sponsored} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {snapshot.viewer.operator && snapshot.accessRequests.length > 0 && (
+        <section className="console-section">
+          <div className="panel-title">
+            <span className="label">Asking for access</span>
+            <span className="label tnum">{snapshot.accessRequests.length}</span>
+          </div>
+          <div className="rows">
+            {snapshot.accessRequests.map((r) => (
+              <a key={r.login} href={`https://github.com/${r.login}`} target="_blank" rel="noreferrer" className="finding-row">
+                <span className="status">Not on a team</span>
+                <span className="id">@{r.login}</span>
+                <strong>Signed in with GitHub {r.attempts === 1 ? 'once' : `${r.attempts} times`}</strong>
+                <small>
+                  last <Ago ts={r.lastAt} /> · they join a team by installing bon travail on their own repo
+                </small>
+                <ArrowUpRight size={16} className="go" aria-hidden />
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
 
       {(snapshot.watching.length > 0 || snapshot.settled.length > 0) && (
         <section className="console-section">

@@ -213,6 +213,79 @@ CREATE TABLE IF NOT EXISTS finding_events (
   detail_json TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS finding_events_finding ON finding_events(finding_id);
+
+-- Findings that came from a bug report carry Aeon's reproducing test.
+ALTER TABLE findings ADD COLUMN IF NOT EXISTS bug_json TEXT;
+
+CREATE TABLE IF NOT EXISTS bug_reports (
+  id TEXT PRIMARY KEY,
+  seq INTEGER NOT NULL UNIQUE,
+  repo_id TEXT NOT NULL REFERENCES repos(id),
+  issue_number INTEGER NOT NULL,
+  issue_title TEXT NOT NULL,
+  issue_body TEXT NOT NULL,
+  issue_url TEXT NOT NULL,
+  issue_author TEXT NOT NULL,
+  status TEXT NOT NULL,
+  note TEXT,
+  finding_id TEXT REFERENCES findings(id),
+  reported_at BIGINT NOT NULL,
+  created_at BIGINT NOT NULL,
+  updated_at BIGINT NOT NULL,
+  UNIQUE (repo_id, issue_number)
+);
+CREATE INDEX IF NOT EXISTS bug_reports_status ON bug_reports(status);
+
+-- A team is the GitHub account an installation of the app belongs to. GitHub
+-- decides who is on it; each member is re-read from GitHub at every sign-in.
+CREATE TABLE IF NOT EXISTS teams (
+  id TEXT PRIMARY KEY,
+  installation_id BIGINT NOT NULL,
+  budget_micro TEXT NOT NULL DEFAULT '0',
+  created_at BIGINT NOT NULL,
+  updated_at BIGINT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS team_members (
+  team_id TEXT NOT NULL REFERENCES teams(id),
+  login TEXT NOT NULL,
+  role TEXT NOT NULL,
+  verified_at BIGINT NOT NULL,
+  PRIMARY KEY (team_id, login)
+);
+CREATE INDEX IF NOT EXISTS team_members_login ON team_members(login);
+-- The repos ("owner/name" to role) this member can reach, as GitHub reported at sign-in.
+ALTER TABLE team_members ADD COLUMN IF NOT EXISTS repos_json TEXT NOT NULL DEFAULT '{}';
+
+-- People who signed in with GitHub but belong to no team yet.
+CREATE TABLE IF NOT EXISTS access_requests (
+  login TEXT PRIMARY KEY,
+  attempts INTEGER NOT NULL,
+  first_at BIGINT NOT NULL,
+  last_at BIGINT NOT NULL
+);
+-- How many of a person's attempts the operator has been told about.
+ALTER TABLE access_requests ADD COLUMN IF NOT EXISTS reported_attempts INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE repos ADD COLUMN IF NOT EXISTS private BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- A team funds its own work: it registers the wallet it pays from, sends USDC
+-- to the deposit address, and each verified transaction is credited once.
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS funding_wallet TEXT;
+-- The block height when the wallet was registered: only transfers after it count, so nobody can
+-- register someone else's wallet and claim transfers it already made. One wallet, one team.
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS funding_wallet_block TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS teams_funding_wallet ON teams(LOWER(funding_wallet)) WHERE funding_wallet IS NOT NULL;
+CREATE TABLE IF NOT EXISTS team_deposits (
+  tx_hash TEXT PRIMARY KEY,
+  team_id TEXT NOT NULL REFERENCES teams(id),
+  amount_micro TEXT NOT NULL,
+  from_address TEXT NOT NULL,
+  block_number TEXT NOT NULL,
+  credited_at BIGINT NOT NULL,
+  credited_by TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS team_deposits_team ON team_deposits(team_id);
 CREATE OR REPLACE TRIGGER finding_events_append_only BEFORE UPDATE OR DELETE ON finding_events
   FOR EACH ROW EXECUTE FUNCTION proofwork_append_only('finding_events is append-only');
 `

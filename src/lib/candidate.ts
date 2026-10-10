@@ -18,6 +18,7 @@ const short = (sha: string) => sha.slice(0, 7)
  * it on a later run, and `skipped` when it was not possible.
  */
 export function preparation(finding: FindingView): PrepItem[] {
+  if (finding.bug) return bugPreparation(finding, finding.bug)
   const current = investigationIsCurrent(finding)
   const inv = current ? finding.investigation : null
   const window = finding.regression
@@ -73,8 +74,35 @@ export function preparation(finding: FindingView): PrepItem[] {
   ]
 }
 
+/** A reported bug reaches the engineer already reproduced: Aeon's test is the evidence. */
+function bugPreparation(finding: FindingView, bug: NonNullable<FindingView['bug']>): PrepItem[] {
+  const commands = finding.investigation?.commands ?? []
+  const withoutTest = commands.find((c) => c.note === 'without the new test')
+  return [
+    { key: 'reported', state: 'done', text: `Picked up bug #${bug.issueNumber} from GitHub` },
+    { key: 'test', state: 'done', text: `Wrote ${bug.testPath}, a test that fails because of it` },
+    {
+      key: 'ran',
+      state: 'done',
+      text:
+        withoutTest?.outcome === 'passed'
+          ? 'Ran your tests: they pass without the new test and fail with it'
+          : 'Ran your tests with the new test; they were already failing without it',
+    },
+    { key: 'acceptance', state: 'done', text: 'Proposed how a fix should be judged' },
+    { key: 'guard', state: 'pending', text: 'A fix is paid only if it adds that test unchanged and CI passes' },
+  ]
+}
+
 /** The headline label for a candidate, from where it stands. */
-export function candidateLabel(finding: Pick<FindingView, 'status' | 'recurrenceCount'>): string {
+export function candidateLabel(finding: Pick<FindingView, 'status' | 'recurrenceCount' | 'isBug'>): string {
+  if (finding.isBug) {
+    if (finding.status === 'externalized') return 'With a human'
+    if (finding.status === 'resolved') return 'Bug fixed'
+    if (finding.status === 'internal') return 'Kept internal'
+    if (finding.status === 'dismissed') return 'Dismissed'
+    return 'Reported bug'
+  }
   switch (finding.status) {
     case 'recurred':
       return 'Came back'

@@ -1,5 +1,6 @@
 import { createVerify, generateKeyPairSync } from 'node:crypto'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { getApp } from '@/server/container'
 import { GitHubApp, appJwt, normalizePem } from '@/server/github/app'
 import { verifyOwnerSession } from '@/server/owner'
 import { TEST_ENV } from './helpers'
@@ -36,11 +37,30 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 }
 
-/** GitHub's OAuth token exchange and /user, answering as the given login. */
-function stubGitHubLogin(login: string) {
+interface StubInstallation {
+  id: number
+  account: string
+  permissions: Record<string, boolean>
+}
+
+/**
+ * GitHub's OAuth token exchange, /user, and the installations the user can
+ * reach, answering as the given login. `installations: null` makes GitHub
+ * fail the installations lookup.
+ */
+function stubGitHubLogin(login: string, installations: StubInstallation[] | null = []) {
   const fetchMock = vi.fn<(url: string | URL) => Promise<Response>>(async (url) => {
-    if (String(url).startsWith('https://github.com/login/oauth/access_token')) return json({ access_token: 'gho_user' })
-    if (String(url) === 'https://api.github.com/user') return json({ login })
+    const u = String(url)
+    if (u.startsWith('https://github.com/login/oauth/access_token')) return json({ access_token: 'gho_user' })
+    if (u === 'https://api.github.com/user') return json({ login })
+    if (u.startsWith('https://api.github.com/user/installations?')) {
+      return installations === null ? json({}, 502) : json({ installations: installations.map((i) => ({ id: i.id, account: { login: i.account } })) })
+    }
+    const repos = /^https:\/\/api\.github\.com\/user\/installations\/(\d+)\/repositories/.exec(u)
+    if (repos && installations) {
+      const install = installations.find((i) => i.id === Number(repos[1]))
+      return json({ repositories: install ? [{ name: 'sdk', permissions: install.permissions }] : [] })
+    }
     return json({}, 404)
   })
   vi.stubGlobal('fetch', fetchMock)
@@ -94,6 +114,45 @@ describe('Sign in with GitHub', () => {
     // #then
     expect(sessionFrom(response)).toBeUndefined()
     expect(await response.text()).toContain('error=not_owner&login=mallory')
+  })
+
+  it('lets in someone GitHub says can write to a repo the app is installed on, as an engineer of that team', async () => {
+    // #given sparker can push to a repo in the YouDotCom installation
+    const { state, cookie } = await startSignIn()
+    stubGitHubLogin('Sparker', [{ id: 77, account: 'YouDotCom', permissions: { push: true } }])
+    // #when
+    const response = await routes.callback(new Request(`${BASE}/api/auth/github/callback?code=abc&state=${state}`, { headers: { cookie } }))
+    // #then signed in, and recorded on that team only
+    expect(verifyOwnerSession(SECRET, sessionFrom(response), Date.now())).toBe('github:Sparker')
+    const { teams } = await getApp()
+    const access = await teams.membershipsOf('sparker')
+    expect([...access.teams]).toEqual([['youdotcom', 'engineer']])
+    expect([...access.repos]).toEqual([['youdotcom/sdk', 'engineer']])
+  })
+
+  it('counts someone who is on no team, so the operator can be told', async () => {
+    // #given eve signs in twice and reaches no installation
+    for (let i = 0; i < 2; i++) {
+      const { state, cookie } = await startSignIn()
+      stubGitHubLogin('eve')
+      await routes.callback(new Request(`${BASE}/api/auth/github/callback?code=abc&state=${state}`, { headers: { cookie } }))
+    }
+    // #then
+    const { teams } = await getApp()
+    expect((await teams.listAccessRequests()).find((r) => r.login === 'eve')).toMatchObject({ attempts: 2 })
+  })
+
+  it('does not mistake a GitHub hiccup for "no team": others are asked to retry, operators still get in', async () => {
+    // #given GitHub fails the installations lookup
+    const first = await startSignIn()
+    stubGitHubLogin('mallory', null)
+    const refused = await routes.callback(new Request(`${BASE}/api/auth/github/callback?code=abc&state=${first.state}`, { headers: { cookie: first.cookie } }))
+    const second = await startSignIn()
+    stubGitHubLogin('octocat', null)
+    const operator = await routes.callback(new Request(`${BASE}/api/auth/github/callback?code=abc&state=${second.state}`, { headers: { cookie: second.cookie } }))
+    // #then
+    expect(await refused.text()).toContain('error=github')
+    expect(verifyOwnerSession(SECRET, sessionFrom(operator), Date.now())).toBe('github:octocat')
   })
 
   it('refuses a callback whose state does not match this browser', async () => {

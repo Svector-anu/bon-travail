@@ -7,7 +7,7 @@ import { AutoRefresh } from '@/components/auto-refresh'
 import { ClaimCta } from '@/components/claim-cta'
 import { Countdown, LocalTime } from '@/components/clock'
 import { CopyButton } from '@/components/copy-button'
-import { EvidenceFailure } from '@/components/evidence'
+import { BugEvidence, EvidenceFailure } from '@/components/evidence'
 import { Reveal } from '@/components/reveal'
 import { WorkPanel } from '@/components/work-panel'
 import { TASK_STATUS, whoMayTake, workTitle } from '@/lib/format'
@@ -101,7 +101,15 @@ async function WorkPackage({ task, attempts, work }: { task: TaskView; attempts:
               {ci.repo}
             </a>
             <span>·</span>
-            {ci.workflowName} › {ci.jobName}
+            {ci.bug ? (
+              <a href={ci.bug.issueUrl} target="_blank" rel="noreferrer">
+                bug #{ci.bug.issueNumber}
+              </a>
+            ) : (
+              <>
+                {ci.workflowName} › {ci.jobName}
+              </>
+            )}
           </p>
 
           <div className="facts">
@@ -130,7 +138,13 @@ async function WorkPackage({ task, attempts, work }: { task: TaskView; attempts:
             <span className="label">Done when</span>
             <p>{ci.acceptance}</p>
             <small>
-              Your project&apos;s own tests check it. Leave{' '}
+              Your project&apos;s own tests check it.{' '}
+              {ci.bug && (
+                <>
+                  Add <span className="mono">{ci.bug.testPath}</span> exactly as written below.{' '}
+                </>
+              )}
+              Leave{' '}
               {ci.protectedPaths.map((p, i) => (
                 <span key={p}>
                   {i > 0 && ', '}
@@ -156,10 +170,16 @@ async function WorkPackage({ task, attempts, work }: { task: TaskView; attempts:
         <p className="scope">{ci.scope}</p>
       </section>
 
-      {live?.finding && (
+      {ci.bug ? (
         <section className="work-section">
-          <EvidenceFailure facts={live.finding} />
+          <BugEvidence bug={ci.bug} failingOutput={live?.finding?.errorExcerpt} />
         </section>
+      ) : (
+        live?.finding && (
+          <section className="work-section">
+            <EvidenceFailure facts={live.finding} />
+          </section>
+        )
       )}
     </>
   )

@@ -36,14 +36,24 @@ export function useAction() {
 }
 
 const SIGN_IN_ERRORS: Record<string, string> = {
-  not_owner: 'isn\'t set up as an engineer on a team yet. Bringing your team? Write to hello@bontravail.xyz and we\'ll add you.',
+  not_owner: 'isn\'t on a team yet. Install bon travail on a repository your team owns (a GitHub admin can), then sign in again. Questions? Write to hello@bontravail.xyz.',
   state: 'The sign-in link expired. Try again.',
   denied: 'GitHub sign-in was cancelled.',
   github: 'GitHub did not confirm the sign-in. Try again.',
   github_not_configured: 'Sign in with GitHub is not set up in this deployment yet.',
 }
 
-export function OwnerLogin({ error, login, enabled }: { error: string | null; login: string | null; enabled: boolean }) {
+export function OwnerLogin({
+  error,
+  login,
+  enabled,
+  installUrl,
+}: {
+  error: string | null
+  login: string | null
+  enabled: boolean
+  installUrl: string | null
+}) {
   const message = error ? SIGN_IN_ERRORS[error] ?? 'Sign-in failed. Try again.' : null
   return (
     <div className="console-login-wrap">
@@ -66,6 +76,11 @@ export function OwnerLogin({ error, login, enabled }: { error: string | null; lo
             {error === 'not_owner' && login ? `@${login} ` : ''}
             {message}
           </p>
+        )}
+        {error === 'not_owner' && installUrl && (
+          <a className="action-pill" href={installUrl}>
+            Install bon travail on GitHub
+          </a>
         )}
       </div>
 
@@ -316,5 +331,98 @@ export function ActionButton({
       </button>
       {error && <small className="form-error">{error}</small>}
     </span>
+  )
+}
+
+/** Operators set how much USDC a team may hold in escrow at once. */
+export function TeamBudget({ team, budget }: { team: string; budget: string }) {
+  const { busy, error, run } = useAction()
+  const [value, setValue] = useState(budget)
+  return (
+    <span className="check-now">
+      <span className="team-budget">
+        <input
+          className="input mono"
+          aria-label={`Budget for ${team} in USDC`}
+          inputMode="decimal"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+        />
+        <button
+          type="button"
+          className="action-pill"
+          disabled={busy || value.trim() === budget}
+          onClick={() => void run(() => postJson('/api/owner/teams/budget', { team, budget: value.trim() }))}
+        >
+          {busy ? 'Saving' : 'Set sponsorship'}
+        </button>
+      </span>
+      {error && <small className="form-error">{error}</small>}
+    </span>
+  )
+}
+
+/** A team admin names the wallet the team deposits from. */
+export function TeamWallet({ team, wallet }: { team: string; wallet: string | null }) {
+  const { busy, error, run } = useAction()
+  const [value, setValue] = useState(wallet ?? '')
+  return (
+    <div className="field">
+      <label htmlFor={`wallet-${team}`}>Wallet you deposit from</label>
+      <span className="team-budget">
+        <input
+          id={`wallet-${team}`}
+          className="input mono team-wide"
+          placeholder="0x…"
+          autoComplete="off"
+          spellCheck={false}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+        />
+        <button
+          type="button"
+          className="action-pill"
+          disabled={busy || value.trim() === (wallet ?? '')}
+          onClick={() => void run(() => postJson('/api/owner/teams/funding-wallet', { team, wallet: value.trim() }))}
+        >
+          {busy ? 'Saving' : 'Save'}
+        </button>
+      </span>
+      {error && <small className="form-error">{error}</small>}
+    </div>
+  )
+}
+
+/** After sending USDC, the admin pastes the transaction hash; bon travail reads it from the chain before crediting it. */
+export function TeamDeposit({ team }: { team: string }) {
+  const { busy, error, run } = useAction()
+  const [hash, setHash] = useState('')
+  return (
+    <div className="field">
+      <label htmlFor={`deposit-${team}`}>Transaction hash of your deposit</label>
+      <span className="team-budget">
+        <input
+          id={`deposit-${team}`}
+          className="input mono team-wide"
+          placeholder="0x…"
+          autoComplete="off"
+          spellCheck={false}
+          value={hash}
+          onChange={(e) => setHash(e.target.value)}
+        />
+        <button
+          type="button"
+          className="action-pill"
+          disabled={busy || hash.trim().length === 0}
+          onClick={() => void run(() => postJson('/api/owner/teams/deposits', { team, txHash: hash.trim() }), () => {
+            setHash('')
+            window.location.reload()
+          })}
+        >
+          {busy ? 'Checking the chain' : 'Credit deposit'}
+        </button>
+      </span>
+      {error && <small className="form-error">{error}</small>}
+    </div>
   )
 }

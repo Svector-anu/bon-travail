@@ -88,6 +88,16 @@ export interface GhPull {
   body: string
 }
 
+export interface GhIssue {
+  number: number
+  title: string
+  body: string
+  htmlUrl: string
+  author: string
+  labels: string[]
+  createdAt: number
+}
+
 export interface RunQuery {
   branch?: string
   headSha?: string
@@ -109,6 +119,10 @@ export interface GitHubClient {
   compare(owner: string, name: string, base: string, head: string): Promise<GhCompare>
   getPull(owner: string, name: string, number: number): Promise<GhPull>
   listPullFiles(owner: string, name: string, number: number): Promise<string[]>
+  /** Open issues (never pull requests), newest first. Needs the app's Issues read permission. */
+  listOpenIssues(owner: string, name: string): Promise<GhIssue[]>
+  /** Whether one issue is still open; a missing issue counts as closed. */
+  issueIsOpen(owner: string, name: string, number: number): Promise<boolean>
 }
 
 type Json = Record<string, unknown>
@@ -311,7 +325,40 @@ export class RestGitHubClient implements GitHubClient {
     }
     return files
   }
+
+  async listOpenIssues(owner: string, name: string): Promise<GhIssue[]> {
+    const raw: Json[] = []
+    for (let page = 1; page <= MAX_ISSUE_PAGES; page++) {
+      const response = await this.request(owner, name, `/repos/${owner}/${name}/issues?state=open&sort=created&direction=desc&per_page=100&page=${page}`)
+      const batch = list(await response.json())
+      raw.push(...batch)
+      if (batch.length < 100) break
+    }
+    return raw
+      .filter((issue) => issue.pull_request === undefined)
+      .map((issue) => ({
+        number: n(issue.number),
+        title: s(issue.title),
+        body: s(issue.body),
+        htmlUrl: s(issue.html_url),
+        author: s(obj(issue.user).login),
+        labels: list(issue.labels).map((label) => s(label.name)),
+        createdAt: Date.parse(s(issue.created_at)) || 0,
+      }))
+  }
+
+  async issueIsOpen(owner: string, name: string, number: number): Promise<boolean> {
+    try {
+      const issue = await this.json(owner, name, `/repos/${owner}/${name}/issues/${number}`)
+      return s(issue.state) === 'open'
+    } catch (error) {
+      if (error instanceof GitHubNotFoundError) return false
+      throw error
+    }
+  }
 }
+
+const MAX_ISSUE_PAGES = 5
 
 /** Parses https://github.com/owner/repo/pull/123 (with optional trailing path). */
 export function parsePullUrl(input: string): { owner: string; name: string; number: number } | null {

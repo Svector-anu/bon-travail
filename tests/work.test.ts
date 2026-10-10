@@ -6,7 +6,7 @@ import { throttle } from '@/server/throttle'
 import { VerificationPendingError } from '@/server/verification/verifier'
 import { toTaskView } from '@/server/services/views'
 import { FakeGitHub, JOB, NAME, OWNER, STEP, WORKFLOW_PATH, sha } from './fake-github'
-import { T0, makeApp } from './helpers'
+import { OPERATOR, T0, makeApp } from './helpers'
 
 const HOUR = 60 * 60 * 1000
 const ADA = 'ada'
@@ -48,14 +48,14 @@ async function watched(env: Record<string, string> = {}) {
   github.addRun({ sha: sha('a1'), at: T0 - 4 * HOUR, conclusion: 'success' })
   github.addRun({ sha: sha('b1'), at: T0 - 3 * HOUR, conclusion: 'failure' })
   github.addRun({ sha: sha('c1'), at: T0 - 2 * HOUR, conclusion: 'failure' })
-  const { repo, report } = await app.work.connectRepo(REPO, undefined, 'owner')
+  const { repo, report } = await app.work.connectRepo(REPO, undefined, OPERATOR)
   const finding = (await app.watch.listFindings())[0]!
   return { app, github, repo, report, finding }
 }
 
 async function openWork(env: Record<string, string> = {}, input: Partial<ExternalizeInput> = {}) {
   const ctx = await watched(env)
-  const task = await ctx.app.work.externalize(ctx.finding.id, externalizeInput(input), 'owner')
+  const task = await ctx.app.work.externalize(ctx.finding.id, externalizeInput(input), OPERATOR)
   return { ...ctx, task }
 }
 
@@ -87,7 +87,7 @@ describe('observing CI', () => {
     github.addRun({ sha: sha('a1'), at: T0 - 2 * HOUR, conclusion: 'failure' })
     github.addRun({ sha: sha('p1'), at: T0 - HOUR, conclusion: 'failure', event: 'pull_request', branch: 'fix' })
     // #when
-    await app.work.connectRepo(REPO, undefined, 'owner')
+    await app.work.connectRepo(REPO, undefined, OPERATOR)
     // #then
     const findings = await app.watch.listFindings()
     expect(findings).toHaveLength(1)
@@ -173,7 +173,7 @@ describe('Aeon investigation', () => {
     const github = new FakeGitHub()
     const app = await makeApp({ github })
     github.addRun({ sha: sha('a1'), at: T0 - HOUR, conclusion: 'failure' })
-    await app.work.connectRepo(REPO, undefined, 'owner')
+    await app.work.connectRepo(REPO, undefined, OPERATOR)
     const finding = (await app.watch.listFindings())[0]!
     // #when/#then
     expect(() => parseInvestigation({ ...INVESTIGATION, confidence: 'certain' }, T0)).toThrow(/confidence/)
@@ -209,7 +209,7 @@ describe('engineer decisions', () => {
     const key = `0x${'11'.repeat(32)}`
     const { app, finding } = await watched({ ARC_PAYER_PRIVATE_KEY: key })
     const treasury = '0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A'
-    const attempt = (input: Partial<ExternalizeInput>) => app.work.externalize(finding.id, externalizeInput(input), 'owner')
+    const attempt = (input: Partial<ExternalizeInput>) => app.work.externalize(finding.id, externalizeInput(input), OPERATOR)
     // #when/#then
     await expect(attempt({ reward: '1.01' })).rejects.toMatchObject({ code: 'BAD_REQUEST' })
     await expect(attempt({ reward: '0' })).rejects.toMatchObject({ code: 'BAD_REQUEST' })
@@ -227,7 +227,7 @@ describe('engineer decisions', () => {
     const { app, finding } = await watched({ ARC_ESCROW_ADDRESS: escrow })
     // #when/#then
     await expect(
-      app.work.externalize(finding.id, externalizeInput({ contributors: [{ login: ADA, wallet: escrow }] }), 'owner'),
+      app.work.externalize(finding.id, externalizeInput({ contributors: [{ login: ADA, wallet: escrow }] }), OPERATOR),
     ).rejects.toThrow(/escrow contract/)
   })
 
@@ -235,10 +235,10 @@ describe('engineer decisions', () => {
     // #given a candidate
     const { app, finding } = await watched()
     // #when
-    const internal = await app.work.keepInternal(finding.id, 'owner')
+    const internal = await app.work.keepInternal(finding.id, OPERATOR)
     // #then
     expect(internal.status).toBe('internal')
-    await expect(app.work.dismiss(finding.id, 'owner')).rejects.toMatchObject({ code: 'CONFLICT' })
+    await expect(app.work.dismiss(finding.id, OPERATOR)).rejects.toMatchObject({ code: 'CONFLICT' })
   })
 })
 
@@ -285,7 +285,7 @@ describe('contributor claim', () => {
     // #given a claimed package
     const { app, task } = await claimedWork()
     // #when
-    const released = await app.work.releaseClaim(task.id, 'owner')
+    const released = await app.work.releaseClaim(task.id, OPERATOR)
     // #then
     expect(released).toMatchObject({ state: 'OPEN', claimant: null, claimantHandle: null })
   })
@@ -522,7 +522,7 @@ describe('watching a repository without runnable workflows', () => {
 
     // #when the engineer tries to watch it
     // #then they are pointed at the fork's Actions tab, not told to write a workflow
-    await expect(app.work.connectRepo(REPO, undefined, 'owner')).rejects.toThrow(/is a fork.*Open its Actions tab/)
+    await expect(app.work.connectRepo(REPO, undefined, OPERATOR)).rejects.toThrow(/is a fork.*Open its Actions tab/)
   })
 
   it('asks for a workflow when the repository has none', async () => {
@@ -532,7 +532,7 @@ describe('watching a repository without runnable workflows', () => {
     const app = await makeApp({ github, env: { TARGET_OPEN_TASKS: '0' } })
 
     // #then the engineer is told to add one
-    await expect(app.work.connectRepo(REPO, undefined, 'owner')).rejects.toThrow(/has no GitHub Actions yet/)
+    await expect(app.work.connectRepo(REPO, undefined, OPERATOR)).rejects.toThrow(/has no GitHub Actions yet/)
   })
 })
 
@@ -561,7 +561,7 @@ describe('a bonus from the team', () => {
     const { app, finding } = await watched()
 
     // #then a malformed bonus is refused before anything is escrowed
-    await expect(app.work.externalize(finding.id, externalizeInput({ bonus: '-5' }), 'owner')).rejects.toThrow(/Bonus must be a USDC amount/)
+    await expect(app.work.externalize(finding.id, externalizeInput({ bonus: '-5' }), OPERATOR)).rejects.toThrow(/Bonus must be a USDC amount/)
   })
 })
 
@@ -584,7 +584,7 @@ describe('a run that fails in several jobs', () => {
     }
 
     // #when the repository is connected and its runs are read
-    await app.work.connectRepo(REPO, undefined, 'owner')
+    await app.work.connectRepo(REPO, undefined, OPERATOR)
 
     // #then each failing job is a candidate seen twice, not only the first one listed
     const findings = await app.watch.listFindings()

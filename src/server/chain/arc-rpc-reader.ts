@@ -39,6 +39,14 @@ export class ArcRpcChainReader implements ChainReader {
     }
   }
 
+  async latestBlockNumber(): Promise<bigint> {
+    try {
+      return await this.client.getBlockNumber()
+    } catch (error) {
+      throw new ChainUnavailableError('Arc RPC block number read failed', { cause: error })
+    }
+  }
+
   async recentTransferCandidates(limit: number): Promise<Hex[]> {
     try {
       const latest = await this.client.getBlockNumber()

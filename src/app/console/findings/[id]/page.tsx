@@ -8,11 +8,12 @@ import { AutoRefresh } from '@/components/auto-refresh'
 import { Ago, LocalTime } from '@/components/clock'
 import { DecisionPanel } from '@/components/decision-panel'
 import { CandidateEvidence } from '@/components/candidate-evidence'
+import { BugEvidence } from '@/components/evidence'
 import { ActionButton } from '@/components/owner-actions'
 import { Reveal } from '@/components/reveal'
 import { candidateLabel, preparation } from '@/lib/candidate'
 import { FINDING_STATUS, TASK_STATUS, whoMayTake } from '@/lib/format'
-import { isOwnerSession } from '@/server/owner-session'
+import { consoleViewer } from '@/server/owner-session'
 import { getFindingDetail } from '@/server/queries'
 import { Roll } from '@/components/roll'
 
@@ -21,6 +22,7 @@ export const metadata: Metadata = { title: 'Candidate work' }
 
 const EVENT_LABELS: Record<string, string> = {
   detected: 'First failure seen',
+  reproduced: 'Aeon reproduced the bug',
   repeated: 'Failed again',
   evidence_gathered: 'Evidence gathered',
   investigated: 'Aeon investigated',
@@ -67,8 +69,9 @@ function history(finding: FindingView): HistoryItem[] {
 }
 
 export default async function FindingPage({ params }: { params: Promise<{ id: string }> }) {
-  if (!(await isOwnerSession())) redirect('/console')
-  const detail = await getFindingDetail((await params).id)
+  const viewer = await consoleViewer()
+  if (!viewer) redirect('/console')
+  const detail = await getFindingDetail((await params).id, viewer)
   if (!detail) notFound()
   const { finding, task, pastTasks } = detail
   const status = FINDING_STATUS[finding.status]
@@ -103,23 +106,51 @@ export default async function FindingPage({ params }: { params: Promise<{ id: st
             {finding.repo}
           </a>{' '}
           · {finding.workflowName} on {finding.defaultBranch}
+          {finding.bug && (
+            <>
+              {' '}
+              ·{' '}
+              <a href={finding.bug.issueUrl} target="_blank" rel="noreferrer">
+                issue #{finding.bug.issueNumber}
+              </a>
+            </>
+          )}
         </p>
-        <dl className="cand-stats">
-          <div>
-            <dt>Failed in a row</dt>
-            <dd className="tnum">{finding.failureCount}</dd>
-          </div>
-          <div>
-            <dt>First seen</dt>
-            <dd>
-              <Ago ts={finding.firstFailedAt} />
-            </dd>
-          </div>
-          <div>
-            <dt>{finding.recurrenceCount > 0 ? 'Came back' : 'Last failed'}</dt>
-            <dd className="tnum">{finding.recurrenceCount > 0 ? `${finding.recurrenceCount}×` : <Ago ts={finding.lastFailedAt} />}</dd>
-          </div>
-        </dl>
+        {finding.bug ? (
+          <dl className="cand-stats">
+            <div>
+              <dt>Reproduced</dt>
+              <dd>
+                <Ago ts={finding.firstFailedAt} />
+              </dd>
+            </div>
+            <div>
+              <dt>On commit</dt>
+              <dd className="mono">{finding.bug.baseSha.slice(0, 7)}</dd>
+            </div>
+            <div>
+              <dt>Test</dt>
+              <dd className="mono">{finding.bug.testPath}</dd>
+            </div>
+          </dl>
+        ) : (
+          <dl className="cand-stats">
+            <div>
+              <dt>Failed in a row</dt>
+              <dd className="tnum">{finding.failureCount}</dd>
+            </div>
+            <div>
+              <dt>First seen</dt>
+              <dd>
+                <Ago ts={finding.firstFailedAt} />
+              </dd>
+            </div>
+            <div>
+              <dt>{finding.recurrenceCount > 0 ? 'Came back' : 'Last failed'}</dt>
+              <dd className="tnum">{finding.recurrenceCount > 0 ? `${finding.recurrenceCount}×` : <Ago ts={finding.lastFailedAt} />}</dd>
+            </div>
+          </dl>
+        )}
       </header>
 
       <section className="cand-found">
@@ -169,22 +200,38 @@ export default async function FindingPage({ params }: { params: Promise<{ id: st
         </aside>
       </section>
 
-      <CandidateEvidence
-        log={finding.errorExcerpt}
-        stepCommand={finding.stepCommand}
-        failingRunUrl={finding.lastFailedRunUrl}
-        reproduction={inv?.reproduction ?? []}
-        commands={inv?.commands ?? []}
-        bisectMethod={inv?.bisectMethod ?? null}
-        regression={finding.regression}
-        firstBadSha={inv?.firstBadSha ?? null}
-        awaitingAeon={INVESTIGABLE.includes(finding.status)}
-      />
+      {finding.bug ? (
+        <BugEvidence bug={finding.bug} failingOutput={finding.errorExcerpt} />
+      ) : (
+        <CandidateEvidence
+          log={finding.errorExcerpt}
+          stepCommand={finding.stepCommand}
+          failingRunUrl={finding.lastFailedRunUrl}
+          reproduction={inv?.reproduction ?? []}
+          commands={inv?.commands ?? []}
+          bisectMethod={inv?.bisectMethod ?? null}
+          regression={finding.regression}
+          firstBadSha={inv?.firstBadSha ?? null}
+          awaitingAeon={INVESTIGABLE.includes(finding.status)}
+        />
+      )}
 
-      <p className="cand-judge">
-        <span className="label">Judged by</span> your GitHub Actions: <strong>{finding.workflowName} › {finding.jobName}</strong> on{' '}
-        {finding.defaultBranch}. Nobody fixing it can change the tests.
-      </p>
+      {finding.bug ? (
+        <p className="cand-judge">
+          <span className="label">Judged by</span> your GitHub Actions:{' '}
+          <strong>
+            {finding.bug.jobs.length > 0 ? `${finding.workflowName} › ${finding.bug.jobs.join(', ')}` : `every job in ${finding.workflowName}`}
+          </strong>{' '}
+          on{' '}
+          {finding.defaultBranch}, with <span className="mono">{finding.bug.testPath}</span> added unchanged. A fix that edits or skips the
+          test is not paid.
+        </p>
+      ) : (
+        <p className="cand-judge">
+          <span className="label">Judged by</span> your GitHub Actions: <strong>{finding.workflowName} › {finding.jobName}</strong> on{' '}
+          {finding.defaultBranch}. Nobody fixing it can change the tests.
+        </p>
+      )}
 
       {task ? (
         <section className="panel in-flight-panel">
@@ -216,14 +263,18 @@ export default async function FindingPage({ params }: { params: Promise<{ id: st
         <section className="cand-resolved">
           <span className="label">Fixed</span>
           <p>
-            Green again{finding.resolvedSha ? <> at <span className="mono">{finding.resolvedSha.slice(0, 7)}</span></> : null}
+            {finding.bug ? 'Fixed and paid' : 'Green again'}
+            {finding.resolvedSha ? <> at <span className="mono">{finding.resolvedSha.slice(0, 7)}</span></> : null}
             {finding.resolvedAt ? (
               <>
                 {' '}
                 <Ago ts={finding.resolvedAt} />
               </>
             ) : null}
-            . Aeon keeps watching; if the same step fails again, it comes back here as a new episode.
+            .{' '}
+            {finding.bug
+              ? 'Its test now lives in your repository, so your CI guards against this bug from here on.'
+              : 'Aeon keeps watching; if the same step fails again, it comes back here as a new episode.'}
           </p>
         </section>
       ) : (

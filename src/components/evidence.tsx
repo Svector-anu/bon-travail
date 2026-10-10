@@ -1,4 +1,5 @@
 import { ArrowUpRight } from 'lucide-react'
+import { CopyButton } from './copy-button'
 import type { RegressionWindow } from '@/domain/findings'
 import type { ReceiptInvestigation } from '@/domain/views'
 
@@ -120,5 +121,44 @@ export function Evidence({ facts, investigation }: { facts: EvidenceFacts; inves
       <EvidenceFailure facts={facts} />
       <EvidenceInvestigation investigation={investigation} />
     </div>
+  )
+}
+
+export interface BugFacts {
+  issueNumber: number
+  issueTitle: string
+  issueUrl: string
+  testPath: string
+  testContent: string
+  testCommand: string
+}
+
+/** The reported bug and the test Aeon wrote for it, which a fix must add unchanged. */
+export function BugEvidence({ bug, failingOutput }: { bug: BugFacts; failingOutput?: string | null }) {
+  return (
+    <section className="evidence-block">
+      <div className="panel-title">
+        <span className="label">The bug · reported on GitHub</span>
+        <a className="text-link" href={bug.issueUrl} target="_blank" rel="noreferrer">
+          issue #{bug.issueNumber} <ArrowUpRight size={12} aria-hidden />
+        </a>
+      </div>
+      <p className="evidence-lead">{bug.issueTitle}</p>
+      <div className="panel-title">
+        <span className="label">The test that proves it · written by Aeon</span>
+        <CopyButton value={bug.testContent} label="Copy the test" />
+      </div>
+      <p className="muted">
+        Add it as <span className="mono">{bug.testPath}</span>, unchanged. It fails today; your fix makes it pass when you run{' '}
+        <span className="mono">{bug.testCommand}</span>.
+      </p>
+      <pre className="log">{bug.testContent}</pre>
+      {failingOutput && (
+        <>
+          <span className="label">How it fails today</span>
+          <pre className="log">{failingOutput}</pre>
+        </>
+      )}
+    </section>
   )
 }

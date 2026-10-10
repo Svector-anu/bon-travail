@@ -1,4 +1,4 @@
-import type { FindingEventType, FindingStatus, Investigation, RegressionWindow } from './findings'
+import type { BugDetails, FindingEventType, FindingStatus, Investigation, RegressionWindow } from './findings'
 import type { TaskState } from './task-state'
 import type { AgentRunSource, AttemptOutcome, CiEvidence, TaskEventType, TaskKind } from './types'
 
@@ -30,7 +30,18 @@ export interface CiTaskView {
   openToAnyone: boolean
   /** Sent by the team after the paid fix, outside escrow; null when there is none. */
   bonusUsdc: string | null
+  /** Set when the work is a reported bug: the fix must add this test unchanged. */
+  bug: BugWorkView | null
   approvedBy: string
+}
+
+export interface BugWorkView {
+  issueNumber: number
+  issueTitle: string
+  issueUrl: string
+  testPath: string
+  testContent: string
+  testCommand: string
 }
 
 export interface TaskView {
@@ -197,6 +208,8 @@ export interface FindingSummaryView {
   /** The first line of what Aeon found, for this episode only. */
   investigationSummary: string | null
   taskId: string | null
+  /** It started as a reported bug that Aeon reproduced, not as a failing run. */
+  isBug: boolean
 }
 
 export interface FindingEventView {
@@ -207,6 +220,7 @@ export interface FindingEventView {
 }
 
 export interface FindingView extends FindingSummaryView {
+  bug: BugDetails | null
   repoUrl: string
   workflowName: string
   workflowPath: string
@@ -283,4 +297,6 @@ export interface TickReport {
   openTasks: string[]
   /** Lines worth sending to a human channel. Empty means stay silent. */
   notable: string[]
+  /** For the operator only, each sent once: people asking for console access. */
+  operatorNotices: string[]
 }

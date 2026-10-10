@@ -7,6 +7,7 @@ const DOCS_SECTIONS: Record<string, string> = {
   teams: 'engineers',
   humans: 'contributors',
   verification: 'verification',
+  bugs: 'bugs',
 }
 
 const nextConfig: NextConfig = {
