@@ -60,7 +60,8 @@ export async function GET(request: Request) {
   if (signIn.teams !== null) await teams.recordSignIn(login, signIn.teams, clock.now())
   if (!operator && signIn.teams !== null && signIn.teams.length === 0) {
     const { request: asked, people } = await teams.recordAccessRequest(login, clock.now())
-    await notifyOperator(config, accessRequestMessage(login, asked.attempts, people))
+    // Told directly when this deployment has its own bot; otherwise the next sweep carries it to the operator.
+    if (await notifyOperator(config, accessRequestMessage(login, asked.attempts, people))) await teams.markAccessReported(login)
     return finish(`/console?error=not_owner&login=${encodeURIComponent(login)}`, [clearState])
   }
   const session = issueOwnerSession(config.sessionSecret, clock.now(), `github:${login}`)

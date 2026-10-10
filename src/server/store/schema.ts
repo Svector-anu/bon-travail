@@ -264,6 +264,8 @@ CREATE TABLE IF NOT EXISTS access_requests (
   first_at BIGINT NOT NULL,
   last_at BIGINT NOT NULL
 );
+-- How many of a person's attempts the operator has been told about.
+ALTER TABLE access_requests ADD COLUMN IF NOT EXISTS reported_attempts INTEGER NOT NULL DEFAULT 0;
 
 ALTER TABLE repos ADD COLUMN IF NOT EXISTS private BOOLEAN NOT NULL DEFAULT FALSE;
 

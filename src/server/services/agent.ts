@@ -9,6 +9,8 @@ import { DomainError } from '../errors'
 import { errorMessage } from '../payments/ledger-provider'
 import type { PaymentProvider } from '../payments/payment-provider'
 import { StaleStateError, type Store } from '../store/store'
+import { accessRequestMessage } from '../notify'
+import type { TeamStore } from '../store/team-store'
 import type { WatchStore } from '../store/watch-store'
 import { VerificationPendingError } from '../verification/verifier'
 import type { TaskService } from './task-service'
@@ -60,6 +62,7 @@ export class Agent {
     private readonly clock: Clock,
     private readonly settings: AgentSettings,
     private readonly githubEnabled: boolean,
+    private readonly access: Pick<TeamStore, 'takeUnreportedAccessRequests'> | null = null,
   ) {}
 
   async tick(source: AgentRunSource): Promise<TickReport> {
@@ -75,6 +78,7 @@ export class Agent {
         actions: [],
         openTasks: await this.openTaskIds(),
         notable: [],
+        operatorNotices: [],
       }
     }
 
@@ -101,7 +105,14 @@ export class Agent {
     const summary = `${done} action${done === 1 ? '' : 's'}, ${errors.length} error${errors.length === 1 ? '' : 's'}`
     await this.store.finishTick(tickId, status, summary, finishedAt)
 
-    return { tickId, source, status, startedAt, finishedAt, actions, openTasks: await this.openTaskIds(), notable }
+    return { tickId, source, status, startedAt, finishedAt, actions, openTasks: await this.openTaskIds(), notable, operatorNotices: await this.accessNotices() }
+  }
+
+  /** People who signed in but are on no team, each told once, for the operator's own channel. */
+  private async accessNotices(): Promise<string[]> {
+    if (!this.access) return []
+    const { requests, people } = await this.access.takeUnreportedAccessRequests().catch(() => ({ requests: [], people: 0 }))
+    return requests.map((r) => accessRequestMessage(r.login, r.attempts, people))
   }
 
   /**

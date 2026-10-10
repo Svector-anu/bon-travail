@@ -155,6 +155,26 @@ describe('telling the operator about access requests', () => {
     expect(other).toMatchObject({ firstTime: true, people: 2 })
   })
 
+  it('carries each new attempt in the next sweep, once, for the operator\'s own channel', async () => {
+    // #given eve asked twice and frank once
+    const { app } = await acme()
+    await app.teams.recordAccessRequest('eve', T0)
+    await app.teams.recordAccessRequest('eve', T0 + 1)
+    await app.teams.recordAccessRequest('frank', T0 + 2)
+    // #when the agent sweeps twice
+    const first = await app.agent.tick('aeon')
+    const second = await app.agent.tick('aeon')
+    // #then the first sweep tells the operator about both, the second about nobody
+    expect(first.operatorNotices).toEqual([
+      expect.stringMatching(/^@eve tried to sign in.*\(tried 2 times\)/),
+      expect.stringContaining('@frank tried to sign in'),
+    ])
+    expect(second.operatorNotices).toEqual([])
+    // #and a new attempt is told again
+    await app.teams.recordAccessRequest('eve', T0 + 3)
+    expect((await app.agent.tick('aeon')).operatorNotices).toEqual([expect.stringContaining('@eve tried to sign in to the bon travail console but is not on a team yet (tried 3 times)')])
+  })
+
   it('writes a plain message with the running count', () => {
     expect(accessRequestMessage('eve', 1, 3)).toBe(
       '@eve tried to sign in to the bon travail console but is not on a team yet (first time).\n3 people have asked for access so far.\nhttps://github.com/eve',

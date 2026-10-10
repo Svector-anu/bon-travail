@@ -297,4 +297,6 @@ export interface TickReport {
   openTasks: string[]
   /** Lines worth sending to a human channel. Empty means stay silent. */
   notable: string[]
+  /** For the operator only, each sent once: people asking for console access. */
+  operatorNotices: string[]
 }

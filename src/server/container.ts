@@ -152,6 +152,7 @@ export function createApp(config: AppConfig, store: Store, overrides: AppOverrid
       publicBaseUrl: config.publicBaseUrl,
     },
     github !== null,
+    teams,
   )
   return { config, githubApp, store, watch, teams, funding, chain, github, payments, tasks, work, agent, clock, identity }
 }

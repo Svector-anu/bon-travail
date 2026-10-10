@@ -176,6 +176,24 @@ export class TeamStore extends Repository {
     })
   }
 
+  /** Marks everyone's attempts so far as told to the operator. */
+  async markAccessReported(login: string): Promise<void> {
+    await this.run('UPDATE access_requests SET reported_attempts = attempts WHERE login = $1', login.toLowerCase())
+  }
+
+  /** Attempts the operator has not heard about yet, marked as told in the same step; plus how many people asked overall. */
+  async takeUnreportedAccessRequests(): Promise<{ requests: AccessRequest[]; people: number }> {
+    return this.transaction(async () => {
+      const rows = await this.all('SELECT * FROM access_requests WHERE attempts > reported_attempts ORDER BY last_at ASC FOR UPDATE')
+      await this.run('UPDATE access_requests SET reported_attempts = attempts WHERE attempts > reported_attempts')
+      const count = await this.get('SELECT COUNT(*) AS n FROM access_requests')
+      return {
+        requests: rows.map((row) => ({ login: str(row, 'login'), attempts: num(row, 'attempts'), firstAt: num(row, 'first_at'), lastAt: num(row, 'last_at') })),
+        people: count ? num(count, 'n') : 0,
+      }
+    })
+  }
+
   async listAccessRequests(limit = 50): Promise<AccessRequest[]> {
     return (await this.all('SELECT * FROM access_requests ORDER BY last_at DESC LIMIT $1', limit)).map((row) => ({
       login: str(row, 'login'),
