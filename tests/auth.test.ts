@@ -29,6 +29,10 @@ let routes: {
 }
 
 beforeAll(async () => {
+  // These routes are checked with GitHub unconfigured; CI runners (GitHub Actions) set GITHUB_TOKEN on their own.
+  for (const key of ['GITHUB_TOKEN', 'GITHUB_APP_ID', 'GITHUB_APP_PRIVATE_KEY', 'GITHUB_APP_SLUG', 'GITHUB_APP_CLIENT_ID', 'GITHUB_APP_CLIENT_SECRET']) {
+    delete process.env[key]
+  }
   Object.assign(process.env, TEST_ENV)
   routes = {
     externalize: (await import('@/app/api/owner/findings/[id]/externalize/route')).POST,
